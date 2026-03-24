@@ -70,3 +70,22 @@ cd backend && uvicorn main:app --reload --port 8000
 - Frontend API calls proxy through Vite → `/api` → `localhost:8000`
 - Backend config via `.env` file (pydantic-settings), never commit secrets
 - License: GPL-3.0
+
+## Team & Communication
+
+三角色协作（详见 CONTRIBUTING.md）：Owner（人类决策）、Creator（写代码）、Reviewer（审查+调研）。
+
+**tmux 实时通知**：Creator 和 Reviewer 在独立 tmux session 中运行，通过 `tmux send-keys` 互相通知。
+
+```bash
+# Creator 通知 Reviewer（如：PR 修复完成）
+tmux send-keys -t SelfLearn-reviewer "[Creator 通知] 消息内容" Enter
+
+# Reviewer 通知 Creator（如：审查完成）
+tmux send-keys -t SelfLearning-creator "[Reviewer 通知] 消息内容" Enter
+
+# 发送前检查对方是否空闲（末尾含 ❯ 表示空闲）
+tmux capture-pane -t <session> -p | grep -v '^$' | tail -1
+```
+
+自动守护脚本：`tmux new-session -d -s gh-notify "bash scripts/gh-notify-daemon.sh"`

@@ -110,6 +110,89 @@ Creator 和 Reviewer 各自在 Issue 中陈述理由，Owner 最终裁决。
   - 自查清单
   - Reviewer 关注点
 
+## 实时通信：tmux 跨 Session 通知
+
+Creator 和 Reviewer 运行在独立的 tmux session 中，三方共用同一个 GitHub 账号，**GitHub 原生通知无效**（自己评论自己的 PR 不会触发通知）。因此需要 tmux 机制来实现实时通信。
+
+### tmux Session 架构
+
+```
+┌──────────────────────┐  ┌──────────────────────┐  ┌──────────────────────┐
+│ SelfLearning-creator │  │ SelfLearn-reviewer   │  │ gh-notify            │
+│ (Creator 工作区)      │  │ (Reviewer 工作区)     │  │ (通知守护脚本)        │
+└──────────────────────┘  └──────────────────────┘  └──────────────────────┘
+```
+
+### 手动通知命令
+
+当需要立即通知对方时（不等待守护脚本轮询），使用 `tmux send-keys`：
+
+**Creator → Reviewer（如：PR 修复完成、需要重新审查）**
+
+```bash
+tmux send-keys -t SelfLearn-reviewer "[Creator 通知] PR #9 已修复 Reviewer 提出的问题，请重新审查。" Enter
+```
+
+**Reviewer → Creator（如：审查完成、发现紧急 Bug）**
+
+```bash
+tmux send-keys -t SelfLearning-creator "[Reviewer 通知] PR #9 审查完成，有 2 个必须修复的问题，详见 PR comment。" Enter
+```
+
+**注意事项：**
+
+- 发送前**必须检查对方是否空闲**，避免打断正在进行的对话：
+  ```bash
+  # 检查空闲：末尾显示 ❯ 表示等待输入
+  tmux capture-pane -t <session-name> -p | grep -v '^$' | tail -1
+  ```
+- 如果对方**忙碌**（正在输出或思考），等待或记录到队列文件：
+  ```bash
+  echo "[通知内容]" >> /tmp/gh-notify/queue_<session>.txt
+  ```
+- 消息格式统一前缀 `[Creator 通知]` 或 `[Reviewer 通知]`，便于识别来源
+
+### 通知触发时机
+
+| 场景 | 谁通知谁 | 方式 |
+|------|---------|------|
+| Reviewer 完成 PR 审查 | Reviewer → Creator | 手动 `tmux send-keys` |
+| Creator 修复 PR 问题后 | Creator → Reviewer | 手动 `tmux send-keys` |
+| Owner 给 Issue 标 `approved` | 守护脚本 → Creator | 自动（5 分钟内） |
+| Creator 开 PR 标 `needs-review` | 守护脚本 → Reviewer | 自动（5 分钟内） |
+| Reviewer 创建新 Issue | 守护脚本 → Reviewer | 自动（确认收录） |
+
+### 自动通知守护脚本
+
+`scripts/gh-notify-daemon.sh` 在独立 tmux session 中运行，每 5 分钟轮询 GitHub：
+
+```bash
+# 启动
+tmux new-session -d -s gh-notify "bash scripts/gh-notify-daemon.sh"
+
+# 查看日志
+tmux attach -t gh-notify
+
+# 停止
+tmux kill-session -t gh-notify
+```
+
+可通过环境变量配置：
+
+| 变量 | 默认值 | 说明 |
+|------|--------|------|
+| `POLL_INTERVAL` | `300` | 轮询间隔（秒） |
+| `REPO` | `ICEY4040727/Self_Learning-System` | 目标仓库 |
+| `CREATOR_SESSION` | `SelfLearning-creator` | Creator tmux session |
+| `REVIEWER_SESSION` | `SelfLearn-reviewer` | Reviewer tmux session |
+
+### 空闲检测原理
+
+Claude Code 等待输入时，pane 末尾显示 `❯`。守护脚本通过 `tmux capture-pane` 检测此特征判断是否空闲：
+- **空闲** → 立即通过 `tmux send-keys` 发送通知
+- **忙碌** → 写入队列文件 `/tmp/gh-notify/queue_*.txt`，下次轮询时补发
+- **积压 >3 条** → 合并为一条摘要通知，防止刷屏
+
 ## 设计先行
 
 非平凡功能的流程：
