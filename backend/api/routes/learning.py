@@ -1,0 +1,174 @@
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
+from pydantic import BaseModel
+from typing import Optional, List
+from backend.db.database import get_db
+from backend.api.routes.auth import get_current_user
+from backend.models.models import User, Session as SessionModel, ChatMessage, TeacherPersona, LearnerProfile, Subject
+
+router = APIRouter()
+
+
+# Chat Request/Response models
+class ChatRequest(BaseModel):
+    message: str
+
+
+class ChatResponse(BaseModel):
+    type: str  # text, tool_request, choice
+    reply: str
+    choices: Optional[List[str]] = None
+    emotion: Optional[dict] = None
+    relationship_stage: Optional[str] = None
+
+
+class ToolConfirmRequest(BaseModel):
+    tool: str
+    query: str
+    reason: str
+
+
+# Start learning session
+@router.post("/subjects/{subject_id}/start")
+async def start_learning(
+    subject_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    subject = db.query(Subject).filter(
+        Subject.id == subject_id,
+        Subject.tenant_id == current_user.tenant_id
+    ).first()
+    if not subject:
+        raise HTTPException(status_code=404, detail="Subject not found")
+
+    # Get active teacher persona
+    teacher_persona = db.query(TeacherPersona).filter(
+        TeacherPersona.character_id == subject.character_id,
+        TeacherPersona.is_active == True
+    ).first()
+
+    # Create session
+    db_session = SessionModel(
+        tenant_id=current_user.tenant_id,
+        subject_id=subject_id,
+        user_id=current_user.id,
+        system_prompt=teacher_persona.system_prompt_template if teacher_persona else None,
+        teacher_persona_id=teacher_persona.id if teacher_persona else None
+    )
+    db.add(db_session)
+    db.commit()
+    db.refresh(db_session)
+
+    return {
+        "session_id": db_session.id,
+        "teacher_persona": teacher_persona.name if teacher_persona else None,
+        "subject": subject.name
+    }
+
+
+# Send chat message
+@router.post("/subjects/{subject_id}/chat", response_model=ChatResponse)
+async def send_message(
+    subject_id: int,
+    chat_request: ChatRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    # Get active session for this subject
+    db_session = db.query(SessionModel).filter(
+        SessionModel.subject_id == subject_id,
+        SessionModel.user_id == current_user.id,
+        SessionModel.ended_at == None
+    ).order_by(SessionModel.started_at.desc()).first()
+
+    if not db_session:
+        # Auto-start a new session
+        return await start_learning(subject_id, db, current_user)
+
+    # Save user message
+    user_message = ChatMessage(
+        session_id=db_session.id,
+        sender_type="user",
+        sender_id=current_user.id,
+        content=chat_request.message
+    )
+    db.add(user_message)
+    db.commit()
+
+    # Simple response for now (will integrate LLM later)
+    reply = f"收到你的消息：{chat_request.message}"
+
+    # Save teacher response
+    teacher_message = ChatMessage(
+        session_id=db_session.id,
+        sender_type="teacher",
+        content=reply
+    )
+    db.add(teacher_message)
+    db.commit()
+
+    return ChatResponse(
+        type="text",
+        reply=reply,
+        relationship_stage=db_session.relationship_stage
+    )
+
+
+# Confirm tool call
+@router.post("/chat/tool_confirm")
+async def confirm_tool(
+    tool_request: ToolConfirmRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    # Execute tool and return result
+    # This is a placeholder - will integrate actual tool execution
+    return {
+        "message": "Tool execution placeholder",
+        "tool": tool_request.tool,
+        "query": tool_request.query
+    }
+
+
+# End learning session
+@router.post("/sessions/{session_id}/end")
+async def end_session(
+    session_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    session = db.query(SessionModel).filter(
+        SessionModel.id == session_id,
+        SessionModel.user_id == current_user.id
+    ).first()
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    from datetime import datetime
+    session.ended_at = datetime.utcnow()
+    db.commit()
+
+    return {"message": "Session ended"}
+
+
+# Get chat history
+@router.get("/sessions/{session_id}/history")
+async def get_history(
+    session_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    messages = db.query(ChatMessage).filter(
+        ChatMessage.session_id == session_id
+    ).order_by(ChatMessage.timestamp).all()
+
+    return [
+        {
+            "id": m.id,
+            "sender_type": m.sender_type,
+            "content": m.content,
+            "timestamp": m.timestamp
+        }
+        for m in messages
+    ]
