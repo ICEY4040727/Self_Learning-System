@@ -3,6 +3,7 @@
 import json
 import re
 from typing import List, Optional
+from sqlalchemy import func as sqlfunc
 from backend.services.llm.adapter import get_llm_adapter
 from backend.services.memory import memory_service
 from backend.services.dynamic_analyzer import DynamicAnalyzer
@@ -59,6 +60,8 @@ class LearningEngine:
         if emotion_type == "confusion" and mastery_level < 50:
             return 4
         if emotion_type == "confusion":
+            return 3
+        if emotion_type == "anxiety" and mastery_level > 60:
             return 3
         if emotion_type == "anxiety":
             return 4
@@ -247,7 +250,6 @@ class LearningEngine:
             # 4.6 Get average mastery_level for this subject (for scaffold computation)
             mastery_level = 50  # default
             if session.subject_id:
-                from sqlalchemy import func as sqlfunc
                 avg = db.query(sqlfunc.avg(ProgressTracking.mastery_level)).filter(
                     ProgressTracking.subject_id == session.subject_id,
                     ProgressTracking.user_id == session.user_id,
