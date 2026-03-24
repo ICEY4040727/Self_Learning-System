@@ -23,68 +23,113 @@ class LearningEngine:
         self.memory = memory_service
         self.analyzer = DynamicAnalyzer()
 
-    def get_relationship_stage_prompt(self, stage: str) -> str:
-        """Get prompt adaptation based on relationship stage"""
-        stage_prompts = {
-            "stranger": "以温和、耐心的方式自我介绍，建立信任。使用简单易懂的语言，避免过于专业术语。",
-            "acquaintance": "开始更多互动，逐步了解学习者的背景和需求。保持友好但适当的距离。",
-            "friend": "以朋友的方式交流，可以更加轻松随意。分享学习方法，适度关心学习者的状态。",
-            "mentor": "提供专业、深入的指导。鼓励学习者挑战更高难度，分享专业知识见解。",
-            "partner": "深入讨论知识话题，共同探索。认可学习者的成长，可以进行更深层次的学术交流。"
-        }
-        return stage_prompts.get(stage, stage_prompts["stranger"])
+    # ------------------------------------------------------------------
+    # Relationship stage prompts
+    # ------------------------------------------------------------------
+    STAGE_PROMPTS = {
+        "stranger": "以温和、耐心的方式自我介绍，建立信任。使用简单易懂的语言，避免过于专业术语。",
+        "acquaintance": "开始更多互动，逐步了解学习者的背景和需求。保持友好但适当的距离。",
+        "friend": "以朋友的方式交流，可以更加轻松随意。分享学习方法，适度关心学习者的状态。",
+        "mentor": "提供专业、深入的指导。鼓励学习者挑战更高难度，分享专业知识见解。",
+        "partner": "深入讨论知识话题，共同探索。认可学习者的成长，可以进行更深层次的学术交流。",
+    }
 
+    # Emotion-aware teaching strategies
+    EMOTION_STRATEGIES = {
+        "curiosity":    "学习者表现出好奇心——顺势深入提问，拓展话题广度，鼓励探索。",
+        "confusion":    "学习者感到困惑——退一步用更简单的类比重新解释，确认哪一部分不清楚。",
+        "frustration":  "学习者有些沮丧——先共情安抚，降低难度，用小步骤引导重建信心。",
+        "excitement":   "学习者很兴奋——趁热打铁加深难度，引导他们自己总结规律。",
+        "satisfaction":  "学习者感到满意——适时引入下一层级的知识，保持学习动力。",
+        "boredom":      "学习者显得无聊——尝试换一种教学方式，引入有趣的案例或挑战性问题。",
+        "anxiety":      "学习者感到焦虑——放慢节奏，强调理解过程比结果更重要，给予肯定。",
+    }
+
+    # ------------------------------------------------------------------
+    # Dual-layer prompt builder
+    # ------------------------------------------------------------------
     def build_system_prompt(
         self,
         teacher_persona: TeacherPersona,
         relationship_stage: str,
         learner_profile: Optional[LearnerProfile] = None,
-        retrieved_memories: List[dict] = None
+        retrieved_memories: List[dict] = None,
+        prev_emotion: Optional[dict] = None,
     ) -> str:
-        """Build dynamic system prompt based on teacher persona, relationship stage, and memories"""
+        """
+        Build system prompt with dual-layer architecture:
+          Static layer  — teacher identity + Socratic method principles
+          Dynamic layer — relationship stage + learner context + emotion + memories
+        """
+        static = self._build_static_layer(teacher_persona)
+        dynamic = self._build_dynamic_layer(
+            relationship_stage, learner_profile, retrieved_memories, prev_emotion
+        )
+        return f"{static}\n\n---\n\n{dynamic}"
 
-        # 1. Base prompt from teacher persona
-        base_prompt = teacher_persona.system_prompt_template or ""
-        if not base_prompt:
-            base_prompt = f"你是 {teacher_persona.name}，一位富有耐心的教师，运用苏格拉底教学法帮助学生自主思考和探索知识。"
+    def _build_static_layer(self, teacher_persona: TeacherPersona) -> str:
+        """Stable across turns: persona identity + Socratic method rules."""
+        persona = teacher_persona.system_prompt_template or ""
+        if not persona:
+            persona = (
+                f"你是 {teacher_persona.name}，一位富有耐心的教师，"
+                f"运用苏格拉底教学法帮助学生自主思考和探索知识。"
+            )
 
-        # 2. Add relationship stage adaptation
-        stage_prompt = self.get_relationship_stage_prompt(relationship_stage)
+        return f"""{persona}
 
-        # 3. Add learner profile context
-        learner_context = ""
+【教学方法——苏格拉底式提问】
+1. 绝不直接给出答案。通过一连串由浅入深的问题引导学习者自己发现答案。
+2. 每次回复至少包含一个引导性问题，推动学习者思考下一步。
+3. 当学习者的回答有误时，不要直接纠正；而是通过反问让他们重新审视自己的推理。
+4. 适时总结学习者已经掌握的部分，再引向尚未理解的部分。
+5. 保持专业、耐心、鼓励的态度。"""
+
+    def _build_dynamic_layer(
+        self,
+        relationship_stage: str,
+        learner_profile: Optional[LearnerProfile],
+        retrieved_memories: Optional[List[dict]],
+        prev_emotion: Optional[dict],
+    ) -> str:
+        """Changes per turn: stage, learner state, emotion, memories."""
+        parts: list[str] = []
+
+        # 1. Relationship stage
+        stage_text = self.STAGE_PROMPTS.get(relationship_stage, self.STAGE_PROMPTS["stranger"])
+        parts.append(f"【当前关系阶段：{relationship_stage}】\n{stage_text}")
+
+        # 2. Emotion-aware strategy
+        if prev_emotion:
+            etype = prev_emotion.get("emotion_type", "")
+            strategy = self.EMOTION_STRATEGIES.get(etype)
+            if strategy:
+                parts.append(f"【学习者情感状态：{etype}】\n{strategy}")
+
+        # 3. Learner profile
+        profile_lines: list[str] = []
         if learner_profile:
-            if learner_profile.learning_style:
-                learning_style = learner_profile.learning_style
-                if isinstance(learning_style, dict):
-                    style_text = ", ".join([f"{k}: {v}" for k, v in learning_style.items() if v])
-                    learner_context += f"\n学习者风格偏好: {style_text}"
+            if isinstance(learner_profile.learning_style, dict):
+                pairs = [f"{k}: {v}" for k, v in learner_profile.learning_style.items() if v]
+                if pairs:
+                    profile_lines.append(f"学习风格偏好: {', '.join(pairs)}")
+            if isinstance(learner_profile.cognitive_traits, dict):
+                pairs = [f"{k}: {v}" for k, v in learner_profile.cognitive_traits.items() if v]
+                if pairs:
+                    profile_lines.append(f"认知特质: {', '.join(pairs)}")
+            if isinstance(learner_profile.emotional_traits, dict):
+                pairs = [f"{k}: {v}" for k, v in learner_profile.emotional_traits.items() if v]
+                if pairs:
+                    profile_lines.append(f"情感特质: {', '.join(pairs)}")
+        if profile_lines:
+            parts.append("【学习者画像】\n" + "\n".join(profile_lines))
 
-            if learner_profile.cognitive_traits:
-                cognitive = learner_profile.cognitive_traits
-                if isinstance(cognitive, dict):
-                    traits_text = ", ".join([f"{k}: {v}" for k, v in cognitive.items() if v])
-                    learner_context += f"\n学习者认知特质: {traits_text}"
-
-        # 4. Add retrieved memories
-        memory_context = ""
+        # 4. Retrieved memories
         if retrieved_memories:
-            memory_context = "\n\n相关学习记忆:"
-            for mem in retrieved_memories:
-                memory_context += f"\n- {mem['content']}"
+            mem_lines = [f"- {m['content']}" for m in retrieved_memories]
+            parts.append("【相关学习记忆】\n" + "\n".join(mem_lines))
 
-        # Combine all parts
-        system_prompt = f"""{base_prompt}
-
-{stage_prompt}
-{learner_context}
-{memory_context}
-
-请用苏格拉底式提问法引导学习者思考，通过提问而不是直接给出答案来帮助他们理解。
-保持专业、耐心、鼓励的态度。
-"""
-
-        return system_prompt
+        return "\n\n".join(parts)
 
     def parse_tool_request(self, response: str) -> Optional[dict]:
         """Parse tool request from LLM response"""
@@ -141,12 +186,24 @@ class LearningEngine:
                 top_k=3
             )
 
-            # 5. Build dynamic system prompt
+            # 4.5 Get previous emotion from last user message (for dynamic prompt layer)
+            prev_emotion = None
+            last_user_msg = (
+                db.query(ChatMessage)
+                .filter(ChatMessage.session_id == session_id, ChatMessage.sender_type == "user")
+                .order_by(ChatMessage.timestamp.desc())
+                .first()
+            )
+            if last_user_msg and last_user_msg.emotion_analysis:
+                prev_emotion = last_user_msg.emotion_analysis
+
+            # 5. Build dynamic system prompt (dual-layer architecture)
             system_prompt = self.build_system_prompt(
                 teacher_persona,
                 session.relationship_stage or "stranger",
                 learner_profile,
-                retrieved_memories
+                retrieved_memories,
+                prev_emotion,
             )
 
             # 6. Get chat history for context
