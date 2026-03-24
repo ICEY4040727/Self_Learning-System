@@ -82,20 +82,24 @@ flush_queue() {
     [[ ! -f "$queue_file" ]] && return 0
     [[ ! -s "$queue_file" ]] && return 0
 
+    if ! tmux has-session -t "$session" 2>/dev/null; then
+        return 0
+    fi
+
     if ! is_idle "$session"; then
         return 0  # still busy
     fi
 
     # Merge similar notifications to avoid spam
     local count
-    count=$(wc -l < "$queue_file" | tr -d ' ')
+    count=$(wc -l < "$queue_file" | tr -d ' ') || { echo "[gh-notify] WARN: flush_queue count failed"; return 0; }
     if [[ "$count" -gt 3 ]]; then
         local merged="[通知] 你有 ${count} 条积压通知，请查看 GitHub Issues/PRs"
-        tmux send-keys -t "$session" "$merged" Enter
+        tmux send-keys -t "$session" "$merged" Enter || { echo "[gh-notify] WARN: flush send failed"; return 0; }
         echo "[gh-notify] Flushed $count queued messages to $session (merged)"
     else
         while IFS= read -r line; do
-            tmux send-keys -t "$session" "$line" Enter
+            tmux send-keys -t "$session" "$line" Enter || true
         done < "$queue_file"
         echo "[gh-notify] Flushed $count queued messages to $session"
     fi
@@ -112,7 +116,7 @@ check_approved_issues() {
     local state_file="$STATE_DIR/last_approved.json"
     local current
 
-    current=$(gh issue list --repo "$REPO" --label "approved,creator" --state open --json number,title 2>/dev/null || echo "[]")
+    current=$(gh issue list --repo "$REPO" --label "approved" --state open --json number,title 2>/dev/null || echo "[]")
 
     if [[ ! -f "$state_file" ]]; then
         echo "$current" > "$state_file"
