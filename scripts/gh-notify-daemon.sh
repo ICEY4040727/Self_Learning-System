@@ -12,7 +12,7 @@ set -euo pipefail
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
-POLL_INTERVAL="${POLL_INTERVAL:-300}"                               # 5 minutes
+POLL_INTERVAL="${POLL_INTERVAL:-60}"                                # 1 minute
 REPO="${REPO:-ICEY4040727/Self_Learning-System}"
 CREATOR_SESSION="${CREATOR_SESSION:-SelfLearning-creator}"
 REVIEWER_SESSION="${REVIEWER_SESSION:-SelfLearn-reviewer}"
@@ -43,15 +43,24 @@ echo "[gh-notify] Reviewer session: $REVIEWER_SESSION"
 # Helpers
 # ---------------------------------------------------------------------------
 
-# Check if a tmux session's active pane is idle (prompt visible)
+# Check if a tmux session's active pane is idle
+# Claude Code shows status bar (Opus/context/weekly) when idle at prompt
 is_idle() {
     local session="$1"
     if ! tmux has-session -t "$session" 2>/dev/null; then
         return 1  # session doesn't exist
     fi
-    local content
-    content=$(tmux capture-pane -t "$session" -p 2>/dev/null | grep -v '^$' | tail -1)
-    [[ "$content" == *"❯"* || "$content" == *"$"* || "$content" == *"%"* ]] && return 0
+    local tail_lines
+    tail_lines=$(tmux capture-pane -t "$session" -p 2>/dev/null | grep -v '^$' | tail -5)
+
+    # Claude Code idle: status bar contains usage info
+    if echo "$tail_lines" | grep -q "weekly\|current.*⟳\|accept edits"; then
+        return 0
+    fi
+    # Traditional shell prompt
+    if echo "$tail_lines" | tail -1 | grep -qE '[❯$%] *$'; then
+        return 0
+    fi
     return 1
 }
 
