@@ -293,7 +293,7 @@ const fetchSubjectInfo = async () => {
 const fetchActiveSession = async () => {
   try {
     // 获取最近的会话历史
-    const response = await axios.get(`/api/subjects/${subjectId.value}/start`, {
+    const response = await axios.post(`/api/subjects/${subjectId.value}/start`, {}, {
       headers: { Authorization: `Bearer ${authStore.token}` }
     })
 
