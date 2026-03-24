@@ -10,21 +10,21 @@
       <section class="section">
         <div class="section-header">
           <h2>我的角色</h2>
-          <button class="add-btn" @click="showCreateDialog = true">+ 新建角色</button>
+          <button class="add-btn" @click="openCreateCharacter">+ 新建角色</button>
         </div>
 
         <div class="characters-grid">
           <div
             v-for="char in characters"
             :key="char.id"
-            class="character-card"
+            :class="['character-card', { selected: selectedCharacter?.id === char.id }]"
             @click="selectCharacter(char)"
           >
             <div class="char-avatar">{{ char.name?.[0] || '?' }}</div>
             <h3>{{ char.name }}</h3>
             <p>{{ char.personality || '暂无描述' }}</p>
             <div class="card-actions">
-              <button @click.stop="editCharacter(char)">编辑</button>
+              <button @click.stop="openEditCharacter(char)">编辑</button>
               <button @click.stop="deleteCharacter(char.id)" class="delete">删除</button>
             </div>
           </div>
@@ -35,7 +35,7 @@
       <section v-if="selectedCharacter" class="section">
         <div class="section-header">
           <h2>教师人格 - {{ selectedCharacter.name }}</h2>
-          <button class="add-btn" @click="showPersonaDialog = true">+ 新建人格</button>
+          <button class="add-btn" @click="openCreatePersona">+ 新建人格</button>
         </div>
 
         <div class="personas-list">
@@ -49,7 +49,7 @@
               <span class="version">v{{ persona.version }}</span>
             </div>
             <p class="traits" v-if="persona.traits">
-              特质: {{ JSON.stringify(persona.traits) }}
+              特质: {{ formatTraits(persona.traits) }}
             </p>
             <p class="prompt-preview" v-if="persona.system_prompt_template">
               {{ persona.system_prompt_template.substring(0, 100) }}...
@@ -57,7 +57,8 @@
             <div class="card-actions">
               <button v-if="!persona.is_active" @click="activatePersona(persona.id)">激活</button>
               <span v-else class="active-badge">已激活</span>
-              <button @click="editPersona(persona)">编辑</button>
+              <button @click="openEditPersona(persona)">编辑</button>
+              <button @click="deletePersona(persona.id)" class="delete">删除</button>
             </div>
           </div>
         </div>
@@ -67,7 +68,7 @@
       <section v-if="selectedCharacter" class="section">
         <div class="section-header">
           <h2>学习科目</h2>
-          <button class="add-btn" @click="showSubjectDialog = true">+ 新建科目</button>
+          <button class="add-btn" @click="openCreateSubject">+ 新建科目</button>
         </div>
 
         <div class="subjects-list">
@@ -79,14 +80,18 @@
             <h3>{{ subj.name }}</h3>
             <p>{{ subj.description || '暂无描述' }}</p>
             <span class="target">{{ subj.target_level || '未设目标' }}</span>
+            <div class="card-actions">
+              <button @click.stop="openEditSubject(subj)">编辑</button>
+              <button @click.stop="deleteSubject(subj.id)" class="delete">删除</button>
+            </div>
           </div>
         </div>
       </section>
 
-      <!-- 创建角色对话框 -->
+      <!-- 角色对话框（创建/编辑） -->
       <div v-if="showCreateDialog" class="dialog-overlay" @click.self="showCreateDialog = false">
         <div class="dialog">
-          <h3>新建角色</h3>
+          <h3>{{ editingCharacterId ? '编辑角色' : '新建角色' }}</h3>
           <div class="form-group">
             <label>角色名称</label>
             <input v-model="characterForm.name" placeholder="输入角色名称" />
@@ -99,17 +104,23 @@
             <label>背景故事</label>
             <textarea v-model="characterForm.background" placeholder="描述角色背景"></textarea>
           </div>
+          <div class="form-group">
+            <label>说话风格</label>
+            <textarea v-model="characterForm.speech_style" placeholder="如：温柔、幽默、严肃、口头禅等"></textarea>
+          </div>
           <div class="dialog-actions">
             <button @click="showCreateDialog = false">取消</button>
-            <button class="primary" @click="createCharacter">创建</button>
+            <button class="primary" @click="saveCharacter">
+              {{ editingCharacterId ? '保存' : '创建' }}
+            </button>
           </div>
         </div>
       </div>
 
-      <!-- 创建教师人格对话框 -->
+      <!-- 教师人格对话框（创建/编辑） -->
       <div v-if="showPersonaDialog" class="dialog-overlay" @click.self="showPersonaDialog = false">
         <div class="dialog">
-          <h3>新建教师人格</h3>
+          <h3>{{ editingPersonaId ? '编辑教师人格' : '新建教师人格' }}</h3>
           <div class="form-group">
             <label>人格名称</label>
             <input v-model="personaForm.name" placeholder="如：苏格拉底型、朋友型" />
@@ -119,20 +130,26 @@
             <input v-model="personaForm.version" placeholder="1.0" />
           </div>
           <div class="form-group">
+            <label>性格特质（逗号分隔）</label>
+            <input v-model="personaForm.traitsInput" placeholder="如：耐心, 幽默, 严谨, 鼓励" />
+          </div>
+          <div class="form-group">
             <label>系统提示词模板</label>
             <textarea v-model="personaForm.system_prompt_template" rows="6" placeholder="设置AI教师的系统提示词..."></textarea>
           </div>
           <div class="dialog-actions">
             <button @click="showPersonaDialog = false">取消</button>
-            <button class="primary" @click="createPersona">创建</button>
+            <button class="primary" @click="savePersona">
+              {{ editingPersonaId ? '保存' : '创建' }}
+            </button>
           </div>
         </div>
       </div>
 
-      <!-- 创建科目对话框 -->
+      <!-- 科目对话框（创建/编辑） -->
       <div v-if="showSubjectDialog" class="dialog-overlay" @click.self="showSubjectDialog = false">
         <div class="dialog">
-          <h3>新建科目</h3>
+          <h3>{{ editingSubjectId ? '编辑科目' : '新建科目' }}</h3>
           <div class="form-group">
             <label>科目名称</label>
             <input v-model="subjectForm.name" placeholder="如：数学、英语" />
@@ -147,7 +164,9 @@
           </div>
           <div class="dialog-actions">
             <button @click="showSubjectDialog = false">取消</button>
-            <button class="primary" @click="createSubject">创建</button>
+            <button class="primary" @click="saveSubject">
+              {{ editingSubjectId ? '保存' : '创建' }}
+            </button>
           </div>
         </div>
       </div>
@@ -169,10 +188,12 @@ interface Character {
   name: string
   personality?: string
   background?: string
+  speech_style?: string
 }
 
 interface TeacherPersona {
   id: number
+  character_id: number
   name: string
   version: string
   traits?: any
@@ -182,6 +203,7 @@ interface TeacherPersona {
 
 interface Subject {
   id: number
+  character_id: number
   name: string
   description?: string
   target_level?: string
@@ -196,18 +218,34 @@ const showCreateDialog = ref(false)
 const showPersonaDialog = ref(false)
 const showSubjectDialog = ref(false)
 
-const characterForm = ref({ name: '', personality: '', background: '' })
-const personaForm = ref({ name: '', version: '1.0', system_prompt_template: '' })
+const editingCharacterId = ref<number | null>(null)
+const editingPersonaId = ref<number | null>(null)
+const editingSubjectId = ref<number | null>(null)
+
+const characterForm = ref({ name: '', personality: '', background: '', speech_style: '' })
+const personaForm = ref({ name: '', version: '1.0', traitsInput: '', system_prompt_template: '' })
 const subjectForm = ref({ name: '', description: '', target_level: '' })
 
-const api = (path: string) => {
-  return axios.get(path, { headers: { Authorization: `Bearer ${authStore.token}` } })
+const headers = () => ({ Authorization: `Bearer ${authStore.token}` })
+
+// --- Helpers ---
+
+const formatTraits = (traits: any): string => {
+  if (Array.isArray(traits)) return traits.join(', ')
+  if (typeof traits === 'object') return Object.values(traits).join(', ')
+  return String(traits)
 }
+
+const parseTraits = (input: string): string[] => {
+  return input.split(/[,，]/).map(s => s.trim()).filter(Boolean)
+}
+
+// --- Fetch ---
 
 const fetchCharacters = async () => {
   try {
-    const response = await api('/api/character')
-    characters.value = response.data
+    const res = await axios.get('/api/character', { headers: headers() })
+    characters.value = res.data
   } catch (error) {
     console.error('Failed to fetch characters:', error)
   }
@@ -215,8 +253,8 @@ const fetchCharacters = async () => {
 
 const fetchTeacherPersonas = async (characterId: number) => {
   try {
-    const response = await api(`/api/teacher_persona?character_id=${characterId}`)
-    teacherPersonas.value = response.data
+    const res = await axios.get(`/api/teacher_persona?character_id=${characterId}`, { headers: headers() })
+    teacherPersonas.value = res.data
   } catch (error) {
     console.error('Failed to fetch personas:', error)
   }
@@ -224,8 +262,8 @@ const fetchTeacherPersonas = async (characterId: number) => {
 
 const fetchSubjects = async (characterId: number) => {
   try {
-    const response = await api(`/api/subjects?character_id=${characterId}`)
-    subjects.value = response.data
+    const res = await axios.get(`/api/subjects?character_id=${characterId}`, { headers: headers() })
+    subjects.value = res.data
   } catch (error) {
     console.error('Failed to fetch subjects:', error)
   }
@@ -237,63 +275,121 @@ const selectCharacter = (char: Character) => {
   fetchSubjects(char.id)
 }
 
-const createCharacter = async () => {
-  try {
-    await axios.post('/api/character', characterForm.value, {
-      headers: { Authorization: `Bearer ${authStore.token}` }
-    })
-    showCreateDialog.value = false
-    characterForm.value = { name: '', personality: '', background: '' }
-    fetchCharacters()
-  } catch (error) {
-    console.error('Failed to create character:', error)
-  }
+// --- Character CRUD ---
+
+const resetCharacterForm = () => {
+  characterForm.value = { name: '', personality: '', background: '', speech_style: '' }
+  editingCharacterId.value = null
 }
 
-const editCharacter = (char: Character) => {
-  characterForm.value = { ...char }
+const openCreateCharacter = () => {
+  resetCharacterForm()
   showCreateDialog.value = true
 }
 
-const deleteCharacter = async (id: number) => {
-  if (!confirm('确定要删除这个角色吗？')) return
+const openEditCharacter = (char: Character) => {
+  editingCharacterId.value = char.id
+  characterForm.value = {
+    name: char.name,
+    personality: char.personality || '',
+    background: char.background || '',
+    speech_style: char.speech_style || '',
+  }
+  showCreateDialog.value = true
+}
+
+const saveCharacter = async () => {
   try {
-    await axios.delete(`/api/character/${id}`, {
-      headers: { Authorization: `Bearer ${authStore.token}` }
-    })
+    if (editingCharacterId.value) {
+      await axios.put(`/api/character/${editingCharacterId.value}`, characterForm.value, { headers: headers() })
+    } else {
+      await axios.post('/api/character', characterForm.value, { headers: headers() })
+    }
+    showCreateDialog.value = false
+    resetCharacterForm()
+    fetchCharacters()
+  } catch (error) {
+    console.error('Failed to save character:', error)
+  }
+}
+
+const deleteCharacter = async (id: number) => {
+  if (!confirm('确定要删除这个角色吗？相关的人格和科目也会被删除。')) return
+  try {
+    await axios.delete(`/api/character/${id}`, { headers: headers() })
+    if (selectedCharacter.value?.id === id) {
+      selectedCharacter.value = null
+      teacherPersonas.value = []
+      subjects.value = []
+    }
     fetchCharacters()
   } catch (error) {
     console.error('Failed to delete character:', error)
   }
 }
 
-const createPersona = async () => {
+// --- Persona CRUD ---
+
+const resetPersonaForm = () => {
+  personaForm.value = { name: '', version: '1.0', traitsInput: '', system_prompt_template: '' }
+  editingPersonaId.value = null
+}
+
+const openCreatePersona = () => {
+  resetPersonaForm()
+  showPersonaDialog.value = true
+}
+
+const openEditPersona = (persona: TeacherPersona) => {
+  editingPersonaId.value = persona.id
+  personaForm.value = {
+    name: persona.name,
+    version: persona.version,
+    traitsInput: persona.traits ? formatTraits(persona.traits) : '',
+    system_prompt_template: persona.system_prompt_template || '',
+  }
+  showPersonaDialog.value = true
+}
+
+const savePersona = async () => {
   if (!selectedCharacter.value) return
+  const payload = {
+    character_id: selectedCharacter.value.id,
+    name: personaForm.value.name,
+    version: personaForm.value.version,
+    traits: parseTraits(personaForm.value.traitsInput),
+    system_prompt_template: personaForm.value.system_prompt_template,
+    is_active: false,
+  }
   try {
-    await axios.post('/api/teacher_persona', {
-      ...personaForm.value,
-      character_id: selectedCharacter.value.id
-    }, {
-      headers: { Authorization: `Bearer ${authStore.token}` }
-    })
+    if (editingPersonaId.value) {
+      await axios.put(`/api/teacher_persona/${editingPersonaId.value}`, payload, { headers: headers() })
+    } else {
+      await axios.post('/api/teacher_persona', payload, { headers: headers() })
+    }
     showPersonaDialog.value = false
-    personaForm.value = { name: '', version: '1.0', system_prompt_template: '' }
+    resetPersonaForm()
     fetchTeacherPersonas(selectedCharacter.value.id)
   } catch (error) {
-    console.error('Failed to create persona:', error)
+    console.error('Failed to save persona:', error)
   }
 }
 
-const editPersona = (persona: TeacherPersona) => {
-  personaForm.value = { ...persona }
-  showPersonaDialog.value = true
+const deletePersona = async (id: number) => {
+  if (!confirm('确定要删除这个教师人格吗？')) return
+  try {
+    await axios.delete(`/api/teacher_persona/${id}`, { headers: headers() })
+    if (selectedCharacter.value) {
+      fetchTeacherPersonas(selectedCharacter.value.id)
+    }
+  } catch (error) {
+    console.error('Failed to delete persona:', error)
+  }
 }
 
 const activatePersona = async (personaId: number) => {
   try {
-    await axios.put(`/api/teacher_persona/${personaId}/activate`, {}, {
-      headers: { Authorization: `Bearer ${authStore.token}` }
-    })
+    await axios.put(`/api/teacher_persona/${personaId}/activate`, {}, { headers: headers() })
     if (selectedCharacter.value) {
       fetchTeacherPersonas(selectedCharacter.value.id)
     }
@@ -302,20 +398,59 @@ const activatePersona = async (personaId: number) => {
   }
 }
 
-const createSubject = async () => {
+// --- Subject CRUD ---
+
+const resetSubjectForm = () => {
+  subjectForm.value = { name: '', description: '', target_level: '' }
+  editingSubjectId.value = null
+}
+
+const openCreateSubject = () => {
+  resetSubjectForm()
+  showSubjectDialog.value = true
+}
+
+const openEditSubject = (subj: Subject) => {
+  editingSubjectId.value = subj.id
+  subjectForm.value = {
+    name: subj.name,
+    description: subj.description || '',
+    target_level: subj.target_level || '',
+  }
+  showSubjectDialog.value = true
+}
+
+const saveSubject = async () => {
   if (!selectedCharacter.value) return
+  const payload = {
+    character_id: selectedCharacter.value.id,
+    name: subjectForm.value.name,
+    description: subjectForm.value.description,
+    target_level: subjectForm.value.target_level,
+  }
   try {
-    await axios.post('/api/subjects', {
-      ...subjectForm.value,
-      character_id: selectedCharacter.value.id
-    }, {
-      headers: { Authorization: `Bearer ${authStore.token}` }
-    })
+    if (editingSubjectId.value) {
+      await axios.put(`/api/subjects/${editingSubjectId.value}`, payload, { headers: headers() })
+    } else {
+      await axios.post('/api/subjects', payload, { headers: headers() })
+    }
     showSubjectDialog.value = false
-    subjectForm.value = { name: '', description: '', target_level: '' }
+    resetSubjectForm()
     fetchSubjects(selectedCharacter.value.id)
   } catch (error) {
-    console.error('Failed to create subject:', error)
+    console.error('Failed to save subject:', error)
+  }
+}
+
+const deleteSubject = async (id: number) => {
+  if (!confirm('确定要删除这个科目吗？')) return
+  try {
+    await axios.delete(`/api/subjects/${id}`, { headers: headers() })
+    if (selectedCharacter.value) {
+      fetchSubjects(selectedCharacter.value.id)
+    }
+  } catch (error) {
+    console.error('Failed to delete subject:', error)
   }
 }
 
@@ -401,6 +536,11 @@ onMounted(() => {
 
 .character-card:hover {
   border-color: #ffd700;
+}
+
+.character-card.selected {
+  border-color: #ffd700;
+  box-shadow: 0 0 12px rgba(255, 215, 0, 0.3);
 }
 
 .char-avatar {
@@ -531,6 +671,8 @@ onMounted(() => {
   padding: 30px;
   width: 90%;
   max-width: 500px;
+  max-height: 90vh;
+  overflow-y: auto;
 }
 
 .dialog h3 {
@@ -555,6 +697,7 @@ onMounted(() => {
   border: 1px solid #4a4a8a;
   border-radius: 6px;
   color: #fff;
+  box-sizing: border-box;
 }
 
 .form-group textarea {

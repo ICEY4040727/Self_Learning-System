@@ -252,6 +252,46 @@ def activate_teacher_persona(
     return {"message": "Teacher persona activated"}
 
 
+@router.put("/teacher_persona/{persona_id}", response_model=TeacherPersonaResponse)
+def update_teacher_persona(
+    persona_id: int,
+    persona: TeacherPersonaCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    db_persona = db.query(TeacherPersona).filter(
+        TeacherPersona.id == persona_id,
+        TeacherPersona.tenant_id == current_user.tenant_id
+    ).first()
+    if not db_persona:
+        raise HTTPException(status_code=404, detail="Teacher persona not found")
+
+    for key, value in persona.model_dump().items():
+        setattr(db_persona, key, value)
+
+    db.commit()
+    db.refresh(db_persona)
+    return db_persona
+
+
+@router.delete("/teacher_persona/{persona_id}")
+def delete_teacher_persona(
+    persona_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    persona = db.query(TeacherPersona).filter(
+        TeacherPersona.id == persona_id,
+        TeacherPersona.tenant_id == current_user.tenant_id
+    ).first()
+    if not persona:
+        raise HTTPException(status_code=404, detail="Teacher persona not found")
+
+    db.delete(persona)
+    db.commit()
+    return {"message": "Teacher persona deleted"}
+
+
 # Learner Profile endpoints
 @router.post("/learner_profile", response_model=LearnerProfileResponse)
 def create_learner_profile(
@@ -349,6 +389,46 @@ def get_subject(
     if not subject:
         raise HTTPException(status_code=404, detail="Subject not found")
     return subject
+
+
+@router.put("/subjects/{subject_id}", response_model=SubjectResponse)
+def update_subject(
+    subject_id: int,
+    subject: SubjectCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    db_subject = db.query(Subject).filter(
+        Subject.id == subject_id,
+        Subject.tenant_id == current_user.tenant_id
+    ).first()
+    if not db_subject:
+        raise HTTPException(status_code=404, detail="Subject not found")
+
+    for key, value in subject.model_dump().items():
+        setattr(db_subject, key, value)
+
+    db.commit()
+    db.refresh(db_subject)
+    return db_subject
+
+
+@router.delete("/subjects/{subject_id}")
+def delete_subject(
+    subject_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    subject = db.query(Subject).filter(
+        Subject.id == subject_id,
+        Subject.tenant_id == current_user.tenant_id
+    ).first()
+    if not subject:
+        raise HTTPException(status_code=404, detail="Subject not found")
+
+    db.delete(subject)
+    db.commit()
+    return {"message": "Subject deleted"}
 
 
 # Learning Diary endpoints
