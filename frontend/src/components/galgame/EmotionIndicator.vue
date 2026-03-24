@@ -19,6 +19,10 @@
         {{ getStageEmoji(s) }}
       </span>
     </div>
+    <div v-if="emotion && emotion !== 'neutral'" class="current-emotion">
+      <span class="emotion-dot" :class="emotionClass"></span>
+      {{ emotionLabel }}
+    </div>
   </div>
 </template>
 
@@ -27,6 +31,7 @@ import { computed } from 'vue'
 
 const props = defineProps<{
   stage: string
+  emotion?: string
 }>()
 
 const stages = ['stranger', 'acquaintance', 'friend', 'mentor', 'partner']
@@ -39,12 +44,42 @@ const stageNames: Record<string, string> = {
   partner: '伙伴'
 }
 
+const emotionLabels: Record<string, string> = {
+  curiosity: '好奇',
+  confusion: '困惑',
+  frustration: '沮丧',
+  excitement: '兴奋',
+  satisfaction: '满足',
+  boredom: '无聊',
+  anxiety: '焦虑',
+  neutral: '平静',
+}
+
+const emotionClasses: Record<string, string> = {
+  curiosity: 'positive',
+  excitement: 'positive',
+  satisfaction: 'positive',
+  confusion: 'negative',
+  frustration: 'negative',
+  anxiety: 'negative',
+  boredom: 'negative',
+  neutral: 'neutral',
+}
+
 const stageName = computed(() => stageNames[props.stage] || '陌生人')
 
 const progressPercent = computed(() => {
   const idx = stages.indexOf(props.stage)
   return Math.min(100, ((idx + 1) / stages.length) * 100)
 })
+
+const emotionLabel = computed(() =>
+  props.emotion ? emotionLabels[props.emotion] || '' : ''
+)
+
+const emotionClass = computed(() =>
+  props.emotion ? emotionClasses[props.emotion] || 'neutral' : 'neutral'
+)
 
 const getStageEmoji = (stage: string) => {
   const emojis: Record<string, string> = {
@@ -104,5 +139,37 @@ const getStageEmoji = (stage: string) => {
 .stage-icon.active {
   opacity: 1;
   transform: scale(1.2);
+}
+
+.current-emotion {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid #3a3a6a;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #ccc;
+}
+
+.emotion-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.emotion-dot.positive {
+  background: #4adf6a;
+  box-shadow: 0 0 4px #4adf6a;
+}
+
+.emotion-dot.negative {
+  background: #df6a4a;
+  box-shadow: 0 0 4px #df6a4a;
+}
+
+.emotion-dot.neutral {
+  background: #8a8aaa;
 }
 </style>

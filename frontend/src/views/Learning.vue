@@ -5,7 +5,7 @@
       <button class="back-btn" @click="goBack">← 返回</button>
       <h2>{{ subjectName }}</h2>
       <div class="header-actions">
-        <EmotionIndicator :stage="relationshipStage" />
+        <EmotionIndicator :stage="relationshipStage" :emotion="currentEmotion" />
         <button class="save-btn" @click="showSaveLoad = true">存档/读档</button>
       </div>
     </header>
@@ -118,6 +118,7 @@ const displayedText = ref('')
 const currentChoices = ref<string[]>([])
 const showToolConfirm = ref(false)
 const showSaveLoad = ref(false)
+const currentEmotion = ref('')
 const toolRequest = ref({ tool: '', query: '', reason: '' })
 const dialogArea = ref<HTMLElement | null>(null)
 
@@ -211,7 +212,10 @@ const sendMessage = async () => {
       // 显示教师回复 (打字机效果)
       await startTyping(data.reply)
 
-      // 更新关系阶段
+      // 更新情感状态与关系阶段
+      if (data.emotion?.emotion_type) {
+        currentEmotion.value = data.emotion.emotion_type
+      }
       if (data.relationship_stage) {
         relationshipStage.value = data.relationship_stage
       }

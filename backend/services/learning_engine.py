@@ -184,8 +184,8 @@ class LearningEngine:
                     "reply": llm_response
                 }
 
-            # 9. Analyze emotion
-            emotion = await self.analyzer.analyze_emotion(user_message)
+            # 9. Analyze emotion (LLM-based when API key available, local fallback)
+            emotion = await self.analyzer.analyze_emotion(user_message, user_api_key, provider)
 
             # 10. Update relationship stage
             new_stage = await self.analyzer.update_relationship_stage(session_id, emotion, db)
