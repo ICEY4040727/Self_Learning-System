@@ -33,3 +33,27 @@ def decode_access_token(token: str) -> Optional[dict]:
         return payload
     except JWTError:
         return None
+
+
+def encrypt_api_key(api_key: str) -> str:
+    """Encrypt API key usingFernet symmetric encryption"""
+    from cryptography.fernet import Fernet
+    import base64
+
+    # Generate key from secret_key (must be 32 bytes for Fernet)
+    key = base64.urlsafe_b64encode(settings.secret_key.ljust(32)[:32].encode())
+    f = Fernet(key)
+    return f.encrypt(api_key.encode()).decode()
+
+
+def decrypt_api_key(encrypted_key: str) -> Optional[str]:
+    """Decrypt API key"""
+    from cryptography.fernet import Fernet
+    import base64
+
+    try:
+        key = base64.urlsafe_b64encode(settings.secret_key.ljust(32)[:32].encode())
+        f = Fernet(key)
+        return f.decrypt(encrypted_key.encode()).decode()
+    except Exception:
+        return None

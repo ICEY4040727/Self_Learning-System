@@ -429,3 +429,39 @@ def update_progress(
     db.commit()
     db.refresh(db_progress)
     return db_progress
+
+# Settings endpoints
+class SettingsUpdate(BaseModel):
+    default_provider: Optional[str] = None
+    api_key: Optional[str] = None
+
+
+class SettingsResponse(BaseModel):
+    default_provider: Optional[str] = None
+
+
+@router.get("/settings", response_model=SettingsResponse)
+def get_settings(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    return SettingsResponse(
+        default_provider=current_user.default_provider
+    )
+
+
+@router.put("/settings")
+def update_settings(
+    settings: SettingsUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    if settings.default_provider:
+        current_user.default_provider = settings.default_provider
+
+    if settings.api_key:
+        from backend.core.security import encrypt_api_key
+        current_user.encrypted_api_key = encrypt_api_key(settings.api_key)
+
+    db.commit()
+    return {"message": "Settings updated"}

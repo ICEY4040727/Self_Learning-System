@@ -2,9 +2,12 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import Optional, List
+from datetime import datetime
 from backend.db.database import get_db
 from backend.api.routes.auth import get_current_user
 from backend.models.models import User, Session as SessionModel, ChatMessage, TeacherPersona, LearnerProfile, Subject
+from backend.services.learning_engine import learning_engine
+from backend.core.security import decrypt_api_key
 
 router = APIRouter()
 
@@ -84,34 +87,59 @@ async def send_message(
 
     if not db_session:
         # Auto-start a new session
-        return await start_learning(subject_id, db, current_user)
+        start_result = await start_learning(subject_id, db, current_user)
+        # Get the newly created session
+        db_session = db.query(SessionModel).filter(
+            SessionModel.subject_id == subject_id,
+            SessionModel.user_id == current_user.id,
+            SessionModel.ended_at == None
+        ).order_by(SessionModel.started_at.desc()).first()
 
-    # Save user message
+    if not db_session:
+        raise HTTPException(status_code=500, detail="Failed to create session")
+
+    # Get user's API key and provider
+    user_api_key = None
+    provider = "claude"
+    if current_user.encrypted_api_key:
+        user_api_key = decrypt_api_key(current_user.encrypted_api_key)
+    if current_user.default_provider:
+        provider = current_user.default_provider
+
+    # Process message through LearningEngine
+    # Note: LearningEngine handles session updates, we handle ChatMessage storage
+    result = await learning_engine.process_message(
+        session_id=db_session.id,
+        user_message=chat_request.message,
+        user_api_key=user_api_key,
+        provider=provider
+    )
+
+    # Save user message to database
     user_message = ChatMessage(
         session_id=db_session.id,
         sender_type="user",
         sender_id=current_user.id,
-        content=chat_request.message
+        content=chat_request.message,
+        emotion_analysis=result.get("emotion"),
+        used_memory_ids=result.get("used_memory_ids")
     )
     db.add(user_message)
-    db.commit()
 
-    # Simple response for now (will integrate LLM later)
-    reply = f"收到你的消息：{chat_request.message}"
-
-    # Save teacher response
+    # Save teacher response to database
     teacher_message = ChatMessage(
         session_id=db_session.id,
         sender_type="teacher",
-        content=reply
+        content=result.get("reply", "")
     )
     db.add(teacher_message)
     db.commit()
 
     return ChatResponse(
-        type="text",
-        reply=reply,
-        relationship_stage=db_session.relationship_stage
+        type=result.get("type", "text"),
+        reply=result.get("reply", ""),
+        emotion=result.get("emotion"),
+        relationship_stage=result.get("relationship_stage")
     )
 
 
@@ -145,7 +173,6 @@ async def end_session(
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    from datetime import datetime
     session.ended_at = datetime.utcnow()
     db.commit()
 
