@@ -1,11 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional, List
-from datetime import datetime
+from datetime import datetime, timezone
 from backend.db.database import get_db
 from backend.api.routes.auth import get_current_user
 from backend.models.models import Character, TeacherPersona, LearnerProfile, Subject, LessonPlan, LearningDiary, ProgressTracking, User
+from backend.services import spaced_repetition
 
 router = APIRouter()
 
@@ -509,6 +510,73 @@ def update_progress(
     db.commit()
     db.refresh(db_progress)
     return db_progress
+
+
+# Review endpoint – FSRS spaced repetition
+class ReviewRequest(BaseModel):
+    rating: int = Field(ge=1, le=4)  # 1=Again, 2=Hard, 3=Good, 4=Easy
+
+
+class ReviewResponse(BaseModel):
+    id: int
+    topic: str
+    mastery_level: int
+    retrievability: float
+    next_review: Optional[datetime] = None
+    last_review: Optional[datetime] = None
+
+
+@router.post("/progress/{progress_id}/review", response_model=ReviewResponse)
+def review_progress(
+    progress_id: int,
+    req: ReviewRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Record a review for a topic and compute next review date via FSRS."""
+    db_progress = db.query(ProgressTracking).filter(
+        ProgressTracking.id == progress_id,
+        ProgressTracking.user_id == current_user.id,
+    ).first()
+    if not db_progress:
+        raise HTTPException(status_code=404, detail="Progress not found")
+
+    result = spaced_repetition.review(db_progress.fsrs_state, req.rating)
+
+    db_progress.fsrs_state = result["fsrs_state"]
+    db_progress.last_review = result["last_review"]
+    db_progress.next_review = result["due"]
+    db_progress.mastery_level = result["mastery_level"]
+
+    db.commit()
+    db.refresh(db_progress)
+
+    return ReviewResponse(
+        id=db_progress.id,
+        topic=db_progress.topic,
+        mastery_level=db_progress.mastery_level,
+        retrievability=result["retrievability"],
+        next_review=db_progress.next_review,
+        last_review=db_progress.last_review,
+    )
+
+
+@router.get("/progress/due", response_model=List[ProgressTrackingResponse])
+def get_due_reviews(
+    subject_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Get topics that are due for review (next_review <= now)."""
+    now = datetime.now(timezone.utc)
+    query = db.query(ProgressTracking).filter(
+        ProgressTracking.user_id == current_user.id,
+        ProgressTracking.next_review <= now,
+    )
+    if subject_id:
+        query = query.filter(ProgressTracking.subject_id == subject_id)
+    return query.order_by(ProgressTracking.next_review).all()
+
 
 # Settings endpoints
 class SettingsUpdate(BaseModel):

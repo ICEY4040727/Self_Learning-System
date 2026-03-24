@@ -150,6 +150,7 @@ class ProgressTracking(Base):
     mastery_level = Column(Integer, default=0)
     last_review = Column(DateTime, nullable=True)
     next_review = Column(DateTime, nullable=True)
+    fsrs_state = Column(JSON, nullable=True)
 
     subject = relationship("Subject", back_populates="progress_trackings")
     user = relationship("User", back_populates="progress_trackings")
