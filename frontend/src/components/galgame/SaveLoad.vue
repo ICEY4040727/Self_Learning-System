@@ -111,7 +111,7 @@ const handleLoad = async () => {
 
   try {
     const response = await axios.get(`/api/save/${selectedSave.value.id}`)
-    emit('loaded', response.data.data)
+    emit('load', response.data.data)
     alert('读档成功！')
   } catch (error) {
     console.error('Load failed:', error)
