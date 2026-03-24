@@ -91,6 +91,7 @@ import CharacterDisplay from '@/components/galgame/CharacterDisplay.vue'
 import EmotionIndicator from '@/components/galgame/EmotionIndicator.vue'
 import SaveLoad from '@/components/galgame/SaveLoad.vue'
 import ToolConfirmDialog from '@/components/galgame/ToolConfirmDialog.vue'
+import mermaid from 'mermaid'
 
 interface ChatMessage {
   id: number
@@ -126,9 +127,29 @@ const dialogArea = ref<HTMLElement | null>(null)
 let typeInterval: number | null = null
 const TYPE_SPEED = 30 // ms per character
 
+let mermaidCounter = 0
+
 const formatMessage = (content: string) => {
-  // 简单换行处理
-  return content.replace(/\n/g, '<br>')
+  // Replace mermaid code blocks with render containers
+  const formatted = content.replace(/```mermaid\n([\s\S]*?)```/g, (_match, code) => {
+    const id = `mermaid-${++mermaidCounter}`
+    return `<div class="mermaid-container"><pre class="mermaid" id="${id}">${code.trim()}</pre></div>`
+  })
+  // Convert remaining newlines to <br>
+  return formatted.replace(/\n/g, '<br>')
+}
+
+const renderMermaid = () => {
+  nextTick(async () => {
+    const elements = document.querySelectorAll('.mermaid[data-processed]')
+    // Clear previously processed flag for re-render
+    elements.forEach(el => el.removeAttribute('data-processed'))
+    try {
+      await mermaid.run({ querySelector: '.mermaid' })
+    } catch (e) {
+      console.warn('Mermaid render failed:', e)
+    }
+  })
 }
 
 const scrollToBottom = () => {
@@ -158,6 +179,7 @@ const startTyping = (fullText: string) => {
         content: fullText
       })
       scrollToBottom()
+      renderMermaid()
     }
   }, TYPE_SPEED)
 }
@@ -273,6 +295,7 @@ const handleLoadSave = (saveData: any) => {
   }
   showSaveLoad.value = false
   scrollToBottom()
+  renderMermaid()
 }
 
 const goBack = () => {
@@ -311,6 +334,7 @@ const fetchActiveSession = async () => {
           content: m.content
         }))
         scrollToBottom()
+        renderMermaid()
       }
 
       // 获取关系阶段
@@ -328,6 +352,18 @@ const fetchActiveSession = async () => {
 }
 
 onMounted(async () => {
+  mermaid.initialize({
+    startOnLoad: false,
+    theme: 'dark',
+    themeVariables: {
+      primaryColor: '#4a4a8a',
+      primaryTextColor: '#fff',
+      primaryBorderColor: '#ffd700',
+      lineColor: '#888',
+      secondaryColor: '#2a2a4a',
+      tertiaryColor: '#1a1a2e',
+    },
+  })
   await fetchSubjectInfo()
   await fetchActiveSession()
 })
@@ -497,5 +533,19 @@ onMounted(async () => {
 .input-area button:disabled {
   background: #3a3a5a;
   cursor: not-allowed;
+}
+
+:deep(.mermaid-container) {
+  margin: 12px 0;
+  padding: 16px;
+  background: rgba(42, 42, 74, 0.6);
+  border: 1px solid #4a4a8a;
+  border-radius: 8px;
+  overflow-x: auto;
+}
+
+:deep(.mermaid-container svg) {
+  max-width: 100%;
+  height: auto;
 }
 </style>
