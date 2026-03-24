@@ -172,6 +172,40 @@ check_needs_review() {
     echo "$current" > "$state_file"
 }
 
+# Check for PR updates (new commits pushed) → notify Reviewer to re-review
+check_pr_updates() {
+    local state_file="$STATE_DIR/last_pr_commits.json"
+    local current
+
+    # Get open PRs with their latest commit SHA
+    current=$(gh pr list --repo "$REPO" --state open --json number,title,headRefOid 2>/dev/null || echo "[]")
+
+    if [[ ! -f "$state_file" ]]; then
+        echo "$current" > "$state_file"
+        return 0
+    fi
+
+    local prev
+    prev=$(cat "$state_file")
+
+    # Find PRs where headRefOid changed (new commits pushed)
+    local updated_prs
+    updated_prs=$(jq -r --argjson prev "$prev" '
+        [.[] | . as $cur |
+         ($prev | map(select(.number == $cur.number)) | first // null) as $old |
+         select($old != null and $old.headRefOid != $cur.headRefOid)]
+        | .[] | "[通知] PR #\(.number) 有新提交，请 re-review: \(.title)"
+    ' <<< "$current" 2>/dev/null || true)
+
+    if [[ -n "$updated_prs" ]]; then
+        while IFS= read -r msg; do
+            notify_session "$REVIEWER_SESSION" "$msg"
+        done <<< "$updated_prs"
+    fi
+
+    echo "$current" > "$state_file"
+}
+
 # Check for new reviewer-assigned issues → notify Reviewer
 check_reviewer_issues() {
     local state_file="$STATE_DIR/last_reviewer_issues.json"
@@ -215,6 +249,7 @@ while true; do
     # Check for new events
     check_approved_issues || echo "[gh-notify] WARN: check_approved_issues failed"
     check_needs_review    || echo "[gh-notify] WARN: check_needs_review failed"
+    check_pr_updates      || echo "[gh-notify] WARN: check_pr_updates failed"
     check_reviewer_issues || echo "[gh-notify] WARN: check_reviewer_issues failed"
 
     sleep "$POLL_INTERVAL"
