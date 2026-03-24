@@ -3,6 +3,7 @@
 import json
 import re
 from typing import List, Optional
+from sqlalchemy import func as sqlfunc
 from backend.services.llm.adapter import get_llm_adapter
 from backend.services.memory import memory_service
 from backend.services.dynamic_analyzer import DynamicAnalyzer
@@ -12,7 +13,8 @@ from backend.models.models import (
     TeacherPersona,
     LearnerProfile,
     ChatMessage,
-    RelationshipStageRecord
+    RelationshipStageRecord,
+    ProgressTracking,
 )
 
 
@@ -34,16 +36,57 @@ class LearningEngine:
         "partner": "深入讨论知识话题，共同探索。认可学习者的成长，可以进行更深层次的学术交流。",
     }
 
-    # Emotion-aware teaching strategies
-    EMOTION_STRATEGIES = {
-        "curiosity":    "学习者表现出好奇心——顺势深入提问，拓展话题广度，鼓励探索。",
-        "confusion":    "学习者感到困惑——退一步用更简单的类比重新解释，确认哪一部分不清楚。",
-        "frustration":  "学习者有些沮丧——先共情安抚，降低难度，用小步骤引导重建信心。",
-        "excitement":   "学习者很兴奋——趁热打铁加深难度，引导他们自己总结规律。",
-        "satisfaction":  "学习者感到满意——适时引入下一层级的知识，保持学习动力。",
-        "boredom":      "学习者显得无聊——尝试换一种教学方式，引入有趣的案例或挑战性问题。",
-        "anxiety":      "学习者感到焦虑——放慢节奏，强调理解过程比结果更重要，给予肯定。",
+    # Scaffold level instructions (ZPD-based)
+    SCAFFOLD_INSTRUCTIONS = {
+        5: "【脚手架等级 5/5 — 最高支持】\n用最简单的类比一步步解释，直接给出具体示例带着学习者走。将问题拆解为最小步骤，每步都确认理解后再进入下一步。",
+        4: "【脚手架等级 4/5 — 高支持】\n提供关键线索和提示，缩小思考范围。给出相关概念的对比，引导学习者在有限选项中推理。",
+        3: "【脚手架等级 3/5 — 适度支持】\n提出引导性问题，给适度提示。让学习者尝试自己组织答案，在关键卡点时给予方向性帮助。",
+        2: "【脚手架等级 2/5 — 低支持】\n仅给方向性暗示，鼓励自主探索。可以反问学习者的推理过程，但不直接揭示答案的方向。",
+        1: "【脚手架等级 1/5 — 最低支持】\n只确认方向正确与否，让学生完全自主推理。提出更深层的延伸问题，推动学习者突破舒适区。",
     }
+
+    @staticmethod
+    def compute_scaffold_level(emotion_type: str, mastery_level: int) -> int:
+        """
+        Compute scaffold level (1-5) using fuzzy logic on emotion + mastery.
+
+        Based on Vygotsky's ZPD theory: high support when learner is in
+        struggle zone, low support when in comfort/mastery zone.
+        """
+        if emotion_type == "frustration" and mastery_level < 30:
+            return 5
+        if emotion_type == "frustration":
+            return 4
+        if emotion_type == "confusion" and mastery_level < 50:
+            return 4
+        if emotion_type == "confusion":
+            return 3
+        if emotion_type == "anxiety" and mastery_level > 60:
+            return 3
+        if emotion_type == "anxiety":
+            return 4
+        if emotion_type == "boredom" and mastery_level > 60:
+            return 2
+        if emotion_type == "boredom":
+            return 3
+        if emotion_type == "curiosity" and mastery_level > 60:
+            return 2
+        if emotion_type == "curiosity":
+            return 3
+        if emotion_type == "excitement" and mastery_level > 70:
+            return 1
+        if emotion_type == "excitement":
+            return 2
+        if emotion_type == "satisfaction" and mastery_level > 70:
+            return 1
+        if emotion_type == "satisfaction":
+            return 2
+        # neutral or unknown
+        if mastery_level > 70:
+            return 2
+        if mastery_level < 30:
+            return 4
+        return 3
 
     # ------------------------------------------------------------------
     # Dual-layer prompt builder
@@ -55,15 +98,17 @@ class LearningEngine:
         learner_profile: Optional[LearnerProfile] = None,
         retrieved_memories: List[dict] = None,
         prev_emotion: Optional[dict] = None,
+        mastery_level: int = 50,
     ) -> str:
         """
         Build system prompt with dual-layer architecture:
           Static layer  — teacher identity + Socratic method principles
-          Dynamic layer — relationship stage + learner context + emotion + memories
+          Dynamic layer — relationship stage + scaffold + learner context + memories
         """
         static = self._build_static_layer(teacher_persona)
         dynamic = self._build_dynamic_layer(
-            relationship_stage, learner_profile, retrieved_memories, prev_emotion
+            relationship_stage, learner_profile, retrieved_memories,
+            prev_emotion, mastery_level,
         )
         return f"{static}\n\n---\n\n{dynamic}"
 
@@ -96,20 +141,20 @@ class LearningEngine:
         learner_profile: Optional[LearnerProfile],
         retrieved_memories: Optional[List[dict]],
         prev_emotion: Optional[dict],
+        mastery_level: int = 50,
     ) -> str:
-        """Changes per turn: stage, learner state, emotion, memories."""
+        """Changes per turn: stage, scaffold, learner state, memories."""
         parts: list[str] = []
 
         # 1. Relationship stage
         stage_text = self.STAGE_PROMPTS.get(relationship_stage, self.STAGE_PROMPTS["stranger"])
         parts.append(f"【当前关系阶段：{relationship_stage}】\n{stage_text}")
 
-        # 2. Emotion-aware strategy
-        if prev_emotion:
-            etype = prev_emotion.get("emotion_type", "")
-            strategy = self.EMOTION_STRATEGIES.get(etype)
-            if strategy:
-                parts.append(f"【学习者情感状态：{etype}】\n{strategy}")
+        # 2. Adaptive scaffold (Fuzzy Logic ZPD)
+        emotion_type = prev_emotion.get("emotion_type", "neutral") if prev_emotion else "neutral"
+        scaffold = self.compute_scaffold_level(emotion_type, mastery_level)
+        scaffold_text = self.SCAFFOLD_INSTRUCTIONS[scaffold]
+        parts.append(f"【学习者状态】情感: {emotion_type} | 知识掌握度: {mastery_level}/100\n{scaffold_text}")
 
         # 3. Learner profile
         profile_lines: list[str] = []
@@ -202,13 +247,24 @@ class LearningEngine:
             if last_user_msg and last_user_msg.emotion_analysis:
                 prev_emotion = last_user_msg.emotion_analysis
 
-            # 5. Build dynamic system prompt (dual-layer architecture)
+            # 4.6 Get average mastery_level for this subject (for scaffold computation)
+            mastery_level = 50  # default
+            if session.subject_id:
+                avg = db.query(sqlfunc.avg(ProgressTracking.mastery_level)).filter(
+                    ProgressTracking.subject_id == session.subject_id,
+                    ProgressTracking.user_id == session.user_id,
+                ).scalar()
+                if avg is not None:
+                    mastery_level = int(avg)
+
+            # 5. Build dynamic system prompt (dual-layer architecture + ZPD scaffold)
             system_prompt = self.build_system_prompt(
                 teacher_persona,
                 session.relationship_stage or "stranger",
                 learner_profile,
                 retrieved_memories,
                 prev_emotion,
+                mastery_level,
             )
 
             # 6. Get chat history for context
