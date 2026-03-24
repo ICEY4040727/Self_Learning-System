@@ -53,8 +53,8 @@ class Character(Base):
 
     tenant = relationship("Tenant", back_populates="characters")
     user = relationship("User", back_populates="characters")
-    subjects = relationship("Subject", back_populates="character")
-    teacher_personas = relationship("TeacherPersona", back_populates="character")
+    subjects = relationship("Subject", back_populates="character", cascade="all, delete-orphan")
+    teacher_personas = relationship("TeacherPersona", back_populates="character", cascade="all, delete-orphan")
 
 
 class TeacherPersona(Base):

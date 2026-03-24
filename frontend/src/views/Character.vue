@@ -340,8 +340,11 @@ const openCreatePersona = () => {
   showPersonaDialog.value = true
 }
 
+const editingPersonaWasActive = ref(false)
+
 const openEditPersona = (persona: TeacherPersona) => {
   editingPersonaId.value = persona.id
+  editingPersonaWasActive.value = persona.is_active
   personaForm.value = {
     name: persona.name,
     version: persona.version,
@@ -359,7 +362,7 @@ const savePersona = async () => {
     version: personaForm.value.version,
     traits: parseTraits(personaForm.value.traitsInput),
     system_prompt_template: personaForm.value.system_prompt_template,
-    is_active: false,
+    is_active: editingPersonaId.value ? editingPersonaWasActive.value : false,
   }
   try {
     if (editingPersonaId.value) {
