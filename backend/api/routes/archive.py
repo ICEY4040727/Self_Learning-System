@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional, List
 from datetime import datetime, timezone
 from backend.db.database import get_db
@@ -514,7 +514,7 @@ def update_progress(
 
 # Review endpoint – FSRS spaced repetition
 class ReviewRequest(BaseModel):
-    rating: int  # 1=Again, 2=Hard, 3=Good, 4=Easy
+    rating: int = Field(ge=1, le=4)  # 1=Again, 2=Hard, 3=Good, 4=Easy
 
 
 class ReviewResponse(BaseModel):
