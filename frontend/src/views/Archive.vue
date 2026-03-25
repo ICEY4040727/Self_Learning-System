@@ -54,6 +54,11 @@
         </div>
       </section>
 
+      <!-- 情感轨迹 -->
+      <section class="section">
+        <EmotionTrajectory />
+      </section>
+
       <!-- 存档管理 -->
       <section class="section">
         <div class="section-header">
@@ -110,6 +115,7 @@ import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import axios from 'axios'
 import { useAuthStore } from '@/stores/auth'
+import EmotionTrajectory from '@/components/EmotionTrajectory.vue'
 
 const router = useRouter()
 const authStore = useAuthStore()
