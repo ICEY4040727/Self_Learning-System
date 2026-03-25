@@ -7,7 +7,7 @@ import os
 
 os.environ["TESTING"] = "1"  # Must be set before importing app (disables rate limiting)
 
-import pytest  # noqa: E402
+import pytest  # noqa: E402, I001
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
