@@ -82,13 +82,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, nextTick, watch } from 'vue'
+import { ref, onMounted, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import axios from 'axios'
 import { useAuthStore } from '@/stores/auth'
-import DialogBox from '@/components/galgame/DialogBox.vue'
 import ChoicePanel from '@/components/galgame/ChoicePanel.vue'
-import CharacterDisplay from '@/components/galgame/CharacterDisplay.vue'
 import EmotionIndicator from '@/components/galgame/EmotionIndicator.vue'
 import SaveLoad from '@/components/galgame/SaveLoad.vue'
 import ToolConfirmDialog from '@/components/galgame/ToolConfirmDialog.vue'
@@ -121,7 +119,7 @@ const displayedText = ref('')
 const currentChoices = ref<string[]>([])
 const showToolConfirm = ref(false)
 const showSaveLoad = ref(false)
-const sessionId = ref<number | null>(null)
+const sessionId = ref<number | undefined>(undefined)
 const currentEmotion = ref('')
 const toolRequest = ref({ tool: '', query: '', reason: '' })
 const dialogArea = ref<HTMLElement | null>(null)
