@@ -27,7 +27,7 @@ services:
       postgres:
         condition: service_healthy
       chromadb:
-        condition: service_healthy
+        condition: service_started
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 10s
@@ -61,11 +61,8 @@ services:
       - chroma_data:/chroma/chroma
     environment:
       ANONYMIZED_TELEMETRY: "false"
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/heartbeat')"]
-      interval: 10s
-      timeout: 3s
-      retries: 5
+    # No healthcheck — chromadb/chroma image has no python/curl/wget
+    # backend start_period gives chromadb enough time to initialize
     restart: unless-stopped
 
   neo4j:
