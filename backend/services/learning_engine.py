@@ -267,10 +267,15 @@ class LearningEngine:
                 mastery_level,
             )
 
-            # 6. Get chat history for context
-            chat_history = db.query(ChatMessage).filter(
-                ChatMessage.session_id == session_id
-            ).order_by(ChatMessage.timestamp).all()
+            # 6. Get recent chat history (limit to last 30 messages to control token usage)
+            chat_history = (
+                db.query(ChatMessage)
+                .filter(ChatMessage.session_id == session_id)
+                .order_by(ChatMessage.timestamp.desc())
+                .limit(30)
+                .all()
+            )
+            chat_history.reverse()  # restore chronological order
 
             # Convert to messages format for LLM
             ROLE_MAP = {"user": "user", "teacher": "assistant"}
