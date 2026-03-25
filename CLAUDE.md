@@ -58,9 +58,10 @@ WebGAL/            # Reserved for WebGAL integration (empty)
 cd frontend && npm install && npm run dev    # Dev server on :5173
 cd frontend && npm run build                 # Production build
 
-# Backend
-cd backend && pip install -r requirements.txt                   # Production deps
-cd backend && pip install -r requirements-dev.txt               # Dev + test deps
+# Backend (uv recommended for speed, pip also works)
+pip install uv                                                  # One-time install
+cd backend && uv pip install -r requirements.txt --system       # Production deps
+cd backend && uv pip install -r requirements-dev.txt --system   # Dev + test deps
 cd backend && uvicorn main:app --reload --port 8000
 
 # Tests (requires requirements-dev.txt)
