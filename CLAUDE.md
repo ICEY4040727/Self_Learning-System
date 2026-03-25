@@ -59,8 +59,14 @@ cd frontend && npm install && npm run dev    # Dev server on :5173
 cd frontend && npm run build                 # Production build
 
 # Backend
-cd backend && pip install -r requirements.txt
+cd backend && pip install -r requirements.txt                   # Production deps
+cd backend && pip install -r requirements-dev.txt               # Dev + test deps
 cd backend && uvicorn main:app --reload --port 8000
+
+# Tests (requires requirements-dev.txt)
+cd backend && pytest                                            # Run all tests
+cd backend && pytest tests/test_scaffold.py -v                  # Run specific file
+cd backend && pytest -k "test_login"                            # Run by name pattern
 
 # Database migrations (Alembic)
 cd backend && alembic revision --autogenerate -m "description"  # Generate migration
