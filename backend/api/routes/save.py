@@ -1,8 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional, List
 from datetime import datetime
+from pathlib import Path
 import json
 import os
 from backend.db.database import get_db
@@ -16,8 +17,16 @@ settings = get_settings()
 
 class SaveCreate(BaseModel):
     subject_id: int
-    save_name: str
+    save_name: str = Field(..., max_length=100, pattern=r'^[a-zA-Z0-9_\-\u4e00-\u9fff]+$')
     session_id: Optional[int] = None
+
+
+def _verify_save_path(file_path: str, user_id: int) -> None:
+    """Verify file_path is within the user's save directory."""
+    base = Path(settings.save_directory) / str(user_id)
+    target = Path(file_path).resolve()
+    if not str(target).startswith(str(base.resolve())):
+        raise HTTPException(status_code=403, detail="Access denied")
 
 
 class SaveResponse(BaseModel):
@@ -132,7 +141,9 @@ async def get_save(
     if not save:
         raise HTTPException(status_code=404, detail="Save not found")
 
-    # Read save file
+    # Verify path is within user's save directory
+    _verify_save_path(save.file_path, current_user.id)
+
     if not os.path.exists(save.file_path):
         raise HTTPException(status_code=404, detail="Save file not found")
 
@@ -161,7 +172,8 @@ async def delete_save(
     if not save:
         raise HTTPException(status_code=404, detail="Save not found")
 
-    # Delete file
+    # Verify path and delete file
+    _verify_save_path(save.file_path, current_user.id)
     if os.path.exists(save.file_path):
         os.remove(save.file_path)
 
