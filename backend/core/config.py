@@ -39,6 +39,9 @@ class Settings(BaseSettings):
     neo4j_password: str = "socratic_learning"
     knowledge_graph_enabled: bool = False
 
+    # Sentry
+    sentry_dsn: str = ""
+
     # Features
     features_voice_enabled: bool = False
 
