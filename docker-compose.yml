@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
   frontend:
     build: ./frontend
@@ -40,8 +38,8 @@ services:
 
   postgres:
     image: postgres:16-alpine
-    ports:
-      - "5432:5432"
+    # ports:
+    #   - "5432:5432"    # Uncomment to access DB from host for debugging
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-user}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
@@ -57,14 +55,14 @@ services:
 
   chromadb:
     image: chromadb/chroma:latest
-    ports:
-      - "8001:8000"
+    # ports:
+    #   - "8001:8000"    # Uncomment to access ChromaDB from host
     volumes:
       - chroma_data:/chroma/chroma
     environment:
       ANONYMIZED_TELEMETRY: "false"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/heartbeat"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/heartbeat')"]
       interval: 10s
       timeout: 3s
       retries: 5
@@ -73,9 +71,9 @@ services:
   neo4j:
     image: neo4j:5.26-community
     profiles: ["knowledge-graph"]
-    ports:
-      - "7474:7474"
-      - "7687:7687"
+    # ports:
+    #   - "7474:7474"    # Uncomment for Neo4j browser
+    #   - "7687:7687"
     environment:
       NEO4J_AUTH: ${NEO4J_USER:-neo4j}/${NEO4J_PASSWORD:-socratic_learning}
       NEO4J_PLUGINS: '["apoc"]'
