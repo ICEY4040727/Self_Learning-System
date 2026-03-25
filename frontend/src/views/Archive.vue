@@ -231,7 +231,21 @@ const createDiary = async () => {
 }
 
 const loadSave = async (saveId: number) => {
-  router.push('/home')
+  try {
+    const response = await axios.get(`/api/save/${saveId}`, {
+      headers: { Authorization: `Bearer ${authStore.token}` }
+    })
+    const data = response.data
+    const subjectId = data.subject_id
+    if (subjectId) {
+      router.push({ path: `/learning/${subjectId}`, query: { save_id: String(saveId) } })
+    } else {
+      alert('存档数据缺少科目信息')
+    }
+  } catch (error) {
+    console.error('Failed to load save:', error)
+    alert('读档失败')
+  }
 }
 
 const deleteSave = async (saveId: number) => {

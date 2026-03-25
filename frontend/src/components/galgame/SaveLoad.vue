@@ -38,7 +38,7 @@
         class="save-name-input"
       />
       <button
-        v-if="selectedSave && mode === 'save'"
+        v-if="mode === 'save' && newSaveName.trim()"
         class="action-button save"
         @click="handleSave"
       >
