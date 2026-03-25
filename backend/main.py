@@ -49,9 +49,3 @@ app.include_router(save.router, prefix="/api", tags=["save"])
 @app.post("/api/voice", status_code=501)
 async def voice_input():
     return {"message": "Voice input not yet implemented"}
-
-
-# Settings endpoint placeholder
-@app.get("/api/settings")
-async def get_settings():
-    return {"message": "User settings endpoint"}
