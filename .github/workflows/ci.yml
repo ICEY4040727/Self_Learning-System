@@ -35,6 +35,7 @@ jobs:
         env:
           DATABASE_URL: "sqlite://"
           SECRET_KEY: "test-secret-key-for-ci"
+          TESTING: "1"
 
   frontend-build:
     runs-on: ubuntu-latest

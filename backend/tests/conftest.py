@@ -3,7 +3,11 @@
 Uses SQLite in-memory database for test isolation — no PostgreSQL needed.
 """
 
-import pytest
+import os
+
+os.environ["TESTING"] = "1"  # Must be set before importing app (disables rate limiting)
+
+import pytest  # noqa: E402
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -12,14 +16,6 @@ from sqlalchemy.pool import StaticPool
 from backend.db.database import Base, get_db
 from backend.main import app
 
-
-@pytest.fixture(autouse=True)
-def disable_rate_limit():
-    """Disable rate limiting during tests to prevent 429 failures."""
-    limiter = app.state.limiter
-    limiter.enabled = False
-    yield
-    limiter.enabled = True
 
 
 # In-memory SQLite for tests
