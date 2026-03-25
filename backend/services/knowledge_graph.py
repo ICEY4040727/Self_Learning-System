@@ -17,7 +17,6 @@ _graphiti_available = False
 try:
     from graphiti_core import Graphiti
     from graphiti_core.nodes import EpisodeType
-    pass  # search config recipes available if needed
     _graphiti_available = True
 except ImportError:
     logger.info("graphiti-core not installed, knowledge graph features disabled")
