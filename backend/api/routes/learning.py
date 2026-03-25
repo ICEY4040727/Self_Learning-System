@@ -213,6 +213,13 @@ async def get_history(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
+    session = db.query(SessionModel).filter(
+        SessionModel.id == session_id,
+        SessionModel.user_id == current_user.id,
+    ).first()
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
     messages = db.query(ChatMessage).filter(
         ChatMessage.session_id == session_id
     ).order_by(ChatMessage.timestamp).all()
