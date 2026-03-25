@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional, List
 from datetime import datetime, timezone
 from backend.db.database import get_db
@@ -14,7 +14,7 @@ router = APIRouter()
 
 # Chat Request/Response models
 class ChatRequest(BaseModel):
-    message: str
+    message: str = Field(..., min_length=1, max_length=5000)
 
 
 class ChatResponse(BaseModel):
