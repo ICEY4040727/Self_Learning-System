@@ -1,5 +1,8 @@
+import logging
 from abc import ABC, abstractmethod
 from typing import AsyncGenerator
+
+logger = logging.getLogger(__name__)
 
 
 class LLMAdapter(ABC):
@@ -61,6 +64,13 @@ class ClaudeAdapter(LLMAdapter):
                 )
                 if response.status_code == 200:
                     data = response.json()
+                    usage = data.get("usage", {})
+                    logger.info(
+                        "LLM usage: provider=claude model=%s in_tokens=%d out_tokens=%d",
+                        self.model,
+                        usage.get("input_tokens", 0),
+                        usage.get("output_tokens", 0),
+                    )
                     return data.get("content", [{}])[0].get("text", "")
                 else:
                     return f"API调用失败: {response.status_code}"
@@ -117,6 +127,13 @@ class OpenAIAdapter(LLMAdapter):
                 )
                 if response.status_code == 200:
                     data = response.json()
+                    usage = data.get("usage", {})
+                    logger.info(
+                        "LLM usage: provider=openai model=%s in_tokens=%d out_tokens=%d",
+                        self.model,
+                        usage.get("prompt_tokens", 0),
+                        usage.get("completion_tokens", 0),
+                    )
                     return data.get("choices", [{}])[0].get("message", {}).get("content", "")
                 else:
                     return f"API调用失败: {response.status_code}"

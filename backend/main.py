@@ -12,6 +12,11 @@ limiter = Limiter(key_func=get_remote_address)
 
 settings = get_settings()
 
+# Sentry error monitoring (only if DSN configured)
+if settings.sentry_dsn:
+    import sentry_sdk
+    sentry_sdk.init(dsn=settings.sentry_dsn, traces_sample_rate=0.1)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -60,7 +65,31 @@ async def root():
 
 @app.get("/health")
 async def health_check():
-    return {"status": "healthy"}
+    from sqlalchemy import text
+    from backend.db.database import SessionLocal
+    from backend.services.memory import memory_service
+
+    checks = {"api": "ok"}
+
+    db = None
+    try:
+        db = SessionLocal()
+        db.execute(text("SELECT 1"))
+        checks["database"] = "ok"
+    except Exception:
+        checks["database"] = "error"
+    finally:
+        if db:
+            db.close()
+
+    try:
+        memory_service.client.heartbeat()
+        checks["chromadb"] = "ok"
+    except Exception:
+        checks["chromadb"] = "error"
+
+    status = "healthy" if all(v == "ok" for v in checks.values()) else "degraded"
+    return {"status": status, "checks": checks}
 
 
 # Import and include routers
