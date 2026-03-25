@@ -236,7 +236,7 @@ const loadSave = async (saveId: number) => {
       headers: { Authorization: `Bearer ${authStore.token}` }
     })
     const data = response.data
-    const subjectId = data.subject_id
+    const subjectId = data.data?.session_meta?.subject_id
     if (subjectId) {
       router.push({ path: `/learning/${subjectId}`, query: { save_id: String(saveId) } })
     } else {
