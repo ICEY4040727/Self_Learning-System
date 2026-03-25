@@ -1,7 +1,8 @@
-from datetime import datetime, timedelta, timezone
-from typing import Optional
+from datetime import UTC, datetime, timedelta
+
 from jose import JWTError, jwt
 from passlib.context import CryptContext
+
 from backend.core.config import get_settings
 
 settings = get_settings()
@@ -16,18 +17,18 @@ def get_password_hash(password: str) -> str:
     return pwd_context.hash(password)
 
 
-def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
+def create_access_token(data: dict, expires_delta: timedelta | None = None) -> str:
     to_encode = data.copy()
     if expires_delta:
-        expire = datetime.now(timezone.utc) + expires_delta
+        expire = datetime.now(UTC) + expires_delta
     else:
-        expire = datetime.now(timezone.utc) + timedelta(minutes=settings.access_token_expire_minutes)
+        expire = datetime.now(UTC) + timedelta(minutes=settings.access_token_expire_minutes)
     to_encode.update({"exp": expire})
     encoded_jwt = jwt.encode(to_encode, settings.secret_key, algorithm=settings.algorithm)
     return encoded_jwt
 
 
-def decode_access_token(token: str) -> Optional[dict]:
+def decode_access_token(token: str) -> dict | None:
     try:
         payload = jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
         return payload
@@ -37,8 +38,9 @@ def decode_access_token(token: str) -> Optional[dict]:
 
 def encrypt_api_key(api_key: str) -> str:
     """Encrypt API key usingFernet symmetric encryption"""
-    from cryptography.fernet import Fernet
     import base64
+
+    from cryptography.fernet import Fernet
 
     # Generate key from secret_key (must be 32 bytes for Fernet)
     key = base64.urlsafe_b64encode(settings.secret_key.ljust(32)[:32].encode())
@@ -46,10 +48,11 @@ def encrypt_api_key(api_key: str) -> str:
     return f.encrypt(api_key.encode()).decode()
 
 
-def decrypt_api_key(encrypted_key: str) -> Optional[str]:
+def decrypt_api_key(encrypted_key: str) -> str | None:
     """Decrypt API key"""
-    from cryptography.fernet import Fernet
     import base64
+
+    from cryptography.fernet import Fernet
 
     try:
         key = base64.urlsafe_b64encode(settings.secret_key.ljust(32)[:32].encode())

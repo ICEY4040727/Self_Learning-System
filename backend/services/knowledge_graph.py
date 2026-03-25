@@ -7,8 +7,8 @@ structured concept relationships and temporal knowledge evolution.
 """
 
 import logging
-from datetime import datetime, timezone
-from typing import Any, Optional
+from datetime import UTC, datetime
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +30,7 @@ class KnowledgeGraphService:
         self._uri = "bolt://localhost:7687"
         self._user = "neo4j"
         self._password = "socratic_learning"
-        self._graphiti: Optional[Any] = None
+        self._graphiti: Any | None = None
         self._initialized = False
 
     def configure(
@@ -92,7 +92,7 @@ class KnowledgeGraphService:
             return {"status": "disabled"}
 
         group_id = self._group_id(user_id, subject_id)
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         try:
             # Combine student+teacher into one episode to halve LLM calls
@@ -174,8 +174,8 @@ class KnowledgeGraphService:
         group_id = self._group_id(user_id, subject_id)
 
         try:
-            from graphiti_core.nodes import EntityNode
             from graphiti_core.edges import EntityEdge
+            from graphiti_core.nodes import EntityNode
 
             nodes = await EntityNode.get_by_group_ids(
                 self._graphiti.driver, group_ids=[group_id], limit=limit

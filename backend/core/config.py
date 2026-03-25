@@ -1,7 +1,7 @@
 import warnings
-from pydantic_settings import BaseSettings
 from functools import lru_cache
-from typing import Optional
+
+from pydantic_settings import BaseSettings
 
 _DEFAULT_SECRET = "your-secret-key-change-in-production"
 

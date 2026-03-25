@@ -1,13 +1,15 @@
+from datetime import UTC, datetime
+
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
 from pydantic import BaseModel, Field
-from typing import Optional, List
-from datetime import datetime, timezone
-from backend.db.database import get_db
+from sqlalchemy.orm import Session
+
 from backend.api.routes.auth import get_current_user
-from backend.models.models import User, Session as SessionModel, ChatMessage, TeacherPersona, LearnerProfile, Subject
-from backend.services.learning_engine import learning_engine
 from backend.core.security import decrypt_api_key
+from backend.db.database import get_db
+from backend.models.models import ChatMessage, LearnerProfile, Subject, TeacherPersona, User
+from backend.models.models import Session as SessionModel
+from backend.services.learning_engine import learning_engine
 
 router = APIRouter()
 
@@ -20,9 +22,9 @@ class ChatRequest(BaseModel):
 class ChatResponse(BaseModel):
     type: str  # text, tool_request, choice
     reply: str
-    choices: Optional[List[str]] = None
-    emotion: Optional[dict] = None
-    relationship_stage: Optional[str] = None
+    choices: list[str] | None = None
+    emotion: dict | None = None
+    relationship_stage: str | None = None
 
 
 class ToolConfirmRequest(BaseModel):
@@ -114,7 +116,7 @@ async def send_message(
 
     if not db_session:
         # Auto-start a new session
-        start_result = await start_learning(subject_id, db, current_user)
+        await start_learning(subject_id, db, current_user)
         # Get the newly created session
         db_session = db.query(SessionModel).filter(
             SessionModel.subject_id == subject_id,
@@ -200,7 +202,7 @@ async def end_session(
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    session.ended_at = datetime.now(timezone.utc)
+    session.ended_at = datetime.now(UTC)
     db.commit()
 
     return {"message": "Session ended"}
@@ -238,7 +240,7 @@ async def get_history(
 # List user's sessions
 @router.get("/sessions")
 async def list_sessions(
-    subject_id: Optional[int] = None,
+    subject_id: int | None = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):

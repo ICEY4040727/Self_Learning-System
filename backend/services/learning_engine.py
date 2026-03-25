@@ -3,22 +3,24 @@
 import json
 import logging
 import re
-from typing import List, Optional
 
 from sqlalchemy import func as sqlfunc
-from backend.services.llm.adapter import get_llm_adapter
-from backend.services.memory import memory_service
-from backend.services.dynamic_analyzer import DynamicAnalyzer
-from backend.services.knowledge_graph import knowledge_graph_service
+
 from backend.db.database import SessionLocal
 from backend.models.models import (
-    Session as SessionModel,
-    TeacherPersona,
-    LearnerProfile,
     ChatMessage,
-    RelationshipStageRecord,
+    LearnerProfile,
     ProgressTracking,
+    RelationshipStageRecord,
+    TeacherPersona,
 )
+from backend.models.models import (
+    Session as SessionModel,
+)
+from backend.services.dynamic_analyzer import DynamicAnalyzer
+from backend.services.knowledge_graph import knowledge_graph_service
+from backend.services.llm.adapter import get_llm_adapter
+from backend.services.memory import memory_service
 
 logger = logging.getLogger(__name__)
 
@@ -102,9 +104,9 @@ class LearningEngine:
         self,
         teacher_persona: TeacherPersona,
         relationship_stage: str,
-        learner_profile: Optional[LearnerProfile] = None,
-        retrieved_memories: List[dict] = None,
-        prev_emotion: Optional[dict] = None,
+        learner_profile: LearnerProfile | None = None,
+        retrieved_memories: list[dict] = None,
+        prev_emotion: dict | None = None,
         mastery_level: int = 50,
         knowledge_context: str = "",
     ) -> str:
@@ -146,9 +148,9 @@ class LearningEngine:
     def _build_dynamic_layer(
         self,
         relationship_stage: str,
-        learner_profile: Optional[LearnerProfile],
-        retrieved_memories: Optional[List[dict]],
-        prev_emotion: Optional[dict],
+        learner_profile: LearnerProfile | None,
+        retrieved_memories: list[dict] | None,
+        prev_emotion: dict | None,
         mastery_level: int = 50,
         knowledge_context: str = "",
     ) -> str:
@@ -194,7 +196,7 @@ class LearningEngine:
 
         return "\n\n".join(parts)
 
-    def parse_tool_request(self, response: str) -> Optional[dict]:
+    def parse_tool_request(self, response: str) -> dict | None:
         """Parse tool request from LLM response"""
         # Try JSON format
         try:
@@ -384,7 +386,7 @@ class LearningEngine:
                 "used_memory_ids": [user_memory_id, teacher_memory_id]
             }
 
-        except Exception as e:
+        except Exception:
             logger.error("Message processing failed", exc_info=True)
             return {
                 "type": "error",

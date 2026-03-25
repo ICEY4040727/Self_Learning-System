@@ -8,7 +8,6 @@ Supports 8 education-specific emotion categories with two analysis modes:
 import json
 import logging
 import re
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -162,7 +161,7 @@ class DynamicAnalyzer:
     # ------------------------------------------------------------------
     async def _llm_analyze(
         self, text: str, user_api_key: str, provider: str
-    ) -> Optional[dict]:
+    ) -> dict | None:
         """Call LLM for structured emotion classification."""
         from backend.services.llm.adapter import get_llm_adapter
 

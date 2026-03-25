@@ -5,11 +5,11 @@ backend.db.database.Base.metadata for autogenerate support.
 """
 
 import sys
-from pathlib import Path
 from logging.config import fileConfig
+from pathlib import Path
 
-from sqlalchemy import engine_from_config, pool
 from alembic import context
+from sqlalchemy import engine_from_config, pool
 
 # Add project root to path so `from backend.xxx` imports work
 # env.py is at backend/alembic/env.py → parents[2] is project root
