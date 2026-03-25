@@ -11,8 +11,9 @@ from logging.config import fileConfig
 from sqlalchemy import engine_from_config, pool
 from alembic import context
 
-# Add project root to path so backend imports work
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+# Add project root to path so `from backend.xxx` imports work
+# env.py is at backend/alembic/env.py → parents[2] is project root
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from backend.core.config import get_settings
 from backend.db.database import Base
