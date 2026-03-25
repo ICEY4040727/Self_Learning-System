@@ -273,10 +273,11 @@ class LearningEngine:
             ).order_by(ChatMessage.timestamp).all()
 
             # Convert to messages format for LLM
+            ROLE_MAP = {"user": "user", "teacher": "assistant"}
             messages = []
             for msg in chat_history:
                 messages.append({
-                    "role": msg.sender_type,
+                    "role": ROLE_MAP.get(msg.sender_type, "user"),
                     "content": msg.content
                 })
 
