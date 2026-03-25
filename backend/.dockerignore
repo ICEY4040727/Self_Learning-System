@@ -3,3 +3,5 @@ __pycache__
 chroma_data/
 saves/
 .env
+tests/
+requirements-dev.txt

@@ -6,7 +6,8 @@ COPY requirements.txt .
 RUN pip install uv && uv pip install --no-cache-dir --system -r requirements.txt
 
 COPY . ./backend/
+COPY entrypoint.sh /app/entrypoint.sh
 
 EXPOSE 8000
 
-CMD ["sh", "-c", "cd /app && alembic -c backend/alembic.ini upgrade head && uvicorn backend.main:app --host 0.0.0.0 --port 8000"]
+CMD ["/app/entrypoint.sh"]
