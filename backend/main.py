@@ -24,6 +24,22 @@ app.add_middleware(
 @app.on_event("startup")
 async def startup_event():
     init_db()
+    # Initialize knowledge graph if enabled
+    if settings.knowledge_graph_enabled:
+        from backend.services.knowledge_graph import knowledge_graph_service
+        knowledge_graph_service.configure(
+            neo4j_uri=settings.neo4j_uri,
+            neo4j_user=settings.neo4j_user,
+            neo4j_password=settings.neo4j_password,
+        )
+        await knowledge_graph_service.initialize()
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    if settings.knowledge_graph_enabled:
+        from backend.services.knowledge_graph import knowledge_graph_service
+        await knowledge_graph_service.close()
 
 
 @app.get("/")
