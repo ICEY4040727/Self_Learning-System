@@ -66,7 +66,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import axios from 'axios'
 import { useAuthStore } from '@/stores/auth'
@@ -74,12 +74,29 @@ import { useAuthStore } from '@/stores/auth'
 const router = useRouter()
 const authStore = useAuthStore()
 
+const loadDisplayPrefs = () => {
+  const saved = localStorage.getItem('display_settings')
+  if (saved) {
+    try { return JSON.parse(saved) } catch { /* ignore */ }
+  }
+  return { typewriterEffect: true, autoScroll: true }
+}
+
+const displayPrefs = loadDisplayPrefs()
+
 const settings = ref({
   provider: 'claude',
   apiKey: '',
-  typewriterEffect: true,
-  autoScroll: true
+  typewriterEffect: displayPrefs.typewriterEffect,
+  autoScroll: displayPrefs.autoScroll
 })
+
+watch(() => [settings.value.typewriterEffect, settings.value.autoScroll], () => {
+  localStorage.setItem('display_settings', JSON.stringify({
+    typewriterEffect: settings.value.typewriterEffect,
+    autoScroll: settings.value.autoScroll,
+  }))
+}, { deep: true })
 
 const saving = ref(false)
 const saveMessage = ref('')
