@@ -27,6 +27,12 @@ class Settings(BaseSettings):
         }
     }
 
+    # Neo4j (for Graphiti knowledge graph)
+    neo4j_uri: str = "bolt://localhost:7687"
+    neo4j_user: str = "neo4j"
+    neo4j_password: str = "socratic_learning"
+    knowledge_graph_enabled: bool = False
+
     # Features
     features_voice_enabled: bool = False
 

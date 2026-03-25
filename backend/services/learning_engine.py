@@ -1,12 +1,16 @@
 """Learning Engine - Core logic for Socratic learning system"""
 
 import json
+import logging
 import re
 from typing import List, Optional
+
+logger = logging.getLogger(__name__)
 from sqlalchemy import func as sqlfunc
 from backend.services.llm.adapter import get_llm_adapter
 from backend.services.memory import memory_service
 from backend.services.dynamic_analyzer import DynamicAnalyzer
+from backend.services.knowledge_graph import knowledge_graph_service
 from backend.db.database import SessionLocal
 from backend.models.models import (
     Session as SessionModel,
@@ -99,16 +103,17 @@ class LearningEngine:
         retrieved_memories: List[dict] = None,
         prev_emotion: Optional[dict] = None,
         mastery_level: int = 50,
+        knowledge_context: str = "",
     ) -> str:
         """
         Build system prompt with dual-layer architecture:
           Static layer  — teacher identity + Socratic method principles
-          Dynamic layer — relationship stage + scaffold + learner context + memories
+          Dynamic layer — relationship stage + scaffold + learner context + memories + knowledge graph
         """
         static = self._build_static_layer(teacher_persona)
         dynamic = self._build_dynamic_layer(
             relationship_stage, learner_profile, retrieved_memories,
-            prev_emotion, mastery_level,
+            prev_emotion, mastery_level, knowledge_context,
         )
         return f"{static}\n\n---\n\n{dynamic}"
 
@@ -142,8 +147,9 @@ class LearningEngine:
         retrieved_memories: Optional[List[dict]],
         prev_emotion: Optional[dict],
         mastery_level: int = 50,
+        knowledge_context: str = "",
     ) -> str:
-        """Changes per turn: stage, scaffold, learner state, memories."""
+        """Changes per turn: stage, scaffold, learner state, memories, knowledge graph."""
         parts: list[str] = []
 
         # 1. Relationship stage
@@ -178,6 +184,10 @@ class LearningEngine:
         if retrieved_memories:
             mem_lines = [f"- {m['content']}" for m in retrieved_memories]
             parts.append("【相关学习记忆】\n" + "\n".join(mem_lines))
+
+        # 5. Knowledge graph context
+        if knowledge_context:
+            parts.append("【学习者已掌握的知识关系】\n" + knowledge_context)
 
         return "\n\n".join(parts)
 
@@ -257,6 +267,15 @@ class LearningEngine:
                 if avg is not None:
                     mastery_level = int(avg)
 
+            # 4.7 Get knowledge graph context (if enabled)
+            knowledge_context = ""
+            if knowledge_graph_service.available and session.subject_id:
+                knowledge_context = await knowledge_graph_service.get_relevant_knowledge(
+                    user_id=session.user_id,
+                    subject_id=session.subject_id,
+                    query=user_message,
+                )
+
             # 5. Build dynamic system prompt (dual-layer architecture + ZPD scaffold)
             system_prompt = self.build_system_prompt(
                 teacher_persona,
@@ -265,6 +284,7 @@ class LearningEngine:
                 retrieved_memories,
                 prev_emotion,
                 mastery_level,
+                knowledge_context,
             )
 
             # 6. Get recent chat history (limit to last 30 messages to control token usage)
@@ -337,7 +357,20 @@ class LearningEngine:
                 {"type": "teacher"}
             )
 
-            # 13. Update chat message with emotion analysis
+            # 13. Update knowledge graph (async, non-blocking)
+            if knowledge_graph_service.available and session.subject_id:
+                try:
+                    await knowledge_graph_service.add_conversation_turn(
+                        user_id=session.user_id,
+                        subject_id=session.subject_id,
+                        user_message=user_message,
+                        teacher_response=llm_response,
+                        session_id=session_id,
+                    )
+                except Exception as e:
+                    logger.warning("Knowledge graph update failed: %s", e)
+
+            # 14. Commit DB changes
             db.commit()
 
             # 14. Return response
