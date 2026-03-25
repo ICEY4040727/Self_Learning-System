@@ -1,6 +1,8 @@
 <template>
+  <div class="save-load-overlay" @click.self="emit('close')">
   <div class="save-load-panel">
-    <div class="tabs">
+    <div class="panel-header">
+      <div class="tabs">
       <button
         :class="{ active: mode === 'save' }"
         @click="mode = 'save'"
@@ -13,6 +15,8 @@
       >
         读档
       </button>
+      </div>
+      <button class="close-btn" @click="emit('close')">✕</button>
     </div>
 
     <div class="save-list">
@@ -52,6 +56,7 @@
         确认读档
       </button>
     </div>
+  </div>
   </div>
 </template>
 
@@ -128,12 +133,45 @@ onMounted(fetchSaves)
 </script>
 
 <style scoped>
+.save-load-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
 .save-load-panel {
   background: rgba(0, 0, 0, 0.9);
   border: 2px solid #4a4a8a;
   border-radius: 12px;
   padding: 20px;
   min-width: 400px;
+}
+
+.panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  color: #888;
+  font-size: 18px;
+  cursor: pointer;
+  padding: 4px 8px;
+}
+
+.close-btn:hover {
+  color: #fff;
 }
 
 .tabs {
