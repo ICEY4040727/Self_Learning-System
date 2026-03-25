@@ -1,3 +1,5 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from backend.core.config import get_settings
@@ -5,10 +7,31 @@ from backend.db.database import init_db
 
 settings = get_settings()
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
+    init_db()
+    if settings.knowledge_graph_enabled:
+        from backend.services.knowledge_graph import knowledge_graph_service
+        knowledge_graph_service.configure(
+            neo4j_uri=settings.neo4j_uri,
+            neo4j_user=settings.neo4j_user,
+            neo4j_password=settings.neo4j_password,
+        )
+        await knowledge_graph_service.initialize()
+    yield
+    # Shutdown
+    if settings.knowledge_graph_enabled:
+        from backend.services.knowledge_graph import knowledge_graph_service
+        await knowledge_graph_service.close()
+
+
 app = FastAPI(
     title="Socratic Learning System",
     description="基于苏格拉底教学法的个性化学习系统",
-    version="1.0.0"
+    version="1.0.0",
+    lifespan=lifespan,
 )
 
 # CORS middleware
@@ -19,27 +42,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-
-@app.on_event("startup")
-async def startup_event():
-    init_db()
-    # Initialize knowledge graph if enabled
-    if settings.knowledge_graph_enabled:
-        from backend.services.knowledge_graph import knowledge_graph_service
-        knowledge_graph_service.configure(
-            neo4j_uri=settings.neo4j_uri,
-            neo4j_user=settings.neo4j_user,
-            neo4j_password=settings.neo4j_password,
-        )
-        await knowledge_graph_service.initialize()
-
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    if settings.knowledge_graph_enabled:
-        from backend.services.knowledge_graph import knowledge_graph_service
-        await knowledge_graph_service.close()
 
 
 @app.get("/")

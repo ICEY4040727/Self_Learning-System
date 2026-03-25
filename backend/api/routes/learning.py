@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import Optional, List
-from datetime import datetime
+from datetime import datetime, timezone
 from backend.db.database import get_db
 from backend.api.routes.auth import get_current_user
 from backend.models.models import User, Session as SessionModel, ChatMessage, TeacherPersona, LearnerProfile, Subject
@@ -200,7 +200,7 @@ async def end_session(
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    session.ended_at = datetime.utcnow()
+    session.ended_at = datetime.now(timezone.utc)
     db.commit()
 
     return {"message": "Session ended"}
