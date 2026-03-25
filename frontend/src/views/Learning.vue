@@ -74,6 +74,7 @@
     <SaveLoad
       v-if="showSaveLoad"
       :subject-id="subjectId"
+      :session-id="sessionId"
       @close="showSaveLoad = false"
       @load="handleLoadSave"
     />
@@ -119,6 +120,7 @@ const displayedText = ref('')
 const currentChoices = ref<string[]>([])
 const showToolConfirm = ref(false)
 const showSaveLoad = ref(false)
+const sessionId = ref<number | null>(null)
 const currentEmotion = ref('')
 const toolRequest = ref({ tool: '', query: '', reason: '' })
 const dialogArea = ref<HTMLElement | null>(null)
@@ -321,6 +323,7 @@ const fetchActiveSession = async () => {
     })
 
     if (response.data.session_id) {
+      sessionId.value = response.data.session_id
       // 获取会话历史
       const historyRes = await axios.get(
         `/api/sessions/${response.data.session_id}/history`,
