@@ -12,3 +12,4 @@ httpx==0.26.0
 python-dotenv==1.0.0
 fsrs>=6.3.0
 graphiti-core>=0.28.0
+alembic>=1.13.0
