@@ -1,6 +1,6 @@
 import logging
 from abc import ABC, abstractmethod
-from typing import AsyncGenerator
+from collections.abc import AsyncGenerator
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +29,7 @@ class ClaudeAdapter(LLMAdapter):
     async def chat(self, messages: list, system_prompt: str, user_api_key: str = None) -> str:
         """Send chat request to Claude API"""
         import httpx
+
         from backend.core.config import get_settings
 
         settings = get_settings()
@@ -94,6 +95,7 @@ class OpenAIAdapter(LLMAdapter):
     async def chat(self, messages: list, system_prompt: str, user_api_key: str = None) -> str:
         """Send chat request to OpenAI API"""
         import httpx
+
         from backend.core.config import get_settings
 
         settings = get_settings()
@@ -197,25 +199,24 @@ class LocalAdapter(LLMAdapter):
                 "content": msg.get("content", "")
             })
 
-        async with httpx.AsyncClient() as client:
-            async with client.stream(
-                "POST",
-                f"{self.base_url}/api/chat",
-                json={
-                    "model": self.model,
-                    "messages": local_messages,
-                    "stream": True
-                }
-            ) as response:
-                async for line in response.aiter_lines():
-                    if line:
-                        import json
-                        try:
-                            data = json.loads(line)
-                            if "message" in data:
-                                yield data["message"].get("content", "")
-                        except:
-                            pass
+        async with httpx.AsyncClient() as client, client.stream(
+            "POST",
+            f"{self.base_url}/api/chat",
+            json={
+                "model": self.model,
+                "messages": local_messages,
+                "stream": True
+            }
+        ) as response:
+            async for line in response.aiter_lines():
+                if line:
+                    import json
+                    try:
+                        data = json.loads(line)
+                        if "message" in data:
+                            yield data["message"].get("content", "")
+                    except Exception:
+                        pass
 
 
 def get_llm_adapter(provider: str = "claude") -> LLMAdapter:

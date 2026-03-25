@@ -1,8 +1,8 @@
 """Memory service using ChromaDB for vector storage"""
 
 import os
-from typing import List, Optional
 import uuid
+
 import chromadb
 from chromadb.config import Settings
 
@@ -43,7 +43,7 @@ class MemoryService:
 
         return memory_id
 
-    def retrieve(self, session_id: str, query: str, top_k: int = 3) -> List[dict]:
+    def retrieve(self, session_id: str, query: str, top_k: int = 3) -> list[dict]:
         """Retrieve relevant memories based on query"""
         collection = self.get_or_create_collection(session_id)
 
@@ -70,10 +70,10 @@ class MemoryService:
 
     def clear_session(self, session_id: str):
         """Clear all memories for a session"""
-        try:
+        import contextlib
+
+        with contextlib.suppress(Exception):
             self.client.delete_collection(name=f"{self.collection_name}_{session_id}")
-        except:
-            pass
 
     def get_memory_count(self, session_id: str) -> int:
         """Get count of memories in session"""

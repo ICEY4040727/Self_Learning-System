@@ -1,11 +1,20 @@
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from datetime import UTC, datetime
+
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
-from typing import Optional, List
-from datetime import datetime, timezone
-from backend.db.database import get_db
+from sqlalchemy.orm import Session
+
 from backend.api.routes.auth import get_current_user
-from backend.models.models import Character, TeacherPersona, LearnerProfile, Subject, LessonPlan, LearningDiary, ProgressTracking, User
+from backend.db.database import get_db
+from backend.models.models import (
+    Character,
+    LearnerProfile,
+    LearningDiary,
+    ProgressTracking,
+    Subject,
+    TeacherPersona,
+    User,
+)
 from backend.services import spaced_repetition
 
 router = APIRouter()
@@ -14,10 +23,10 @@ router = APIRouter()
 # Pydantic Schemas
 class CharacterCreate(BaseModel):
     name: str
-    avatar: Optional[str] = None
-    personality: Optional[str] = None
-    background: Optional[str] = None
-    speech_style: Optional[str] = None
+    avatar: str | None = None
+    personality: str | None = None
+    background: str | None = None
+    speech_style: str | None = None
 
 
 class CharacterResponse(CharacterCreate):
@@ -31,8 +40,8 @@ class TeacherPersonaCreate(BaseModel):
     character_id: int
     name: str
     version: str = "1.0"
-    traits: Optional[dict] = None
-    system_prompt_template: Optional[str] = None
+    traits: dict | None = None
+    system_prompt_template: str | None = None
     is_active: bool = False
 
 
@@ -44,11 +53,11 @@ class TeacherPersonaResponse(TeacherPersonaCreate):
 
 
 class LearnerProfileCreate(BaseModel):
-    subject_id: Optional[int] = None
-    learning_style: Optional[dict] = None
-    cognitive_traits: Optional[dict] = None
-    emotional_traits: Optional[dict] = None
-    knowledge_graph: Optional[dict] = None
+    subject_id: int | None = None
+    learning_style: dict | None = None
+    cognitive_traits: dict | None = None
+    emotional_traits: dict | None = None
+    knowledge_graph: dict | None = None
 
 
 class LearnerProfileResponse(LearnerProfileCreate):
@@ -62,8 +71,8 @@ class LearnerProfileResponse(LearnerProfileCreate):
 class SubjectCreate(BaseModel):
     character_id: int
     name: str
-    description: Optional[str] = None
-    target_level: Optional[str] = None
+    description: str | None = None
+    target_level: str | None = None
 
 
 class SubjectResponse(SubjectCreate):
@@ -89,7 +98,7 @@ class LearningDiaryCreate(BaseModel):
     subject_id: int
     date: datetime
     content: str
-    reflection: Optional[str] = None
+    reflection: str | None = None
 
 
 class LearningDiaryResponse(LearningDiaryCreate):
@@ -104,13 +113,13 @@ class ProgressTrackingCreate(BaseModel):
     subject_id: int
     topic: str
     mastery_level: int = 0
-    next_review: Optional[datetime] = None
+    next_review: datetime | None = None
 
 
 class ProgressTrackingResponse(ProgressTrackingCreate):
     id: int
     user_id: int
-    last_review: Optional[datetime] = None
+    last_review: datetime | None = None
 
     class Config:
         from_attributes = True
@@ -134,7 +143,7 @@ def create_character(
     return db_character
 
 
-@router.get("/character", response_model=List[CharacterResponse])
+@router.get("/character", response_model=list[CharacterResponse])
 def get_characters(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
@@ -217,9 +226,9 @@ def create_teacher_persona(
     return db_persona
 
 
-@router.get("/teacher_persona", response_model=List[TeacherPersonaResponse])
+@router.get("/teacher_persona", response_model=list[TeacherPersonaResponse])
 def get_teacher_personas(
-    character_id: Optional[int] = None,
+    character_id: int | None = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -311,9 +320,9 @@ def create_learner_profile(
     return db_profile
 
 
-@router.get("/learner_profile", response_model=List[LearnerProfileResponse])
+@router.get("/learner_profile", response_model=list[LearnerProfileResponse])
 def get_learner_profiles(
-    subject_id: Optional[int] = None,
+    subject_id: int | None = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -365,9 +374,9 @@ def create_subject(
     return db_subject
 
 
-@router.get("/subjects", response_model=List[SubjectResponse])
+@router.get("/subjects", response_model=list[SubjectResponse])
 def get_subjects(
-    character_id: Optional[int] = None,
+    character_id: int | None = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -449,9 +458,9 @@ def create_learning_diary(
     return db_diary
 
 
-@router.get("/learning_diary", response_model=List[LearningDiaryResponse])
+@router.get("/learning_diary", response_model=list[LearningDiaryResponse])
 def get_learning_diaries(
-    subject_id: Optional[int] = None,
+    subject_id: int | None = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -478,9 +487,9 @@ def create_progress(
     return db_progress
 
 
-@router.get("/progress", response_model=List[ProgressTrackingResponse])
+@router.get("/progress", response_model=list[ProgressTrackingResponse])
 def get_progress(
-    subject_id: Optional[int] = None,
+    subject_id: int | None = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -522,8 +531,8 @@ class ReviewResponse(BaseModel):
     topic: str
     mastery_level: int
     retrievability: float
-    next_review: Optional[datetime] = None
-    last_review: Optional[datetime] = None
+    next_review: datetime | None = None
+    last_review: datetime | None = None
 
 
 @router.post("/progress/{progress_id}/review", response_model=ReviewResponse)
@@ -561,14 +570,14 @@ def review_progress(
     )
 
 
-@router.get("/progress/due", response_model=List[ProgressTrackingResponse])
+@router.get("/progress/due", response_model=list[ProgressTrackingResponse])
 def get_due_reviews(
-    subject_id: Optional[int] = None,
+    subject_id: int | None = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """Get topics that are due for review (next_review <= now)."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     query = db.query(ProgressTracking).filter(
         ProgressTracking.user_id == current_user.id,
         ProgressTracking.next_review <= now,
@@ -580,12 +589,12 @@ def get_due_reviews(
 
 # Settings endpoints
 class SettingsUpdate(BaseModel):
-    default_provider: Optional[str] = None
-    api_key: Optional[str] = None
+    default_provider: str | None = None
+    api_key: str | None = None
 
 
 class SettingsResponse(BaseModel):
-    default_provider: Optional[str] = None
+    default_provider: str | None = None
 
 
 @router.get("/settings", response_model=SettingsResponse)

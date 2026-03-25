@@ -1,12 +1,13 @@
+
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from pydantic import BaseModel, Field
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 from sqlalchemy.orm import Session
-from pydantic import BaseModel, Field
-from typing import Optional
+
+from backend.core.security import create_access_token, decode_access_token, get_password_hash, verify_password
 from backend.db.database import get_db
-from backend.core.security import verify_password, get_password_hash, create_access_token, decode_access_token
 from backend.models.models import Tenant, User
 
 router = APIRouter()
@@ -18,7 +19,7 @@ limiter = Limiter(key_func=get_remote_address)
 class UserCreate(BaseModel):
     username: str = Field(..., min_length=3, max_length=50, pattern=r'^[a-zA-Z0-9_-]+$')
     password: str = Field(..., min_length=8, max_length=128)
-    tenant_name: Optional[str] = "default"
+    tenant_name: str | None = "default"
 
 
 class UserResponse(BaseModel):
@@ -36,8 +37,8 @@ class Token(BaseModel):
 
 
 class TokenData(BaseModel):
-    user_id: Optional[int] = None
-    username: Optional[str] = None
+    user_id: int | None = None
+    username: str | None = None
 
 
 def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)) -> User:

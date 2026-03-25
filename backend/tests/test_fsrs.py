@@ -1,7 +1,8 @@
 """Tests for FSRS spaced repetition service."""
 
 import pytest
-from backend.services.spaced_repetition import new_card, review, get_retrievability
+
+from backend.services.spaced_repetition import get_retrievability, new_card, review
 
 
 class TestNewCard:

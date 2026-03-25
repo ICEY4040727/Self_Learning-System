@@ -3,8 +3,9 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi import Limiter, _rate_limit_exceeded_handler
-from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
+
 from backend.core.config import get_settings
 from backend.db.database import init_db
 
@@ -66,6 +67,7 @@ async def root():
 @app.get("/health")
 async def health_check():
     from sqlalchemy import text
+
     from backend.db.database import SessionLocal
     from backend.services.memory import memory_service
 
@@ -93,7 +95,7 @@ async def health_check():
 
 
 # Import and include routers
-from backend.api.routes import auth, archive, learning, save
+from backend.api.routes import archive, auth, learning, save  # noqa: E402
 
 app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 app.include_router(archive.router, prefix="/api", tags=["archive"])

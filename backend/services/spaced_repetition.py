@@ -4,11 +4,9 @@ Wraps py-fsrs to provide topic-level review scheduling for the learning system.
 Each ProgressTracking record stores an FSRS Card state in its `fsrs_state` JSON column.
 """
 
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import UTC, datetime
 
 from fsrs import Card, Rating, Scheduler, State
-
 
 # Shared scheduler instance with sensible defaults for educational context
 _scheduler = Scheduler(
@@ -30,7 +28,7 @@ def new_card() -> dict:
     return Card().to_dict()
 
 
-def review(fsrs_state: Optional[dict], rating_int: int) -> dict:
+def review(fsrs_state: dict | None, rating_int: int) -> dict:
     """
     Review a topic and return updated state.
 
@@ -45,13 +43,10 @@ def review(fsrs_state: Optional[dict], rating_int: int) -> dict:
         raise ValueError(f"rating must be 1-4, got {rating_int}")
 
     rating = RATING_MAP[rating_int]
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     # Restore or create card
-    if fsrs_state:
-        card = Card.from_dict(fsrs_state)
-    else:
-        card = Card()
+    card = Card.from_dict(fsrs_state) if fsrs_state else Card()
 
     # Perform the review
     card, _review_log = _scheduler.review_card(card, rating, review_datetime=now)
@@ -74,7 +69,7 @@ def review(fsrs_state: Optional[dict], rating_int: int) -> dict:
 def get_retrievability(fsrs_state: dict) -> float:
     """Get current recall probability for a card."""
     card = Card.from_dict(fsrs_state)
-    return _scheduler.get_card_retrievability(card, datetime.now(timezone.utc))
+    return _scheduler.get_card_retrievability(card, datetime.now(UTC))
 
 
 def _compute_mastery(card: Card, retrievability: float) -> int:
