@@ -1,6 +1,7 @@
 """Memory service using ChromaDB for vector storage"""
 
 from typing import List, Optional
+import uuid
 import chromadb
 from chromadb.config import Settings
 
@@ -26,9 +27,7 @@ class MemoryService:
         """Add a memory to the vector store"""
         collection = self.get_or_create_collection(session_id)
 
-        # Generate a simple ID
-        import time
-        memory_id = f"memory_{int(time.time() * 1000)}"
+        memory_id = f"memory_{uuid.uuid4().hex[:16]}"
 
         collection.add(
             ids=[memory_id],

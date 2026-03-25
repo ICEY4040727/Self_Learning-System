@@ -65,7 +65,8 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  loaded: [data: any]
+  load: [data: any]
+  close: []
 }>()
 
 const mode = ref<'save' | 'load'>('save')
