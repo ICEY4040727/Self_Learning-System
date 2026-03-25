@@ -62,6 +62,11 @@ cd frontend && npm run build                 # Production build
 cd backend && pip install -r requirements.txt
 cd backend && uvicorn main:app --reload --port 8000
 
+# Tests
+cd backend && pytest                                            # Run all tests
+cd backend && pytest tests/test_scaffold.py -v                  # Run specific file
+cd backend && pytest -k "test_login"                            # Run by name pattern
+
 # Database migrations (Alembic)
 cd backend && alembic revision --autogenerate -m "description"  # Generate migration
 cd backend && alembic upgrade head                              # Apply migrations
