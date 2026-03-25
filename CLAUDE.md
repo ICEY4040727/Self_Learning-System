@@ -61,6 +61,14 @@ cd frontend && npm run build                 # Production build
 # Backend
 cd backend && pip install -r requirements.txt
 cd backend && uvicorn main:app --reload --port 8000
+
+# Database migrations (Alembic)
+cd backend && alembic revision --autogenerate -m "description"  # Generate migration
+cd backend && alembic upgrade head                              # Apply migrations
+cd backend && alembic downgrade -1                              # Rollback one step
+
+# Docker (Neo4j + PostgreSQL)
+docker-compose up -d                                            # Start services
 ```
 
 ## Conventions
