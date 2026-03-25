@@ -1,14 +1,20 @@
+import warnings
 from pydantic_settings import BaseSettings
 from functools import lru_cache
 from typing import Optional
+
+_DEFAULT_SECRET = "your-secret-key-change-in-production"
 
 
 class Settings(BaseSettings):
     # Database
     database_url: str = "postgresql://user:password@localhost:5432/socratic_learning"
 
+    # CORS
+    cors_origin: str = "http://localhost:5173"
+
     # JWT
-    secret_key: str = "your-secret-key-change-in-production"
+    secret_key: str = _DEFAULT_SECRET
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 60 * 24  # 24 hours
 
@@ -45,4 +51,10 @@ class Settings(BaseSettings):
 
 @lru_cache
 def get_settings() -> Settings:
-    return Settings()
+    s = Settings()
+    if s.secret_key == _DEFAULT_SECRET:
+        warnings.warn(
+            "Using default SECRET_KEY! Set SECRET_KEY in .env for production.",
+            stacklevel=2,
+        )
+    return s
