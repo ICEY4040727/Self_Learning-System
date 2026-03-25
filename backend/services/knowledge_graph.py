@@ -17,6 +17,7 @@ _graphiti_available = False
 try:
     from graphiti_core import Graphiti
     from graphiti_core.nodes import EpisodeType
+    from graphiti_core.search.search_config_recipes import EDGE_HYBRID_SEARCH_RRF
     _graphiti_available = True
 except ImportError:
     logger.info("graphiti-core not installed, knowledge graph features disabled")
@@ -132,11 +133,15 @@ class KnowledgeGraphService:
         group_id = self._group_id(user_id, subject_id)
 
         try:
-            edges = await self._graphiti.search(
+            # Use hybrid search (semantic + keyword + graph traversal)
+            search_config = EDGE_HYBRID_SEARCH_RRF.model_copy(deep=True)
+            search_config.limit = num_results
+            results = await self._graphiti.search_(
                 query=query,
+                config=search_config,
                 group_ids=[group_id],
-                num_results=num_results,
             )
+            edges = results.edges
 
             if not edges:
                 return ""
