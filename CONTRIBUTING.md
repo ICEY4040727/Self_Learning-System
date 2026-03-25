@@ -110,6 +110,41 @@ Creator 和 Reviewer 各自在 Issue 中陈述理由，Owner 最终裁决。
   - 自查清单
   - Reviewer 关注点
 
+### PR Review 对话流程
+
+PR 的 review 是 Creator 和 Reviewer 通过 PR comments 进行的持续对话，直到 Reviewer 确认可以合并：
+
+```
+Creator 提交 PR
+  → Reviewer 审查，在 PR comment 中列出问题和建议
+    → Creator 读 PR comments（gh pr view N --comments）
+      → Creator 理解每项反馈的意图和背景
+        → Creator 修复代码并推送
+          → Creator 在 PR comment 中回复修复内容（逐项对应）
+            → Reviewer re-review
+              → 通过 → 合并 / 仍有问题 → 继续对话
+```
+
+**Creator 回复格式：**
+```markdown
+## Creator 修复回复
+
+已修复 Reviewer 提出的 N 项问题：
+
+| # | 问题 | 修复 |
+|---|------|------|
+| 1 | [问题描述] | [修复说明] |
+| 2 | [问题描述] | [修复说明] |
+
+请 re-review。
+```
+
+**关键规则：**
+- Creator 修复后**必须在 PR comment 中回复**，说明每项修改内容，供 Reviewer 对照审查
+- 不得只推送代码不回复——Reviewer 需要知道哪些改了、哪些没改、为什么
+- 如果对某项建议有不同意见，在 comment 中说明理由，而非静默忽略
+- 通过 `tmux send-keys` 通知对方有新 comment，避免等待
+
 ## 实时通信：tmux 跨 Session 通知
 
 Creator 和 Reviewer 运行在独立的 tmux session 中，三方共用同一个 GitHub 账号，**GitHub 原生通知无效**（自己评论自己的 PR 不会触发通知）。因此需要 tmux 机制来实现实时通信。
