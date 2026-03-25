@@ -17,7 +17,6 @@ _graphiti_available = False
 try:
     from graphiti_core import Graphiti
     from graphiti_core.nodes import EpisodeType
-    from graphiti_core.search.search_config_recipes import EDGE_HYBRID_SEARCH_RRF
     _graphiti_available = True
 except ImportError:
     logger.info("graphiti-core not installed, knowledge graph features disabled")
@@ -95,20 +94,11 @@ class KnowledgeGraphService:
         now = datetime.now(timezone.utc)
 
         try:
-            # Add user message
-            await self._graphiti.add_episode(
-                name=f"session_{session_id}_user_{now.timestamp():.0f}",
-                episode_body=f"student: {user_message}",
-                source_description="learning_conversation",
-                source=EpisodeType.message,
-                reference_time=now,
-                group_id=group_id,
-            )
-
-            # Add teacher response
+            # Combine student+teacher into one episode to halve LLM calls
+            combined = f"student: {user_message}\nteacher: {teacher_response}"
             result = await self._graphiti.add_episode(
-                name=f"session_{session_id}_teacher_{now.timestamp():.0f}",
-                episode_body=f"teacher: {teacher_response}",
+                name=f"session_{session_id}_turn_{now.timestamp():.0f}",
+                episode_body=combined,
                 source_description="learning_conversation",
                 source=EpisodeType.message,
                 reference_time=now,
