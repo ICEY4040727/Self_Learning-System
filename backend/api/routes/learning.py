@@ -206,3 +206,63 @@ async def get_history(
         }
         for m in messages
     ]
+
+
+# List user's sessions
+@router.get("/sessions")
+async def list_sessions(
+    subject_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    query = db.query(SessionModel).filter(
+        SessionModel.user_id == current_user.id
+    )
+    if subject_id:
+        query = query.filter(SessionModel.subject_id == subject_id)
+
+    sessions = query.order_by(SessionModel.started_at.desc()).all()
+    return [
+        {
+            "id": s.id,
+            "started_at": s.started_at,
+            "ended_at": s.ended_at,
+            "relationship_stage": s.relationship_stage,
+            "subject_name": s.subject.name if s.subject else None,
+        }
+        for s in sessions
+    ]
+
+
+# Get emotion trajectory for a session
+@router.get("/sessions/{session_id}/emotion_trajectory")
+async def get_emotion_trajectory(
+    session_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Return emotion data for all user messages in a session."""
+    session = db.query(SessionModel).filter(
+        SessionModel.id == session_id,
+        SessionModel.user_id == current_user.id
+    ).first()
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    messages = db.query(ChatMessage).filter(
+        ChatMessage.session_id == session_id,
+        ChatMessage.sender_type == "user",
+        ChatMessage.emotion_analysis != None
+    ).order_by(ChatMessage.timestamp).all()
+
+    return [
+        {
+            "index": i + 1,
+            "timestamp": m.timestamp,
+            "emotion_type": m.emotion_analysis.get("emotion_type", "neutral"),
+            "valence": m.emotion_analysis.get("valence", 0.5),
+            "arousal": m.emotion_analysis.get("arousal", 0.5),
+            "confidence": m.emotion_analysis.get("confidence", 0.0),
+        }
+        for i, m in enumerate(messages)
+    ]

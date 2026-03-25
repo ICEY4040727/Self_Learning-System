@@ -24,7 +24,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, nextTick, watch } from 'vue'
+import { ref, onMounted, onUnmounted, nextTick } from 'vue'
 import axios from 'axios'
 import * as echarts from 'echarts'
 import { useAuthStore } from '@/stores/auth'
@@ -222,6 +222,14 @@ const handleResize = () => {
 onMounted(() => {
   fetchSessions()
   window.addEventListener('resize', handleResize)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('resize', handleResize)
+  valenceInstance?.dispose()
+  pieInstance?.dispose()
+  valenceInstance = null
+  pieInstance = null
 })
 
 defineProps<{
