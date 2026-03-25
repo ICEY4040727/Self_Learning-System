@@ -44,6 +44,14 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
+      - name: Verify lock file in sync
+        run: |
+          cd frontend
+          npm install --package-lock-only
+          git diff --exit-code package-lock.json || {
+            echo "::error::package-lock.json is out of sync with package.json. Run 'cd frontend && npm install' and commit the updated lock file."
+            exit 1
+          }
       - name: Install and build
         run: |
           cd frontend
