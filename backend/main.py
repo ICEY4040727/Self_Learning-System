@@ -71,13 +71,16 @@ async def health_check():
 
     checks = {"api": "ok"}
 
+    db = None
     try:
         db = SessionLocal()
         db.execute(text("SELECT 1"))
         checks["database"] = "ok"
-        db.close()
     except Exception:
         checks["database"] = "error"
+    finally:
+        if db:
+            db.close()
 
     try:
         memory_service.client.heartbeat()
