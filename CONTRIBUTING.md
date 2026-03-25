@@ -193,6 +193,26 @@ Claude Code 等待输入时，pane 末尾显示 `❯`。守护脚本通过 `tmux
 - **忙碌** → 写入队列文件 `/tmp/gh-notify/queue_*.txt`，下次轮询时补发
 - **积压 >3 条** → 合并为一条摘要通知，防止刷屏
 
+## Creator 工作流程
+
+### 接手任务时
+
+1. **读 Issue 全文**：包括描述、验收标准、技术说明
+2. **读 Issue 的所有 comments**：Reviewer/Owner 可能在 comment 中补充了方案建议、技术选型偏好、注意事项
+3. 理解完整上下文后再开始编码
+
+### 处理 PR Review 反馈时
+
+1. **先读 PR 的所有 comments**：`gh pr view N --comments`
+2. **理解 Reviewer 的意图**：Reviewer 提出建议时通常给出了理由和多种选项，不要不加思考地选最简单的
+3. **做出有依据的选择**：如果 Reviewer 提供了 A/B 方案，思考哪个对项目更有价值再决定，而非默认删除或跳过
+4. 修复后推送，等待 re-review
+
+### 绝对禁止
+
+- **不得直接推送到 main**：任何改动都必须走分支 + PR 流程，没有例外
+- **不得未读 comment 就修改**：Issue/PR 的 comment 是协作的核心上下文
+
 ## 设计先行
 
 非平凡功能的流程：
