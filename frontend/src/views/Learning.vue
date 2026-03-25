@@ -93,6 +93,7 @@ import EmotionIndicator from '@/components/galgame/EmotionIndicator.vue'
 import SaveLoad from '@/components/galgame/SaveLoad.vue'
 import ToolConfirmDialog from '@/components/galgame/ToolConfirmDialog.vue'
 import mermaid from 'mermaid'
+import DOMPurify from 'dompurify'
 
 interface ChatMessage {
   id: number
@@ -137,8 +138,12 @@ const formatMessage = (content: string) => {
     const id = `mermaid-${++mermaidCounter}`
     return `<div class="mermaid-container"><pre class="mermaid" id="${id}">${code.trim()}</pre></div>`
   })
-  // Convert remaining newlines to <br>
-  return formatted.replace(/\n/g, '<br>')
+  // Convert remaining newlines to <br>, then sanitize
+  const html = formatted.replace(/\n/g, '<br>')
+  return DOMPurify.sanitize(html, {
+    ADD_TAGS: ['pre', 'div'],
+    ADD_ATTR: ['class', 'id'],
+  })
 }
 
 const renderMermaid = () => {
