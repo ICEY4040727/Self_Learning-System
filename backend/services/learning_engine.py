@@ -385,9 +385,10 @@ class LearningEngine:
             }
 
         except Exception as e:
+            logger.error("Message processing failed", exc_info=True)
             return {
                 "type": "error",
-                "reply": f"处理消息时出错: {str(e)}"
+                "reply": "处理消息时出错，请重试"
             }
         finally:
             db.close()
