@@ -504,7 +504,7 @@ def update_progress(
     if not db_progress:
         raise HTTPException(status_code=404, detail="Progress not found")
 
-    for key, value in progress.model_dump().items():
+    for key, value in progress.model_dump(exclude_unset=True).items():
         setattr(db_progress, key, value)
 
     db.commit()

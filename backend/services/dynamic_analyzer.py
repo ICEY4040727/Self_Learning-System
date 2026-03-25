@@ -253,7 +253,25 @@ class DynamicAnalyzer:
             message_count = db.query(ChatMessage).filter(
                 ChatMessage.session_id == session_id
             ).count()
-            valence = emotion.get("valence", 0.5)
+
+            # Use average valence of recent messages instead of single message
+            recent_msgs = (
+                db.query(ChatMessage)
+                .filter(
+                    ChatMessage.session_id == session_id,
+                    ChatMessage.sender_type == "user",
+                    ChatMessage.emotion_analysis != None,
+                )
+                .order_by(ChatMessage.timestamp.desc())
+                .limit(10)
+                .all()
+            )
+            if recent_msgs:
+                valence = sum(
+                    m.emotion_analysis.get("valence", 0.5) for m in recent_msgs
+                ) / len(recent_msgs)
+            else:
+                valence = emotion.get("valence", 0.5)
 
             if message_count >= 30 and valence > 0.7:
                 return "partner"
