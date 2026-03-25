@@ -24,10 +24,11 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+      - uses: astral-sh/setup-uv@v3
       - name: Install dependencies
         run: |
           cd backend
-          pip install -r requirements-dev.txt
+          uv pip install -r requirements-dev.txt --system
       - name: Run tests
         run: |
           cd backend
