@@ -10,6 +10,12 @@ echo ""
 echo "=== 苏格拉底学习系统 初始化 ==="
 echo ""
 
+# 前置检查
+for cmd in docker; do
+    command -v "$cmd" &>/dev/null || { echo "❌ 需要安装 $cmd"; exit 1; }
+done
+docker compose version &>/dev/null || { echo "❌ 需要 Docker Compose v2"; exit 1; }
+
 # 检查 .env 是否已存在
 if [[ -f .env ]]; then
     read -p ".env 已存在，是否覆盖？(y/N) " confirm
