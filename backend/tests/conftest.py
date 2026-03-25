@@ -13,6 +13,15 @@ from backend.db.database import Base, get_db
 from backend.main import app
 
 
+@pytest.fixture(autouse=True)
+def disable_rate_limit():
+    """Disable rate limiting during tests to prevent 429 failures."""
+    limiter = app.state.limiter
+    limiter.enabled = False
+    yield
+    limiter.enabled = True
+
+
 # In-memory SQLite for tests
 TEST_DATABASE_URL = "sqlite://"
 
