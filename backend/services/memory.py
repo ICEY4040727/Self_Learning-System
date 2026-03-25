@@ -1,5 +1,6 @@
 """Memory service using ChromaDB for vector storage"""
 
+import os
 from typing import List, Optional
 import uuid
 import chromadb
@@ -10,10 +11,15 @@ class MemoryService:
     """ChromaDB-based memory service for conversation history"""
 
     def __init__(self, persist_directory: str = "./chroma_data"):
-        self.client = chromadb.Client(Settings(
-            persist_directory=persist_directory,
-            anonymized_telemetry=False
-        ))
+        chroma_host = os.environ.get("CHROMA_HOST")
+        if chroma_host:
+            chroma_port = int(os.environ.get("CHROMA_PORT", "8000"))
+            self.client = chromadb.HttpClient(host=chroma_host, port=chroma_port)
+        else:
+            self.client = chromadb.Client(Settings(
+                persist_directory=persist_directory,
+                anonymized_telemetry=False
+            ))
         self.collection_name = "conversation_memory"
 
     def get_or_create_collection(self, session_id: str):
