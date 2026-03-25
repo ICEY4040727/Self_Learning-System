@@ -5,7 +5,6 @@ import logging
 import re
 from typing import List, Optional
 
-logger = logging.getLogger(__name__)
 from sqlalchemy import func as sqlfunc
 from backend.services.llm.adapter import get_llm_adapter
 from backend.services.memory import memory_service
@@ -21,9 +20,13 @@ from backend.models.models import (
     ProgressTracking,
 )
 
+logger = logging.getLogger(__name__)
+
 
 class LearningEngine:
     """Learning engine for processing user messages and generating AI responses"""
+
+    ROLE_MAP = {"user": "user", "teacher": "assistant"}
 
     def __init__(self):
         self.memory = memory_service
@@ -298,11 +301,10 @@ class LearningEngine:
             chat_history.reverse()  # restore chronological order
 
             # Convert to messages format for LLM
-            ROLE_MAP = {"user": "user", "teacher": "assistant"}
             messages = []
             for msg in chat_history:
                 messages.append({
-                    "role": ROLE_MAP.get(msg.sender_type, "user"),
+                    "role": self.ROLE_MAP.get(msg.sender_type, "user"),
                     "content": msg.content
                 })
 
@@ -373,7 +375,7 @@ class LearningEngine:
             # 14. Commit DB changes
             db.commit()
 
-            # 14. Return response
+            # 15. Return response
             return {
                 "type": "text",
                 "reply": llm_response,
