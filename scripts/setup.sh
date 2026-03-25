@@ -23,8 +23,24 @@ check_port() {
         echo "⚠️  端口 $port 已被占用（$service 需要）"
         lsof -i ":$port" 2>/dev/null | head -5 || true
         echo ""
-        read -p "是否继续？占用进程可能导致启动失败。(y/N) " confirm
-        [[ "$confirm" != "y" && "$confirm" != "Y" ]] && echo "请释放端口后重试。" && exit 1
+        read -p "是否尝试停止占用进程？(y/N) " confirm
+        if [[ "$confirm" == "y" || "$confirm" == "Y" ]]; then
+            lsof -ti ":$port" | xargs kill 2>/dev/null || true
+            sleep 1
+            if lsof -i ":$port" &>/dev/null 2>&1; then
+                echo "⚠️  进程仍在运行，尝试强制停止..."
+                lsof -ti ":$port" | xargs kill -9 2>/dev/null || true
+                sleep 1
+            fi
+            if lsof -i ":$port" &>/dev/null 2>&1; then
+                echo "❌ 无法释放端口 $port，请手动处理。"
+                exit 1
+            fi
+            echo "✅ 端口 $port 已释放"
+        else
+            echo "请手动释放端口 $port 后重试。"
+            exit 1
+        fi
     fi
 }
 
