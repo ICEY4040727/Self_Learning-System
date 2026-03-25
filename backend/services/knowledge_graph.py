@@ -26,17 +26,23 @@ except ImportError:
 class KnowledgeGraphService:
     """Graphiti-based knowledge graph for tracking learner concepts."""
 
-    def __init__(
+    def __init__(self):
+        self._uri = "bolt://localhost:7687"
+        self._user = "neo4j"
+        self._password = "socratic_learning"
+        self._graphiti: Optional[Any] = None
+        self._initialized = False
+
+    def configure(
         self,
         neo4j_uri: str = "bolt://localhost:7687",
         neo4j_user: str = "neo4j",
         neo4j_password: str = "socratic_learning",
     ):
+        """Set connection parameters before calling initialize()."""
         self._uri = neo4j_uri
         self._user = neo4j_user
         self._password = neo4j_password
-        self._graphiti: Optional[Any] = None
-        self._initialized = False
 
     async def initialize(self):
         """Connect to Neo4j and build indices. Call once on startup."""

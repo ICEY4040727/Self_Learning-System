@@ -7,7 +7,7 @@ services:
       - "7474:7474"   # HTTP browser
       - "7687:7687"   # Bolt protocol
     environment:
-      NEO4J_AUTH: neo4j/socratic_learning
+      NEO4J_AUTH: ${NEO4J_USER:-neo4j}/${NEO4J_PASSWORD:-socratic_learning}
       NEO4J_PLUGINS: '["apoc"]'
     volumes:
       - neo4j_data:/data
@@ -18,9 +18,9 @@ services:
     ports:
       - "5432:5432"
     environment:
-      POSTGRES_USER: user
-      POSTGRES_PASSWORD: password
-      POSTGRES_DB: socratic_learning
+      POSTGRES_USER: ${POSTGRES_USER:-user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
+      POSTGRES_DB: ${POSTGRES_DB:-socratic_learning}
     volumes:
       - pg_data:/var/lib/postgresql/data
     restart: unless-stopped
