@@ -51,13 +51,20 @@ async def start_learning(
         TeacherPersona.is_active == True
     ).first()
 
+    # Get learner profile for this subject
+    learner_profile = db.query(LearnerProfile).filter(
+        LearnerProfile.user_id == current_user.id,
+        LearnerProfile.subject_id == subject_id,
+    ).first()
+
     # Create session
     db_session = SessionModel(
         tenant_id=current_user.tenant_id,
         subject_id=subject_id,
         user_id=current_user.id,
         system_prompt=teacher_persona.system_prompt_template if teacher_persona else None,
-        teacher_persona_id=teacher_persona.id if teacher_persona else None
+        teacher_persona_id=teacher_persona.id if teacher_persona else None,
+        learner_profile_id=learner_profile.id if learner_profile else None,
     )
     db.add(db_session)
     db.commit()
