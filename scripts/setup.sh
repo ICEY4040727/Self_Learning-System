@@ -16,6 +16,21 @@ for cmd in docker; do
 done
 docker compose version &>/dev/null || { echo "❌ 需要 Docker Compose v2"; exit 1; }
 
+# 端口冲突检测
+check_port() {
+    local port=$1 service=$2
+    if lsof -i ":$port" &>/dev/null 2>&1 || ss -ltn 2>/dev/null | grep -q ":$port "; then
+        echo "⚠️  端口 $port 已被占用（$service 需要）"
+        lsof -i ":$port" 2>/dev/null | head -5 || true
+        echo ""
+        read -p "是否继续？占用进程可能导致启动失败。(y/N) " confirm
+        [[ "$confirm" != "y" && "$confirm" != "Y" ]] && echo "请释放端口后重试。" && exit 1
+    fi
+}
+
+check_port 80 "Frontend (Nginx)"
+check_port 8000 "Backend (FastAPI)"
+
 # 检查 .env 是否已存在
 if [[ -f .env ]]; then
     read -p ".env 已存在，是否覆盖？(y/N) " confirm
