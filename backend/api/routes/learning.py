@@ -45,6 +45,26 @@ async def start_learning(
     if not subject:
         raise HTTPException(status_code=404, detail="Subject not found")
 
+    # Reuse existing active session if available
+    existing = db.query(SessionModel).filter(
+        SessionModel.subject_id == subject_id,
+        SessionModel.user_id == current_user.id,
+        SessionModel.ended_at == None
+    ).order_by(SessionModel.started_at.desc()).first()
+
+    if existing:
+        teacher_persona = None
+        if existing.teacher_persona_id:
+            teacher_persona = db.query(TeacherPersona).filter(
+                TeacherPersona.id == existing.teacher_persona_id
+            ).first()
+        return {
+            "session_id": existing.id,
+            "teacher_persona": teacher_persona.name if teacher_persona else None,
+            "subject": subject.name,
+            "relationship_stage": existing.relationship_stage,
+        }
+
     # Get active teacher persona
     teacher_persona = db.query(TeacherPersona).filter(
         TeacherPersona.character_id == subject.character_id,
@@ -57,7 +77,7 @@ async def start_learning(
         LearnerProfile.subject_id == subject_id,
     ).first()
 
-    # Create session
+    # Create new session
     db_session = SessionModel(
         tenant_id=current_user.tenant_id,
         subject_id=subject_id,
