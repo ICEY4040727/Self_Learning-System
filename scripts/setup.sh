@@ -51,6 +51,16 @@ check_port 8000 "Backend (FastAPI)"
 if [[ -f .env ]]; then
     read -p ".env 已存在，是否覆盖？(y/N) " confirm
     [[ "$confirm" != "y" && "$confirm" != "Y" ]] && echo "取消。" && exit 0
+    echo ""
+    echo "⚠️  密码将重新生成。如果之前已部署过，必须重置数据库卷："
+    echo "   docker compose down -v"
+    echo "   （这会删除所有数据库数据）"
+    echo ""
+    read -p "是否自动执行 docker compose down -v？(y/N) " reset
+    if [[ "$reset" == "y" || "$reset" == "Y" ]]; then
+        docker compose down -v 2>/dev/null || true
+        echo "✅ 旧数据卷已清除"
+    fi
 fi
 
 # 自动生成密钥（python3 优先，openssl fallback）
