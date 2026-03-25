@@ -26,7 +26,22 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, nextTick } from 'vue'
 import axios from 'axios'
-import * as echarts from 'echarts'
+import * as echarts from 'echarts/core'
+import { LineChart, PieChart } from 'echarts/charts'
+import {
+  TitleComponent,
+  TooltipComponent,
+  GridComponent,
+  MarkLineComponent,
+  LegendComponent,
+} from 'echarts/components'
+import { CanvasRenderer } from 'echarts/renderers'
+
+echarts.use([
+  LineChart, PieChart,
+  TitleComponent, TooltipComponent, GridComponent, MarkLineComponent, LegendComponent,
+  CanvasRenderer,
+])
 import { useAuthStore } from '@/stores/auth'
 
 const authStore = useAuthStore()
@@ -87,7 +102,8 @@ const formatDate = (d: string) => {
 
 const fetchSessions = async () => {
   try {
-    const res = await axios.get('/api/sessions', { headers: headers() })
+    const params = props.subjectId ? `?subject_id=${props.subjectId}` : ''
+    const res = await axios.get(`/api/sessions${params}`, { headers: headers() })
     sessions.value = res.data
   } catch {
     // endpoint may not exist yet; silently skip
@@ -232,7 +248,7 @@ onUnmounted(() => {
   pieInstance = null
 })
 
-defineProps<{
+const props = defineProps<{
   subjectId?: number
 }>()
 </script>
