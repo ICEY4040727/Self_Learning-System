@@ -222,7 +222,14 @@ const sendMessage = async () => {
 
     // 处理不同响应类型
     if (data.type === 'tool_request') {
-      // 显示工具确认弹窗
+      // Show teacher reply first (strip tool tags)
+      if (data.reply) {
+        const cleanReply = data.reply.replace(/<tool>[\s\S]*?<\/tool>/g, '').trim()
+        if (cleanReply) {
+          await startTyping(cleanReply)
+        }
+      }
+      // Then show tool confirmation
       toolRequest.value = {
         tool: data.tool || 'search',
         query: data.query || userMsg,
