@@ -19,10 +19,9 @@ cp .env.example .env
 SECRET_KEY=<随机生成 32 位字符串>
 POSTGRES_PASSWORD=<强密码>
 CORS_ORIGIN=http://你的域名或IP
-
-# 按需修改
-DATABASE_URL=postgresql://user:<你的密码>@postgres:5432/socratic_learning
 ```
+
+> **注意**：Docker 部署时 `DATABASE_URL` 由 docker-compose.yml 从 `POSTGRES_*` 变量自动拼接，**无需手动设置**。仅本地开发（非 Docker）时才需要在 `.env` 中设置 `DATABASE_URL`。本地开发请参考 CLAUDE.md 的 Commands 部分。
 
 生成随机 SECRET_KEY：
 ```bash
@@ -81,9 +80,13 @@ curl http://localhost:8000/health
 
 ### 3.3 运行测试
 
+测试应在部署前本地运行，不要在生产容器中安装测试依赖：
+
 ```bash
-# 在后端容器内运行
-docker compose exec backend sh -c "cd /app && pip install pytest pytest-asyncio respx && PYTHONPATH=/app pytest backend/tests/ -v"
+# 本地运行（推荐）
+cd backend
+pip install -r requirements-dev.txt
+PYTHONPATH=.. pytest tests/ -v
 ```
 
 ## 四、服务架构
@@ -166,12 +169,14 @@ SENTRY_DSN=https://xxx@xxx.ingest.sentry.io/xxx
 
 ## 八、数据备份
 
+将下方 `<POSTGRES_USER>` 和 `<POSTGRES_DB>` 替换为你 `.env` 中的实际值：
+
 ```bash
 # 备份 PostgreSQL
-docker compose exec postgres pg_dump -U user socratic_learning > backup_$(date +%Y%m%d).sql
+docker compose exec postgres pg_dump -U <POSTGRES_USER> <POSTGRES_DB> > backup_$(date +%Y%m%d).sql
 
 # 恢复
-cat backup_20260325.sql | docker compose exec -T postgres psql -U user socratic_learning
+cat backup_20260325.sql | docker compose exec -T postgres psql -U <POSTGRES_USER> <POSTGRES_DB>
 
 # 备份所有卷
 docker run --rm -v self_learning-system_pg_data:/data -v $(pwd):/backup alpine tar czf /backup/pg_data.tar.gz -C /data .
