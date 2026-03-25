@@ -6,27 +6,19 @@
 - 至少 2GB 可用内存
 - LLM API Key（Claude 或 OpenAI 任选一个）
 
-## 一、配置环境变量
+## 一、初始化配置
 
 ```bash
-cp .env.example .env
+bash scripts/setup.sh
 ```
 
-编辑 `.env`，**必须修改**以下值：
+脚本会自动：
+- 生成随机 SECRET_KEY 和 POSTGRES_PASSWORD
+- 询问前端访问地址（默认 http://localhost）
+- 可选输入 LLM API Key（也可稍后在网页设置页配置）
+- 将所有配置写入 `.env` 文件
 
-```env
-# 必须修改（安全关键）
-SECRET_KEY=<随机生成 32 位字符串>
-POSTGRES_PASSWORD=<强密码>
-CORS_ORIGIN=http://你的域名或IP
-```
-
-> **注意**：Docker 部署时 `DATABASE_URL` 由 docker-compose.yml 从 `POSTGRES_*` 变量自动拼接，**无需手动设置**。仅本地开发（非 Docker）时才需要在 `.env` 中设置 `DATABASE_URL`。本地开发请参考 CLAUDE.md 的 Commands 部分。
-
-生成随机 SECRET_KEY：
-```bash
-python3 -c "import secrets; print(secrets.token_hex(32))"
-```
+> 如需手动编辑配置，也可以 `cp .env.example .env` 后自行修改。本地开发请参考 CLAUDE.md 的 Commands 部分。
 
 ## 二、Docker 一键启动
 
