@@ -1,6 +1,5 @@
 /* === Galgame Theme System === */
-
-@import url('https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;700&family=Noto+Sans+SC:wght@400;700&family=JetBrains+Mono:wght@400;700&display=swap');
+/* Fonts loaded via <link> in index.html for non-blocking rendering */
 
 :root {
   /* Background */

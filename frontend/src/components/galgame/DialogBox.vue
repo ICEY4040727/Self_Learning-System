@@ -130,8 +130,8 @@ const handleSend = () => {
 }
 
 .name-tag-user {
-  background: linear-gradient(135deg, #4a8a4a, #6aba6a);
-  color: #fff;
+  background: linear-gradient(135deg, var(--emotion-positive), #6aba6a);
+  color: var(--text-primary);
 }
 
 /* Dialog text */
