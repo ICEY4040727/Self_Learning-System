@@ -5,6 +5,8 @@
       <h1>角色设定</h1>
     </header>
 
+    <div v-if="errorMessage" class="error-toast">{{ errorMessage }}</div>
+
     <main class="main">
       <!-- 角色列表 -->
       <section class="section">
@@ -179,9 +181,16 @@ import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import axios from 'axios'
 import { useAuthStore } from '@/stores/auth'
+import { parseApiError } from '@/utils/error'
 
 const router = useRouter()
 const authStore = useAuthStore()
+const errorMessage = ref('')
+
+const showError = (e: any) => {
+  errorMessage.value = parseApiError(e)
+  setTimeout(() => { errorMessage.value = '' }, 5000)
+}
 
 interface Character {
   id: number
@@ -247,7 +256,7 @@ const fetchCharacters = async () => {
     const res = await axios.get('/api/character', { headers: headers() })
     characters.value = res.data
   } catch (error) {
-    console.error('Failed to fetch characters:', error)
+    showError(error)
   }
 }
 
@@ -256,7 +265,7 @@ const fetchTeacherPersonas = async (characterId: number) => {
     const res = await axios.get(`/api/teacher_persona?character_id=${characterId}`, { headers: headers() })
     teacherPersonas.value = res.data
   } catch (error) {
-    console.error('Failed to fetch personas:', error)
+    showError(error)
   }
 }
 
@@ -265,7 +274,7 @@ const fetchSubjects = async (characterId: number) => {
     const res = await axios.get(`/api/subjects?character_id=${characterId}`, { headers: headers() })
     subjects.value = res.data
   } catch (error) {
-    console.error('Failed to fetch subjects:', error)
+    showError(error)
   }
 }
 
@@ -309,7 +318,7 @@ const saveCharacter = async () => {
     resetCharacterForm()
     fetchCharacters()
   } catch (error) {
-    console.error('Failed to save character:', error)
+    showError(error)
   }
 }
 
@@ -324,7 +333,7 @@ const deleteCharacter = async (id: number) => {
     }
     fetchCharacters()
   } catch (error) {
-    console.error('Failed to delete character:', error)
+    showError(error)
   }
 }
 
@@ -374,7 +383,7 @@ const savePersona = async () => {
     resetPersonaForm()
     fetchTeacherPersonas(selectedCharacter.value.id)
   } catch (error) {
-    console.error('Failed to save persona:', error)
+    showError(error)
   }
 }
 
@@ -386,7 +395,7 @@ const deletePersona = async (id: number) => {
       fetchTeacherPersonas(selectedCharacter.value.id)
     }
   } catch (error) {
-    console.error('Failed to delete persona:', error)
+    showError(error)
   }
 }
 
@@ -397,7 +406,7 @@ const activatePersona = async (personaId: number) => {
       fetchTeacherPersonas(selectedCharacter.value.id)
     }
   } catch (error) {
-    console.error('Failed to activate persona:', error)
+    showError(error)
   }
 }
 
@@ -441,7 +450,7 @@ const saveSubject = async () => {
     resetSubjectForm()
     fetchSubjects(selectedCharacter.value.id)
   } catch (error) {
-    console.error('Failed to save subject:', error)
+    showError(error)
   }
 }
 
@@ -453,7 +462,7 @@ const deleteSubject = async (id: number) => {
       fetchSubjects(selectedCharacter.value.id)
     }
   } catch (error) {
-    console.error('Failed to delete subject:', error)
+    showError(error)
   }
 }
 
@@ -731,5 +740,18 @@ onMounted(() => {
 
 .dialog-actions button.primary:hover {
   background: #5a9a5a;
+}
+
+.error-toast {
+  position: fixed;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(215, 58, 74, 0.9);
+  color: #fff;
+  padding: 12px 24px;
+  border-radius: 8px;
+  z-index: 2000;
+  font-size: 14px;
 }
 </style>
