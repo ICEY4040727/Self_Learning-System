@@ -1,3 +1,4 @@
+# ruff: noqa
 """add sprites and scene_background
 
 Revision ID: 002
