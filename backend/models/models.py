@@ -50,6 +50,7 @@ class Character(Base):
     personality = Column(Text, nullable=True)
     background = Column(Text, nullable=True)
     speech_style = Column(Text, nullable=True)
+    sprites = Column(JSON, nullable=True)  # {"default": "url", "happy": "url", ...}
     created_at = Column(DateTime, server_default=func.now())
 
     tenant = relationship("Tenant", back_populates="characters")
@@ -105,6 +106,7 @@ class Subject(Base):
     name = Column(String(100), nullable=False)
     description = Column(Text, nullable=True)
     target_level = Column(String(50), nullable=True)
+    scene_background = Column(String(255), nullable=True)  # "/static/scenes/classroom.jpg"
     created_at = Column(DateTime, server_default=func.now())
 
     tenant = relationship("Tenant", back_populates="subjects")
