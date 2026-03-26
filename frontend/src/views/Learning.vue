@@ -302,9 +302,12 @@ const handleLoadSave = (saveData: any) => {
   }
   if (saveData.chat_history) {
     messages.value = saveData.chat_history
+    const lastTeacher = [...messages.value].reverse().find(m => m.sender_type === 'teacher')
+    if (lastTeacher) {
+      lastTeacherReply.value = lastTeacher.content
+    }
   }
   showSaveLoad.value = false
-  scrollToBottom()
   renderMermaid()
 }
 
