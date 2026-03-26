@@ -1,66 +1,67 @@
 <template>
   <div class="learning-page">
-    <!-- 顶部导航 -->
-    <header class="header">
-      <button class="back-btn" @click="goBack">← 返回</button>
-      <h2>{{ subjectName }}</h2>
-      <div class="header-actions">
-        <EmotionIndicator :stage="relationshipStage" :emotion="currentEmotion" />
-        <button class="save-btn" @click="showSaveLoad = true">存档/读档</button>
+    <!-- Layer 0: 场景背景 -->
+    <div class="scene-layer">
+      <div class="scene-bg"></div>
+    </div>
+
+    <!-- Layer 1: 角色层 -->
+    <div class="character-layer">
+      <div class="character-placeholder">
+        <div class="char-avatar-large">{{ teacherName?.[0] || '?' }}</div>
       </div>
-    </header>
+    </div>
 
-    <!-- 对话区域 -->
-    <main class="dialog-area" ref="dialogArea">
-      <div class="messages-container">
-        <div
-          v-for="msg in messages"
-          :key="msg.id"
-          :class="['message', msg.sender_type]"
-        >
-          <div v-if="msg.sender_type === 'teacher'" class="character-avatar">
-            {{ teacherName?.[0] || '?' }}
-          </div>
-          <div class="message-content">
-            <span class="sender-name" v-if="msg.sender_type === 'teacher'">{{ teacherName }}</span>
-            <div class="message-text" v-html="formatMessage(msg.content)"></div>
-          </div>
+    <!-- Layer 2: 对话框层 -->
+    <div class="dialog-layer">
+      <!-- 最新教师回复 / 打字机 -->
+      <div class="dialog-box-wrapper">
+        <div class="dialog-name-tag" v-if="isTyping || lastTeacherReply">
+          {{ teacherName }}
         </div>
-
-        <!-- 打字机效果显示 -->
-        <div v-if="isTyping" class="message teacher typing">
-          <div class="character-avatar">{{ teacherName?.[0] || '?' }}</div>
-          <div class="message-content">
-            <span class="sender-name">{{ teacherName }}</span>
-            <div class="message-text typewriter">{{ displayedText }}</div>
-            <span class="cursor">▊</span>
+        <div class="dialog-content">
+          <div v-if="isTyping" class="dialog-text">
+            {{ displayedText }}<span class="cursor">▊</span>
           </div>
+          <div v-else-if="lastTeacherReply" class="dialog-text" v-html="formatMessage(lastTeacherReply)"></div>
+          <div v-else class="dialog-text dialog-empty">{{ greeting || '……' }}</div>
         </div>
       </div>
-    </main>
 
-    <!-- 选择面板 -->
-    <ChoicePanel
-      v-if="currentChoices.length > 0"
-      :choices="currentChoices"
-      @select="handleChoiceSelect"
-    />
-
-    <!-- 输入区域 -->
-    <footer class="input-area" v-if="currentChoices.length === 0 && !isTyping">
-      <input
-        v-model="inputText"
-        type="text"
-        placeholder="输入你的问题或想法..."
-        @keyup.enter="sendMessage"
-        :disabled="isLoading"
+      <!-- 选择面板（浮动在对话框上方） -->
+      <ChoicePanel
+        v-if="currentChoices.length > 0"
+        :choices="currentChoices"
+        @select="handleChoiceSelect"
       />
-      <button @click="sendMessage" :disabled="isLoading || !inputText.trim()">
-        {{ isLoading ? '...' : '发送' }}
-      </button>
-    </footer>
 
-    <!-- 工具确认弹窗 -->
+      <!-- 输入区域 -->
+      <div class="input-area" v-if="currentChoices.length === 0 && !isTyping">
+        <input
+          v-model="inputText"
+          type="text"
+          placeholder="输入你的问题或想法..."
+          @keyup.enter="sendMessage"
+          :disabled="isLoading"
+        />
+        <button @click="sendMessage" :disabled="isLoading || !inputText.trim()">
+          {{ isLoading ? '...' : '发送' }}
+        </button>
+      </div>
+    </div>
+
+    <!-- Layer 3: HUD 栏（placeholder，#98 完善） -->
+    <div class="hud-layer">
+      <div class="hud-left">
+        <button class="hud-btn" @click="goBack">← 返回</button>
+        <button class="hud-btn" @click="showSaveLoad = true">📁 存档</button>
+      </div>
+      <div class="hud-right">
+        <EmotionIndicator :stage="relationshipStage" :emotion="currentEmotion" />
+      </div>
+    </div>
+
+    <!-- 模态层 -->
     <ToolConfirmDialog
       v-if="showToolConfirm"
       :tool="toolRequest.tool"
@@ -70,7 +71,6 @@
       @cancel="cancelTool"
     />
 
-    <!-- 存档/读档面板 -->
     <SaveLoad
       v-if="showSaveLoad"
       :subject-id="subjectId"
@@ -122,7 +122,8 @@ const showSaveLoad = ref(false)
 const sessionId = ref<number | undefined>(undefined)
 const currentEmotion = ref('')
 const toolRequest = ref({ tool: '', query: '', reason: '' })
-const dialogArea = ref<HTMLElement | null>(null)
+const lastTeacherReply = ref('')
+const greeting = ref('')
 
 // 打字机效果
 let typeInterval: number | null = null
@@ -158,11 +159,8 @@ const renderMermaid = () => {
 }
 
 const scrollToBottom = () => {
-  nextTick(() => {
-    if (dialogArea.value) {
-      dialogArea.value.scrollTop = dialogArea.value.scrollHeight
-    }
-  })
+  // No-op in Galgame layout (no scrolling area)
+  // Kept for compatibility with existing calls
 }
 
 const startTyping = (fullText: string) => {
@@ -177,13 +175,13 @@ const startTyping = (fullText: string) => {
       scrollToBottom()
     } else {
       stopTyping()
-      // 打字完成后添加到消息列表
+      // 打字完成后：更新对话框显示 + 添加到消息列表（供 Backlog 使用）
+      lastTeacherReply.value = fullText
       messages.value.push({
         id: Date.now(),
         sender_type: 'teacher',
         content: fullText
       })
-      scrollToBottom()
       renderMermaid()
     }
   }, TYPE_SPEED)
@@ -332,9 +330,19 @@ const fetchActiveSession = async () => {
       headers: { Authorization: `Bearer ${authStore.token}` }
     })
 
+    if (response.data.teacher_persona) {
+      teacherName.value = response.data.teacher_persona
+    }
+    if (response.data.greeting) {
+      greeting.value = response.data.greeting
+    }
+    if (response.data.relationship_stage) {
+      relationshipStage.value = response.data.relationship_stage
+    }
+
     if (response.data.session_id) {
       sessionId.value = response.data.session_id
-      // 获取会话历史
+      // 获取会话历史（保留在 messages 供 Backlog 使用）
       const historyRes = await axios.get(
         `/api/sessions/${response.data.session_id}/history`,
         { headers: { Authorization: `Bearer ${authStore.token}` } }
@@ -346,18 +354,13 @@ const fetchActiveSession = async () => {
           sender_type: m.sender_type,
           content: m.content
         }))
-        scrollToBottom()
+        // 恢复最后一条教师回复到对话框
+        const lastTeacher = [...messages.value].reverse().find(m => m.sender_type === 'teacher')
+        if (lastTeacher) {
+          lastTeacherReply.value = lastTeacher.content
+        }
         renderMermaid()
       }
-
-      // 获取关系阶段
-      if (response.data.relationship_stage) {
-        relationshipStage.value = response.data.relationship_stage
-      }
-    }
-
-    if (response.data.teacher_persona) {
-      teacherName.value = response.data.teacher_persona
     }
   } catch (error) {
     console.error('Failed to fetch session:', error)
@@ -383,112 +386,100 @@ onMounted(async () => {
 </script>
 
 <style scoped>
+/* === Galgame Four-Layer Layout === */
 .learning-page {
-  min-height: 100vh;
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* Layer 0: Scene Background */
+.scene-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+}
+
+.scene-bg {
+  width: 100%;
+  height: 100%;
+  background: radial-gradient(ellipse at bottom, #1a1a2e 0%, #0a0a1e 100%);
+}
+
+/* Layer 1: Character */
+.character-layer {
+  position: absolute;
+  bottom: 240px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1;
+}
+
+.character-placeholder {
   display: flex;
-  flex-direction: column;
-  background: linear-gradient(180deg, #1a1a2e 0%, #16213e 100%);
+  justify-content: center;
 }
 
-.header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 15px 20px;
-  background: rgba(0, 0, 0, 0.5);
-  border-bottom: 1px solid #4a4a8a;
-}
-
-.header h2 {
-  color: #ffd700;
-  margin: 0;
-}
-
-.back-btn, .save-btn {
-  padding: 8px 16px;
-  background: #2a2a4a;
-  border: 1px solid #4a4a8a;
-  color: #fff;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.3s;
-}
-
-.back-btn:hover, .save-btn:hover {
-  background: #3a3a5a;
-  border-color: #ffd700;
-}
-
-.header-actions {
-  display: flex;
-  align-items: center;
-  gap: 15px;
-}
-
-.dialog-area {
-  flex: 1;
-  overflow-y: auto;
-  padding: 20px;
-  max-height: calc(100vh - 200px);
-}
-
-.messages-container {
-  display: flex;
-  flex-direction: column;
-  gap: 15px;
-}
-
-.message {
-  display: flex;
-  gap: 12px;
-  max-width: 80%;
-}
-
-.message.user {
-  align-self: flex-end;
-  flex-direction: row-reverse;
-}
-
-.character-avatar {
-  width: 50px;
-  height: 50px;
+.char-avatar-large {
+  width: 120px;
+  height: 120px;
   background: linear-gradient(135deg, #4a4a8a, #2a2a4a);
+  border: 3px solid #ffd700;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 20px;
+  font-size: 48px;
   color: #ffd700;
-  flex-shrink: 0;
+  box-shadow: 0 0 30px rgba(255, 215, 0, 0.2);
 }
 
-.message-content {
-  background: rgba(0, 0, 0, 0.5);
-  border: 1px solid #4a4a8a;
-  border-radius: 12px;
-  padding: 12px 16px;
-  position: relative;
+/* Layer 2: Dialog */
+.dialog-layer {
+  position: absolute;
+  bottom: 50px;
+  left: 5%;
+  right: 5%;
+  z-index: 2;
 }
 
-.message.user .message-content {
-  background: rgba(74, 74, 138, 0.3);
-  border-color: #4a8a4a;
+.dialog-box-wrapper {
+  background: rgba(0, 0, 0, 0.85);
+  border: 2px solid #ffd700;
+  border-radius: 8px;
+  padding: 20px 24px;
+  min-height: 120px;
+  max-height: 200px;
+  overflow-y: auto;
+  box-shadow: 0 0 20px rgba(255, 215, 0, 0.15);
 }
 
-.sender-name {
-  display: block;
-  font-size: 12px;
-  color: #ffd700;
-  margin-bottom: 5px;
+.dialog-name-tag {
+  display: inline-block;
+  background: linear-gradient(90deg, #ffd700, #ff8c00);
+  color: #1a1a2e;
+  padding: 4px 16px;
+  border-radius: 4px;
+  font-weight: bold;
+  font-size: 14px;
+  margin-bottom: 10px;
 }
 
-.message-text {
+.dialog-content {
+  margin-top: 5px;
+}
+
+.dialog-text {
   color: #fff;
-  line-height: 1.6;
+  font-size: 16px;
+  line-height: 1.8;
+  white-space: pre-wrap;
 }
 
-.typing .message-text {
-  min-height: 20px;
+.dialog-empty {
+  color: #888;
+  font-style: italic;
 }
 
 .cursor {
@@ -501,20 +492,19 @@ onMounted(async () => {
   51%, 100% { opacity: 0; }
 }
 
+/* Input area (below dialog box) */
 .input-area {
   display: flex;
   gap: 10px;
-  padding: 15px 20px;
-  background: rgba(0, 0, 0, 0.5);
-  border-top: 1px solid #4a4a8a;
+  margin-top: 10px;
 }
 
 .input-area input {
   flex: 1;
-  padding: 12px 16px;
-  background: #2a2a4a;
+  padding: 10px 16px;
+  background: rgba(26, 26, 46, 0.9);
   border: 1px solid #4a4a8a;
-  border-radius: 8px;
+  border-radius: 6px;
   color: #fff;
   font-size: 14px;
 }
@@ -525,14 +515,14 @@ onMounted(async () => {
 }
 
 .input-area input::placeholder {
-  color: #888;
+  color: #666;
 }
 
 .input-area button {
-  padding: 12px 24px;
+  padding: 10px 20px;
   background: #4a8a4a;
   border: none;
-  border-radius: 8px;
+  border-radius: 6px;
   color: #fff;
   font-size: 14px;
   cursor: pointer;
@@ -548,6 +538,45 @@ onMounted(async () => {
   cursor: not-allowed;
 }
 
+/* Layer 3: HUD */
+.hud-layer {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 44px;
+  background: rgba(0, 0, 0, 0.7);
+  border-top: 1px solid #4a4a8a;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 16px;
+  z-index: 3;
+}
+
+.hud-left, .hud-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.hud-btn {
+  padding: 4px 12px;
+  background: transparent;
+  border: 1px solid #4a4a8a;
+  color: #aaa;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.hud-btn:hover {
+  color: #ffd700;
+  border-color: #ffd700;
+}
+
+/* Mermaid in dialog */
 :deep(.mermaid-container) {
   margin: 12px 0;
   padding: 16px;
@@ -560,5 +589,20 @@ onMounted(async () => {
 :deep(.mermaid-container svg) {
   max-width: 100%;
   height: auto;
+}
+
+/* Mobile */
+@media (max-width: 768px) {
+  .character-layer {
+    display: none;
+  }
+  .dialog-layer {
+    left: 2%;
+    right: 2%;
+    bottom: 50px;
+  }
+  .dialog-box-wrapper {
+    max-height: 45vh;
+  }
 }
 </style>
