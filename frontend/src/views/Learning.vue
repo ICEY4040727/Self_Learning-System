@@ -166,26 +166,26 @@ const renderMermaid = () => {
   })
 }
 
-const scrollToBottom = () => {
-  // No-op in Galgame layout (no scrolling area)
-  // Kept for compatibility with existing calls
-}
+let typingResolve: (() => void) | null = null
 
-const startTyping = (fullText: string) => {
-  isTyping.value = true
-  dialogMode.value = 'TEACHER_SPEAKING'
-  displayedText.value = ''
-  currentFullText.value = fullText
+const startTyping = (fullText: string): Promise<void> => {
+  return new Promise((resolve) => {
+    typingResolve = resolve
+    isTyping.value = true
+    dialogMode.value = 'TEACHER_SPEAKING'
+    displayedText.value = ''
+    currentFullText.value = fullText
 
-  let index = 0
-  typeInterval = window.setInterval(() => {
-    if (index < fullText.length) {
-      displayedText.value += fullText[index]
-      index++
-    } else {
-      finishTyping(fullText)
-    }
-  }, TYPE_SPEED)
+    let index = 0
+    typeInterval = window.setInterval(() => {
+      if (index < fullText.length) {
+        displayedText.value += fullText[index]
+        index++
+      } else {
+        finishTyping(fullText)
+      }
+    }, TYPE_SPEED)
+  })
 }
 
 const stopTyping = () => {
@@ -206,6 +206,11 @@ const finishTyping = (fullText: string) => {
   })
   renderMermaid()
 
+  if (typingResolve) {
+    typingResolve()
+    typingResolve = null
+  }
+
   // Auto mode: automatically switch to input after delay
   if (isAuto.value && currentChoices.value.length === 0) {
     autoTimer = window.setTimeout(() => {
@@ -219,7 +224,7 @@ const currentFullText = ref('')
 
 const skipTyping = () => {
   if (!isTyping.value) return
-  stopTyping()
+  displayedText.value = currentFullText.value
   finishTyping(currentFullText.value)
 }
 
@@ -285,9 +290,22 @@ const sendMessage = async () => {
       }
       showToolConfirm.value = true
     } else if (data.type === 'choice') {
-      // 显示选项
+      // 显示选项 + 记录到 Backlog
       currentChoices.value = data.choices || []
       lastTeacherReply.value = data.reply || ''
+      if (data.reply) {
+        messages.value.push({
+          id: Date.now(),
+          sender_type: 'teacher',
+          content: data.reply
+        })
+      }
+      if (data.emotion?.emotion_type) {
+        currentEmotion.value = data.emotion.emotion_type
+      }
+      if (data.relationship_stage) {
+        relationshipStage.value = data.relationship_stage
+      }
       dialogMode.value = 'CHOICES'
     } else {
       // 显示教师回复 (打字机效果)
@@ -303,11 +321,13 @@ const sendMessage = async () => {
     }
   } catch (error: any) {
     console.error('Send message error:', error)
+    lastTeacherReply.value = error.response?.data?.detail || '发送消息失败，请重试'
     messages.value.push({
       id: Date.now(),
       sender_type: 'teacher',
-      content: error.response?.data?.detail || '发送消息失败，请重试'
+      content: lastTeacherReply.value
     })
+    dialogMode.value = 'USER_INPUT'
   } finally {
     isLoading.value = false
   }
@@ -354,14 +374,13 @@ const handleLoadSave = (saveData: any) => {
     const lastTeacher = [...messages.value].reverse().find(m => m.sender_type === 'teacher')
     if (lastTeacher) {
       lastTeacherReply.value = lastTeacher.content
+      dialogMode.value = 'TEACHER_SPEAKING'
+    } else {
+      dialogMode.value = 'USER_INPUT'
     }
   }
   showSaveLoad.value = false
   renderMermaid()
-}
-
-const goBack = () => {
-  router.push('/home')
 }
 
 const fetchSubjectInfo = async () => {
