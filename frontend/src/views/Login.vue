@@ -38,6 +38,7 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { parseApiError } from '@/utils/error'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -45,24 +46,32 @@ const authStore = useAuthStore()
 const username = ref('')
 const password = ref('')
 const error = ref('')
+const isLoading = ref(false)
 
 const handleLogin = async () => {
   error.value = ''
+  isLoading.value = true
   try {
     await authStore.login(username.value, password.value)
     router.push('/home')
   } catch (e: any) {
-    error.value = e.response?.data?.detail || '登录失败'
+    error.value = parseApiError(e)
+  } finally {
+    isLoading.value = false
   }
 }
 
 const handleRegister = async () => {
   error.value = ''
+  isLoading.value = true
   try {
     await authStore.register(username.value, password.value)
+    error.value = ''
     alert('注册成功，请登录')
   } catch (e: any) {
-    error.value = e.response?.data?.detail || '注册失败'
+    error.value = parseApiError(e)
+  } finally {
+    isLoading.value = false
   }
 }
 </script>
