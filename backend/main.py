@@ -102,6 +102,15 @@ app.include_router(archive.router, prefix="/api", tags=["archive"])
 app.include_router(learning.router, prefix="/api", tags=["learning"])
 app.include_router(save.router, prefix="/api", tags=["save"])
 
+# Static files (character sprites, scene backgrounds)
+import os  # noqa: E402
+
+from fastapi.staticfiles import StaticFiles  # noqa: E402
+
+static_dir = os.path.join(os.path.dirname(__file__), "static")
+os.makedirs(static_dir, exist_ok=True)
+app.mount("/static", StaticFiles(directory=static_dir), name="static")
+
 
 # Voice endpoint (reserved, returns 501)
 @app.post("/api/voice", status_code=501)

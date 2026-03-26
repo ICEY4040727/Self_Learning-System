@@ -27,6 +27,7 @@ class CharacterCreate(BaseModel):
     personality: str | None = None
     background: str | None = None
     speech_style: str | None = None
+    sprites: dict | None = None
 
 
 class CharacterResponse(CharacterCreate):
@@ -73,6 +74,7 @@ class SubjectCreate(BaseModel):
     name: str
     description: str | None = None
     target_level: str | None = None
+    scene_background: str | None = None
 
 
 class SubjectResponse(SubjectCreate):

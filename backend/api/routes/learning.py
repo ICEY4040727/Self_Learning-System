@@ -25,6 +25,33 @@ class ChatResponse(BaseModel):
     choices: list[str] | None = None
     emotion: dict | None = None
     relationship_stage: str | None = None
+    expression_hint: str | None = None  # "happy", "thinking", "concerned", "default"
+
+
+EXPRESSION_MAP = {
+    "curiosity": "thinking",
+    "confusion": "concerned",
+    "frustration": "concerned",
+    "excitement": "happy",
+    "satisfaction": "happy",
+    "boredom": "default",
+    "anxiety": "concerned",
+    "neutral": "default",
+}
+
+
+GREETINGS = {
+    "stranger": "你好，我是{name}。很高兴认识你！今天想学点什么呢？",
+    "acquaintance": "嗨，又见面了。今天想继续上次的话题吗？",
+    "friend": "来了来了！今天状态怎么样？",
+    "mentor": "准备好挑战更深的问题了吗？",
+    "partner": "老朋友，我们继续探索吧。",
+}
+
+
+def _get_greeting(stage: str, persona_name: str | None) -> str:
+    template = GREETINGS.get(stage, GREETINGS["stranger"])
+    return template.format(name=persona_name or "老师")
 
 
 class ToolConfirmRequest(BaseModel):
@@ -65,6 +92,7 @@ async def start_learning(
             "teacher_persona": teacher_persona.name if teacher_persona else None,
             "subject": subject.name,
             "relationship_stage": existing.relationship_stage,
+            "greeting": _get_greeting(existing.relationship_stage or "stranger", teacher_persona.name if teacher_persona else None),
         }
 
     # Get active teacher persona
@@ -95,7 +123,8 @@ async def start_learning(
     return {
         "session_id": db_session.id,
         "teacher_persona": teacher_persona.name if teacher_persona else None,
-        "subject": subject.name
+        "subject": subject.name,
+        "greeting": _get_greeting("stranger", teacher_persona.name if teacher_persona else None),
     }
 
 
@@ -164,11 +193,15 @@ async def send_message(
     db.add(teacher_message)
     db.commit()
 
+    emotion_type = result.get("emotion", {}).get("emotion_type", "neutral") if result.get("emotion") else "neutral"
+    expression = EXPRESSION_MAP.get(emotion_type, "default")
+
     return ChatResponse(
         type=result.get("type", "text"),
         reply=result.get("reply", ""),
         emotion=result.get("emotion"),
-        relationship_stage=result.get("relationship_stage")
+        relationship_stage=result.get("relationship_stage"),
+        expression_hint=expression,
     )
 
 
