@@ -14,52 +14,33 @@
 
     <!-- Layer 2: 对话框层 -->
     <div class="dialog-layer">
-      <!-- 最新教师回复 / 打字机 -->
-      <div class="dialog-box-wrapper">
-        <div class="dialog-name-tag" v-if="isTyping || lastTeacherReply">
-          {{ teacherName }}
-        </div>
-        <div class="dialog-content">
-          <div v-if="isTyping" class="dialog-text">
-            {{ displayedText }}<span class="cursor">▊</span>
-          </div>
-          <div v-else-if="lastTeacherReply" class="dialog-text" v-html="formatMessage(lastTeacherReply)"></div>
-          <div v-else class="dialog-text dialog-empty">{{ greeting || '……' }}</div>
-        </div>
-      </div>
-
-      <!-- 选择面板（浮动在对话框上方） -->
-      <ChoicePanel
-        v-if="currentChoices.length > 0"
+      <DialogBox
+        :mode="dialogMode"
+        :character-name="teacherName"
+        :display-content="currentDisplayContent"
+        :is-typing="isTyping"
         :choices="currentChoices"
-        @select="handleChoiceSelect"
+        @click-next="handleClickNext"
+        @skip-typing="skipTyping"
+        @send-message="handleSendFromDialog"
+        @select-choice="handleChoiceSelect"
       />
-
-      <!-- 输入区域 -->
-      <div class="input-area" v-if="currentChoices.length === 0 && !isTyping">
-        <input
-          v-model="inputText"
-          type="text"
-          placeholder="输入你的问题或想法..."
-          @keyup.enter="sendMessage"
-          :disabled="isLoading"
-        />
-        <button @click="sendMessage" :disabled="isLoading || !inputText.trim()">
-          {{ isLoading ? '...' : '发送' }}
-        </button>
-      </div>
     </div>
 
-    <!-- Layer 3: HUD 栏（placeholder，#98 完善） -->
-    <div class="hud-layer">
-      <div class="hud-left">
-        <button class="hud-btn" @click="goBack">← 返回</button>
-        <button class="hud-btn" @click="showSaveLoad = true">📁 存档</button>
-      </div>
-      <div class="hud-right">
-        <EmotionIndicator :stage="relationshipStage" :emotion="currentEmotion" />
-      </div>
-    </div>
+    <!-- Layer 3: HUD -->
+    <HudBar
+      :emotion="currentEmotion"
+      :stage="relationshipStage"
+      :mastery="0"
+      :is-auto="isAuto"
+      @save="showSaveLoad = true"
+      @load="showSaveLoad = true"
+      @skip="skipTyping"
+      @toggle-auto="isAuto = !isAuto"
+      @backlog="showBacklog = true"
+      @settings="router.push('/settings')"
+      @exit="confirmExit"
+    />
 
     <!-- 模态层 -->
     <ToolConfirmDialog
@@ -78,16 +59,24 @@
       @close="showSaveLoad = false"
       @load="handleLoadSave"
     />
+
+    <BacklogPanel
+      :visible="showBacklog"
+      :messages="messages"
+      :teacher-name="teacherName"
+      @close="showBacklog = false"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, nextTick } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import axios from 'axios'
 import { useAuthStore } from '@/stores/auth'
-import ChoicePanel from '@/components/galgame/ChoicePanel.vue'
-import EmotionIndicator from '@/components/galgame/EmotionIndicator.vue'
+import DialogBox from '@/components/galgame/DialogBox.vue'
+import HudBar from '@/components/galgame/HudBar.vue'
+import BacklogPanel from '@/components/galgame/BacklogPanel.vue'
 import SaveLoad from '@/components/galgame/SaveLoad.vue'
 import ToolConfirmDialog from '@/components/galgame/ToolConfirmDialog.vue'
 import mermaid from 'mermaid'
@@ -124,6 +113,25 @@ const currentEmotion = ref('')
 const toolRequest = ref({ tool: '', query: '', reason: '' })
 const lastTeacherReply = ref('')
 const greeting = ref('')
+const showBacklog = ref(false)
+const isAuto = ref(false)
+let autoTimer: number | null = null
+
+type DialogMode = 'TEACHER_SPEAKING' | 'USER_INPUT' | 'CHOICES' | 'WAITING'
+const dialogMode = ref<DialogMode>('WAITING')
+
+const currentDisplayContent = computed(() => {
+  if (dialogMode.value === 'TEACHER_SPEAKING') {
+    return isTyping.value ? displayedText.value : formatMessage(lastTeacherReply.value)
+  }
+  if (dialogMode.value === 'CHOICES') {
+    return formatMessage(lastTeacherReply.value)
+  }
+  if (dialogMode.value === 'WAITING' && !lastTeacherReply.value) {
+    return greeting.value || '……'
+  }
+  return ''
+})
 
 // 打字机效果
 let typeInterval: number | null = null
@@ -165,24 +173,17 @@ const scrollToBottom = () => {
 
 const startTyping = (fullText: string) => {
   isTyping.value = true
+  dialogMode.value = 'TEACHER_SPEAKING'
   displayedText.value = ''
+  currentFullText.value = fullText
 
   let index = 0
   typeInterval = window.setInterval(() => {
     if (index < fullText.length) {
       displayedText.value += fullText[index]
       index++
-      scrollToBottom()
     } else {
-      stopTyping()
-      // 打字完成后：更新对话框显示 + 添加到消息列表（供 Backlog 使用）
-      lastTeacherReply.value = fullText
-      messages.value.push({
-        id: Date.now(),
-        sender_type: 'teacher',
-        content: fullText
-      })
-      renderMermaid()
+      finishTyping(fullText)
     }
   }, TYPE_SPEED)
 }
@@ -195,20 +196,66 @@ const stopTyping = () => {
   isTyping.value = false
 }
 
+const finishTyping = (fullText: string) => {
+  stopTyping()
+  lastTeacherReply.value = fullText
+  messages.value.push({
+    id: Date.now(),
+    sender_type: 'teacher',
+    content: fullText
+  })
+  renderMermaid()
+
+  // Auto mode: automatically switch to input after delay
+  if (isAuto.value && currentChoices.value.length === 0) {
+    autoTimer = window.setTimeout(() => {
+      dialogMode.value = 'USER_INPUT'
+    }, 2000)
+  }
+}
+
+// Store current full text for skip functionality
+const currentFullText = ref('')
+
+const skipTyping = () => {
+  if (!isTyping.value) return
+  stopTyping()
+  finishTyping(currentFullText.value)
+}
+
+const handleClickNext = () => {
+  if (autoTimer) {
+    clearTimeout(autoTimer)
+    autoTimer = null
+  }
+  dialogMode.value = 'USER_INPUT'
+}
+
+const handleSendFromDialog = (message: string) => {
+  inputText.value = message
+  sendMessage()
+}
+
+const confirmExit = () => {
+  if (confirm('确定要返回主页吗？当前对话不会丢失。')) {
+    router.push('/home')
+  }
+}
+
 const sendMessage = async () => {
   if (!inputText.value.trim() || isLoading.value || isTyping.value) return
 
   const userMsg = inputText.value.trim()
   inputText.value = ''
   isLoading.value = true
+  dialogMode.value = 'WAITING'
 
-  // 添加用户消息
+  // 添加用户消息到 Backlog
   messages.value.push({
     id: Date.now(),
     sender_type: 'user',
     content: userMsg
   })
-  scrollToBottom()
 
   try {
     const response = await axios.post(
@@ -240,6 +287,8 @@ const sendMessage = async () => {
     } else if (data.type === 'choice') {
       // 显示选项
       currentChoices.value = data.choices || []
+      lastTeacherReply.value = data.reply || ''
+      dialogMode.value = 'CHOICES'
     } else {
       // 显示教师回复 (打字机效果)
       await startTyping(data.reply)
@@ -361,14 +410,23 @@ const fetchActiveSession = async () => {
         const lastTeacher = [...messages.value].reverse().find(m => m.sender_type === 'teacher')
         if (lastTeacher) {
           lastTeacherReply.value = lastTeacher.content
+          dialogMode.value = 'TEACHER_SPEAKING'
         }
         renderMermaid()
+      } else {
+        // 新 session，显示 greeting 后等待输入
+        dialogMode.value = 'USER_INPUT'
       }
     }
   } catch (error) {
     console.error('Failed to fetch session:', error)
   }
 }
+
+onUnmounted(() => {
+  if (typeInterval) clearInterval(typeInterval)
+  if (autoTimer) clearTimeout(autoTimer)
+})
 
 onMounted(async () => {
   mermaid.initialize({
@@ -407,16 +465,17 @@ onMounted(async () => {
 .scene-bg {
   width: 100%;
   height: 100%;
-  background: radial-gradient(ellipse at bottom, #1a1a2e 0%, #0a0a1e 100%);
+  background: radial-gradient(ellipse at bottom, var(--bg-secondary) 0%, var(--bg-primary) 100%);
 }
 
 /* Layer 1: Character */
 .character-layer {
   position: absolute;
-  bottom: 240px;
+  bottom: 280px;
   left: 50%;
   transform: translateX(-50%);
-  z-index: 1;
+  z-index: 10;
+  animation: fadeSlideIn var(--transition-slow);
 }
 
 .character-placeholder {
@@ -428,155 +487,23 @@ onMounted(async () => {
   width: 120px;
   height: 120px;
   background: linear-gradient(135deg, #4a4a8a, #2a2a4a);
-  border: 3px solid #ffd700;
+  border: 3px solid var(--accent-gold);
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 48px;
-  color: #ffd700;
+  color: var(--accent-gold);
   box-shadow: 0 0 30px rgba(255, 215, 0, 0.2);
 }
 
 /* Layer 2: Dialog */
 .dialog-layer {
   position: absolute;
-  bottom: 50px;
+  bottom: 44px;
   left: 5%;
   right: 5%;
-  z-index: 2;
-}
-
-.dialog-box-wrapper {
-  background: rgba(0, 0, 0, 0.85);
-  border: 2px solid #ffd700;
-  border-radius: 8px;
-  padding: 20px 24px;
-  min-height: 120px;
-  max-height: 200px;
-  overflow-y: auto;
-  box-shadow: 0 0 20px rgba(255, 215, 0, 0.15);
-}
-
-.dialog-name-tag {
-  display: inline-block;
-  background: linear-gradient(90deg, #ffd700, #ff8c00);
-  color: #1a1a2e;
-  padding: 4px 16px;
-  border-radius: 4px;
-  font-weight: bold;
-  font-size: 14px;
-  margin-bottom: 10px;
-}
-
-.dialog-content {
-  margin-top: 5px;
-}
-
-.dialog-text {
-  color: #fff;
-  font-size: 16px;
-  line-height: 1.8;
-  white-space: pre-wrap;
-}
-
-.dialog-empty {
-  color: #888;
-  font-style: italic;
-}
-
-.cursor {
-  animation: blink 1s infinite;
-  color: #ffd700;
-}
-
-@keyframes blink {
-  0%, 50% { opacity: 1; }
-  51%, 100% { opacity: 0; }
-}
-
-/* Input area (below dialog box) */
-.input-area {
-  display: flex;
-  gap: 10px;
-  margin-top: 10px;
-}
-
-.input-area input {
-  flex: 1;
-  padding: 10px 16px;
-  background: rgba(26, 26, 46, 0.9);
-  border: 1px solid #4a4a8a;
-  border-radius: 6px;
-  color: #fff;
-  font-size: 14px;
-}
-
-.input-area input:focus {
-  outline: none;
-  border-color: #ffd700;
-}
-
-.input-area input::placeholder {
-  color: #666;
-}
-
-.input-area button {
-  padding: 10px 20px;
-  background: #4a8a4a;
-  border: none;
-  border-radius: 6px;
-  color: #fff;
-  font-size: 14px;
-  cursor: pointer;
-  transition: all 0.3s;
-}
-
-.input-area button:hover:not(:disabled) {
-  background: #5a9a5a;
-}
-
-.input-area button:disabled {
-  background: #3a3a5a;
-  cursor: not-allowed;
-}
-
-/* Layer 3: HUD */
-.hud-layer {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  height: 44px;
-  background: rgba(0, 0, 0, 0.7);
-  border-top: 1px solid #4a4a8a;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0 16px;
-  z-index: 3;
-}
-
-.hud-left, .hud-right {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.hud-btn {
-  padding: 4px 12px;
-  background: transparent;
-  border: 1px solid #4a4a8a;
-  color: #aaa;
-  border-radius: 4px;
-  font-size: 12px;
-  cursor: pointer;
-  transition: all 0.3s;
-}
-
-.hud-btn:hover {
-  color: #ffd700;
-  border-color: #ffd700;
+  z-index: 20;
 }
 
 /* Mermaid in dialog */
@@ -584,7 +511,7 @@ onMounted(async () => {
   margin: 12px 0;
   padding: 16px;
   background: rgba(42, 42, 74, 0.6);
-  border: 1px solid #4a4a8a;
+  border: 1px solid var(--border-subtle);
   border-radius: 8px;
   overflow-x: auto;
 }
@@ -602,10 +529,6 @@ onMounted(async () => {
   .dialog-layer {
     left: 2%;
     right: 2%;
-    bottom: 50px;
-  }
-  .dialog-box-wrapper {
-    max-height: 45vh;
   }
 }
 </style>
