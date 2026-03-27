@@ -356,6 +356,10 @@ const sendMessage = async () => {
 
     // 处理不同响应类型
     if (data.type === 'tool_request') {
+      // Update expression
+      if (data.expression_hint) {
+        currentExpression.value = data.expression_hint
+      }
       // Show teacher reply first (strip tool tags)
       if (data.reply) {
         const cleanReply = data.reply.replace(/<tool>[\s\S]*?<\/tool>/g, '').trim()

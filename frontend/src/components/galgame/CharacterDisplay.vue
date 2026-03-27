@@ -34,6 +34,9 @@ const spriteError = ref(false)
 
 const currentExpression = computed(() => props.expression || 'default')
 
+// Reset error when expression changes so new sprite gets a chance to load
+watch(currentExpression, () => { spriteError.value = false })
+
 const spriteUrl = computed(() => {
   if (spriteError.value) return null
   if (!props.sprites) return null
@@ -125,7 +128,7 @@ const expressionClass = computed(() => `expr-${currentExpression.value}`)
 }
 
 .placeholder-avatar.expr-thinking {
-  border-color: #60a5fa;
+  border-color: var(--emotion-thinking);
   box-shadow: 0 0 30px rgba(96, 165, 250, 0.2);
 }
 
