@@ -11,7 +11,9 @@
         <span v-html="displayContent"></span>
         <span v-if="isTyping" class="cursor">▊</span>
       </div>
-      <div v-if="!isTyping && displayContent" class="next-indicator">▶ 点击继续</div>
+      <div v-if="!isTyping && displayContent" class="next-indicator">
+        {{ hasMoreSegments ? '▼ 下一段' : '▶ 点击继续' }}
+      </div>
     </div>
 
     <!-- Mode: USER_INPUT -->
@@ -61,6 +63,7 @@ import { ref, nextTick, watch } from 'vue'
 const props = defineProps<{
   mode: 'TEACHER_SPEAKING' | 'USER_INPUT' | 'CHOICES' | 'WAITING'
   characterName: string
+  hasMoreSegments?: boolean
   displayContent?: string
   isTyping?: boolean
   choices?: string[]
