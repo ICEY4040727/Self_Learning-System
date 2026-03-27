@@ -1,24 +1,60 @@
 <template>
   <div class="character-display" :class="position">
-    <img
-      v-if="avatar"
-      :src="avatar"
-      :alt="name"
-      class="character-image"
-      :class="{ 'flipped': position === 'right' }"
-    />
-    <div v-else class="character-placeholder">
-      {{ name?.[0] || '?' }}
-    </div>
+    <Transition name="sprite-switch" mode="out-in">
+      <img
+        v-if="spriteUrl"
+        :key="spriteUrl"
+        :src="spriteUrl"
+        :alt="name"
+        class="character-image"
+        :class="{ 'flipped': position === 'right' }"
+        @error="spriteError = true"
+      />
+      <div v-else class="character-placeholder">
+        <div class="placeholder-avatar" :class="expressionClass">
+          {{ name?.[0] || '?' }}
+        </div>
+        <div class="placeholder-expression">{{ expressionLabel }}</div>
+      </div>
+    </Transition>
   </div>
 </template>
 
 <script setup lang="ts">
-defineProps<{
+import { computed, ref } from 'vue'
+
+const props = defineProps<{
   name?: string
-  avatar?: string
+  sprites?: Record<string, string>  // {"default": "url", "happy": "url", ...}
+  expression?: string               // "default" | "happy" | "thinking" | "concerned"
   position?: 'left' | 'center' | 'right'
 }>()
+
+const spriteError = ref(false)
+
+const currentExpression = computed(() => props.expression || 'default')
+
+const spriteUrl = computed(() => {
+  if (spriteError.value) return null
+  if (!props.sprites) return null
+
+  // Try exact expression match, fallback to default
+  return props.sprites[currentExpression.value]
+    || props.sprites['default']
+    || null
+})
+
+// Expression visual feedback on placeholder (when no sprites)
+const EXPRESSION_LABELS: Record<string, string> = {
+  default: '',
+  happy: '😊',
+  thinking: '🤔',
+  concerned: '😟',
+}
+
+const expressionLabel = computed(() => EXPRESSION_LABELS[currentExpression.value] || '')
+
+const expressionClass = computed(() => `expr-${currentExpression.value}`)
 </script>
 
 <style scoped>
@@ -26,8 +62,6 @@ defineProps<{
   display: flex;
   align-items: flex-end;
   justify-content: center;
-  min-width: 200px;
-  min-height: 300px;
 }
 
 .character-display.left {
@@ -38,33 +72,82 @@ defineProps<{
   justify-content: flex-end;
 }
 
-.character-display.center {
-  justify-content: center;
-}
-
 .character-image {
-  max-height: 400px;
+  max-height: 70vh;
   max-width: 300px;
   object-fit: contain;
-  transition: all 0.5s ease;
-  filter: drop-shadow(0 0 20px rgba(255, 255, 255, 0.3));
+  filter: drop-shadow(0 4px 20px rgba(0, 0, 0, 0.5));
+  transition: filter var(--transition-normal);
 }
 
 .character-image.flipped {
   transform: scaleX(-1);
 }
 
+/* Sprite switch transition */
+.sprite-switch-enter-active,
+.sprite-switch-leave-active {
+  transition: opacity 0.2s ease;
+}
+
+.sprite-switch-enter-from,
+.sprite-switch-leave-to {
+  opacity: 0;
+}
+
+/* Placeholder (no sprites available) */
 .character-placeholder {
-  width: 200px;
-  height: 300px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.placeholder-avatar {
+  width: 120px;
+  height: 120px;
   background: linear-gradient(135deg, #4a4a8a, #2a2a4a);
-  border-radius: 100px 100px 20px 20px;
+  border: 3px solid var(--accent-gold);
+  border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 80px;
-  font-weight: bold;
-  color: #ffd700;
-  border: 3px solid #ffd700;
+  font-size: 48px;
+  color: var(--accent-gold);
+  box-shadow: 0 0 30px rgba(255, 215, 0, 0.2);
+  transition: all var(--transition-normal);
+}
+
+/* Expression variants on placeholder */
+.placeholder-avatar.expr-happy {
+  border-color: var(--emotion-positive);
+  box-shadow: 0 0 30px rgba(74, 223, 106, 0.2);
+}
+
+.placeholder-avatar.expr-thinking {
+  border-color: #60a5fa;
+  box-shadow: 0 0 30px rgba(96, 165, 250, 0.2);
+}
+
+.placeholder-avatar.expr-concerned {
+  border-color: var(--emotion-negative);
+  box-shadow: 0 0 30px rgba(223, 74, 74, 0.2);
+}
+
+.placeholder-expression {
+  font-size: 24px;
+  height: 30px;
+}
+
+@media (max-width: 768px) {
+  .character-image {
+    max-height: 50vh;
+    max-width: 200px;
+  }
+  .placeholder-avatar {
+    width: 80px;
+    height: 80px;
+    font-size: 32px;
+  }
 }
 </style>

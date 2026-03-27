@@ -7,9 +7,12 @@
 
     <!-- Layer 1: 角色层 -->
     <div class="character-layer">
-      <div class="character-placeholder">
-        <div class="char-avatar-large">{{ teacherName?.[0] || '?' }}</div>
-      </div>
+      <CharacterDisplay
+        :name="teacherName"
+        :sprites="characterSprites"
+        :expression="currentExpression"
+        position="center"
+      />
     </div>
 
     <!-- Layer 2: 对话框层 -->
@@ -75,6 +78,7 @@ import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import axios from 'axios'
 import { useAuthStore } from '@/stores/auth'
+import CharacterDisplay from '@/components/galgame/CharacterDisplay.vue'
 import DialogBox from '@/components/galgame/DialogBox.vue'
 import HudBar from '@/components/galgame/HudBar.vue'
 import BacklogPanel from '@/components/galgame/BacklogPanel.vue'
@@ -111,6 +115,8 @@ const showToolConfirm = ref(false)
 const showSaveLoad = ref(false)
 const sessionId = ref<number | undefined>(undefined)
 const currentEmotion = ref('')
+const currentExpression = ref('default')
+const characterSprites = ref<Record<string, string> | undefined>(undefined)
 const toolRequest = ref({ tool: '', query: '', reason: '' })
 const lastTeacherReply = ref('')
 const greeting = ref('')
@@ -328,6 +334,7 @@ const sendMessage = async () => {
   inputText.value = ''
   isLoading.value = true
   dialogMode.value = 'WAITING'
+  currentExpression.value = 'thinking'
 
   // 添加用户消息到 Backlog
   messages.value.push({
@@ -377,6 +384,9 @@ const sendMessage = async () => {
       if (data.emotion?.emotion_type) {
         currentEmotion.value = data.emotion.emotion_type
       }
+      if (data.expression_hint) {
+        currentExpression.value = data.expression_hint
+      }
       if (data.relationship_stage) {
         relationshipStage.value = data.relationship_stage
       }
@@ -385,9 +395,12 @@ const sendMessage = async () => {
       // 显示教师回复 (打字机效果)
       await startTyping(data.reply)
 
-      // 更新情感状态与关系阶段
+      // 更新情感状态、表情、关系阶段
       if (data.emotion?.emotion_type) {
         currentEmotion.value = data.emotion.emotion_type
+      }
+      if (data.expression_hint) {
+        currentExpression.value = data.expression_hint
       }
       if (data.relationship_stage) {
         relationshipStage.value = data.relationship_stage
@@ -591,25 +604,6 @@ onUnmounted(() => {
   transform: translateX(-50%);
   z-index: 10;
   animation: fadeSlideIn var(--transition-slow);
-}
-
-.character-placeholder {
-  display: flex;
-  justify-content: center;
-}
-
-.char-avatar-large {
-  width: 120px;
-  height: 120px;
-  background: linear-gradient(135deg, #4a4a8a, #2a2a4a);
-  border: 3px solid var(--accent-gold);
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 48px;
-  color: var(--accent-gold);
-  box-shadow: 0 0 30px rgba(255, 215, 0, 0.2);
 }
 
 /* Layer 2: Dialog */
