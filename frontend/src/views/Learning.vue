@@ -136,8 +136,13 @@ const splitIntoSegments = (text: string): string[] => {
     const result: string[] = []
     let remaining = text
     while (remaining.length > 250) {
-      const cutPoint = remaining.slice(0, 300).search(/[。！？.!?\n][^。！？.!?\n]*$/)
-      if (cutPoint > 100) {
+      // Primary: split at sentence-ending punctuation
+      let cutPoint = remaining.slice(0, 300).search(/[。！？.!?\n][^。！？.!?\n]*$/)
+      // Fallback: split at clause-level punctuation (，；：,;:)
+      if (cutPoint <= 100) {
+        cutPoint = remaining.slice(0, 300).search(/[，；：,;:][^，；：,;:]*$/)
+      }
+      if (cutPoint > 80) {
         result.push(remaining.slice(0, cutPoint + 1))
         remaining = remaining.slice(cutPoint + 1).trimStart()
       } else {
@@ -521,10 +526,11 @@ const handleKeyDown = (e: KeyboardEvent) => {
   if (showSaveLoad.value || showBacklog.value || showToolConfirm.value) return
 
   if (e.code === 'Space' || e.code === 'Enter') {
-    e.preventDefault()
     if (isTyping.value) {
+      e.preventDefault()
       skipTyping()
     } else if (dialogMode.value === 'TEACHER_SPEAKING') {
+      e.preventDefault()
       handleClickNext()
     }
   }
