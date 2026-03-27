@@ -20,6 +20,7 @@
         :display-content="currentDisplayContent"
         :is-typing="isTyping"
         :choices="currentChoices"
+        :has-more-segments="hasMoreSegments"
         @click-next="handleClickNext"
         @skip-typing="skipTyping"
         @send-message="handleSendFromDialog"
@@ -120,9 +121,42 @@ let autoTimer: number | null = null
 type DialogMode = 'TEACHER_SPEAKING' | 'USER_INPUT' | 'CHOICES' | 'WAITING'
 const dialogMode = ref<DialogMode>('WAITING')
 
+// Segmentation for long replies
+const segments = ref<string[]>([])
+const currentSegmentIndex = ref(0)
+const hasMoreSegments = computed(() => currentSegmentIndex.value < segments.value.length - 1)
+
+const splitIntoSegments = (text: string): string[] => {
+  // Split by double newlines (paragraph breaks)
+  const paragraphs = text.split(/\n\n+/).filter(Boolean)
+  if (paragraphs.length > 1) return paragraphs
+
+  // Single long paragraph: split at sentence boundaries around 200 chars
+  if (text.length > 250) {
+    const result: string[] = []
+    let remaining = text
+    while (remaining.length > 250) {
+      const cutPoint = remaining.slice(0, 300).search(/[。！？.!?\n][^。！？.!?\n]*$/)
+      if (cutPoint > 100) {
+        result.push(remaining.slice(0, cutPoint + 1))
+        remaining = remaining.slice(cutPoint + 1).trimStart()
+      } else {
+        break
+      }
+    }
+    if (remaining) result.push(remaining)
+    if (result.length > 1) return result
+  }
+
+  return [text]
+}
+
 const currentDisplayContent = computed(() => {
   if (dialogMode.value === 'TEACHER_SPEAKING') {
-    return isTyping.value ? displayedText.value : formatMessage(lastTeacherReply.value)
+    if (isTyping.value) return displayedText.value
+    // Show current segment formatted
+    const seg = segments.value[currentSegmentIndex.value]
+    return seg ? formatMessage(seg) : formatMessage(lastTeacherReply.value)
   }
   if (dialogMode.value === 'CHOICES') {
     return formatMessage(lastTeacherReply.value)
@@ -171,21 +205,69 @@ let typingResolve: (() => void) | null = null
 const startTyping = (fullText: string): Promise<void> => {
   return new Promise((resolve) => {
     typingResolve = resolve
-    isTyping.value = true
-    dialogMode.value = 'TEACHER_SPEAKING'
-    displayedText.value = ''
     currentFullText.value = fullText
 
-    let index = 0
-    typeInterval = window.setInterval(() => {
-      if (index < fullText.length) {
-        displayedText.value += fullText[index]
-        index++
-      } else {
-        finishTyping(fullText)
-      }
-    }, TYPE_SPEED)
+    // Split into segments for long replies
+    segments.value = splitIntoSegments(fullText)
+    currentSegmentIndex.value = 0
+
+    // Type the first segment
+    typeSegment(segments.value[0])
   })
+}
+
+const typeSegment = (text: string) => {
+  isTyping.value = true
+  dialogMode.value = 'TEACHER_SPEAKING'
+  displayedText.value = ''
+
+  let index = 0
+  typeInterval = window.setInterval(() => {
+    if (index < text.length) {
+      displayedText.value += text[index]
+      index++
+    } else {
+      stopTyping()
+      // If more segments remain, wait for click; otherwise finish
+      if (!hasMoreSegments.value) {
+        finishAllSegments()
+      }
+      // else: stay in TEACHER_SPEAKING, user clicks to advance
+    }
+  }, TYPE_SPEED)
+}
+
+const advanceSegment = () => {
+  if (hasMoreSegments.value) {
+    currentSegmentIndex.value++
+    typeSegment(segments.value[currentSegmentIndex.value])
+  } else {
+    // All segments shown, switch to input
+    dialogMode.value = 'USER_INPUT'
+  }
+}
+
+const finishAllSegments = () => {
+  // Record full reply to messages (for Backlog)
+  lastTeacherReply.value = currentFullText.value
+  messages.value.push({
+    id: Date.now(),
+    sender_type: 'teacher',
+    content: currentFullText.value
+  })
+  renderMermaid()
+
+  if (typingResolve) {
+    typingResolve()
+    typingResolve = null
+  }
+
+  // Auto mode
+  if (isAuto.value && currentChoices.value.length === 0) {
+    autoTimer = window.setTimeout(() => {
+      dialogMode.value = 'USER_INPUT'
+    }, 2000)
+  }
 }
 
 const stopTyping = () => {
@@ -196,36 +278,19 @@ const stopTyping = () => {
   isTyping.value = false
 }
 
-const finishTyping = (fullText: string) => {
-  stopTyping()
-  lastTeacherReply.value = fullText
-  messages.value.push({
-    id: Date.now(),
-    sender_type: 'teacher',
-    content: fullText
-  })
-  renderMermaid()
-
-  if (typingResolve) {
-    typingResolve()
-    typingResolve = null
-  }
-
-  // Auto mode: automatically switch to input after delay
-  if (isAuto.value && currentChoices.value.length === 0) {
-    autoTimer = window.setTimeout(() => {
-      dialogMode.value = 'USER_INPUT'
-    }, 2000)
-  }
-}
-
 // Store current full text for skip functionality
 const currentFullText = ref('')
 
 const skipTyping = () => {
-  if (!isTyping.value) return
-  displayedText.value = currentFullText.value
-  finishTyping(currentFullText.value)
+  if (isTyping.value) {
+    // Skip current segment's typewriter animation
+    stopTyping()
+    displayedText.value = segments.value[currentSegmentIndex.value] || currentFullText.value
+    if (!hasMoreSegments.value) {
+      finishAllSegments()
+    }
+    return
+  }
 }
 
 const handleClickNext = () => {
@@ -233,7 +298,11 @@ const handleClickNext = () => {
     clearTimeout(autoTimer)
     autoTimer = null
   }
-  dialogMode.value = 'USER_INPUT'
+  if (hasMoreSegments.value) {
+    advanceSegment()
+  } else {
+    dialogMode.value = 'USER_INPUT'
+  }
 }
 
 const handleSendFromDialog = (message: string) => {
@@ -442,12 +511,27 @@ const fetchActiveSession = async () => {
   }
 }
 
-onUnmounted(() => {
-  if (typeInterval) clearInterval(typeInterval)
-  if (autoTimer) clearTimeout(autoTimer)
-})
+// Cleanup moved to bottom onUnmounted
+
+// Keyboard support
+const handleKeyDown = (e: KeyboardEvent) => {
+  // Don't intercept when typing in input
+  if (dialogMode.value === 'USER_INPUT') return
+  // Don't intercept when modals are open
+  if (showSaveLoad.value || showBacklog.value || showToolConfirm.value) return
+
+  if (e.code === 'Space' || e.code === 'Enter') {
+    e.preventDefault()
+    if (isTyping.value) {
+      skipTyping()
+    } else if (dialogMode.value === 'TEACHER_SPEAKING') {
+      handleClickNext()
+    }
+  }
+}
 
 onMounted(async () => {
+  window.addEventListener('keydown', handleKeyDown)
   mermaid.initialize({
     startOnLoad: false,
     theme: 'dark',
@@ -462,6 +546,12 @@ onMounted(async () => {
   })
   await fetchSubjectInfo()
   await fetchActiveSession()
+})
+
+onUnmounted(() => {
+  window.removeEventListener('keydown', handleKeyDown)
+  if (typeInterval) clearInterval(typeInterval)
+  if (autoTimer) clearTimeout(autoTimer)
 })
 </script>
 
