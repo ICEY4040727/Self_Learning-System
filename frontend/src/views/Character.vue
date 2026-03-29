@@ -303,7 +303,7 @@ const uploadSprites = async () => {
     const res = await axios.post(
       `/api/characters/${spriteCharacter.value.id}/sprites`,
       formData,
-      { headers: { ...headers(), 'Content-Type': 'multipart/form-data' } }
+      { headers: headers() }
     )
     // Update local character data
     spriteCharacter.value.sprites = res.data.sprites
