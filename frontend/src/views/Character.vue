@@ -27,11 +27,40 @@
             <p>{{ char.personality || '暂无描述' }}</p>
             <div class="card-actions">
               <button @click.stop="openEditCharacter(char)">编辑</button>
+              <button @click.stop="openSpriteUpload(char)" class="sprite-btn">立绘</button>
               <button @click.stop="deleteCharacter(char.id)" class="delete">删除</button>
             </div>
           </div>
         </div>
       </section>
+
+      <!-- 立绘上传对话框 -->
+      <div v-if="showSpriteDialog" class="dialog-overlay" @click.self="showSpriteDialog = false">
+        <div class="dialog">
+          <h3>上传立绘 — {{ spriteCharacter?.name }}</h3>
+          <p class="sprite-hint">文件名须为 default/happy/thinking/concerned + .png/.jpg/.webp，每张 ≤ 2MB</p>
+          <div class="form-group">
+            <input
+              type="file"
+              ref="spriteFileInput"
+              multiple
+              accept="image/png,image/jpeg,image/webp"
+              class="sprite-file-input"
+            />
+          </div>
+          <div v-if="spriteCharacter?.sprites" class="sprite-preview">
+            <span v-for="(url, expr) in spriteCharacter.sprites" :key="expr" class="sprite-tag">
+              ✅ {{ expr }}
+            </span>
+          </div>
+          <div class="dialog-actions">
+            <button @click="showSpriteDialog = false">取消</button>
+            <button class="primary" @click="uploadSprites" :disabled="spriteUploading">
+              {{ spriteUploading ? '上传中...' : '上传' }}
+            </button>
+          </div>
+        </div>
+      </div>
 
       <!-- 教师人格列表 -->
       <section v-if="selectedCharacter" class="section">
@@ -222,6 +251,7 @@ interface Character {
   id: number
   name: string
   personality?: string
+  sprites?: Record<string, string>
   background?: string
   speech_style?: string
 }
@@ -252,6 +282,41 @@ const selectedCharacter = ref<Character | null>(null)
 const showCreateDialog = ref(false)
 const showPersonaDialog = ref(false)
 const showSubjectDialog = ref(false)
+const showSpriteDialog = ref(false)
+const spriteCharacter = ref<Character | null>(null)
+const spriteUploading = ref(false)
+const spriteFileInput = ref<HTMLInputElement | null>(null)
+
+const openSpriteUpload = (char: Character) => {
+  spriteCharacter.value = char
+  showSpriteDialog.value = true
+}
+
+const uploadSprites = async () => {
+  if (!spriteCharacter.value || !spriteFileInput.value?.files?.length) return
+  spriteUploading.value = true
+  try {
+    const formData = new FormData()
+    for (const file of spriteFileInput.value.files) {
+      formData.append('files', file)
+    }
+    const res = await axios.post(
+      `/api/characters/${spriteCharacter.value.id}/sprites`,
+      formData,
+      { headers: { ...headers(), 'Content-Type': 'multipart/form-data' } }
+    )
+    // Update local character data
+    spriteCharacter.value.sprites = res.data.sprites
+    // Update in characters list
+    const idx = characters.value.findIndex(c => c.id === spriteCharacter.value?.id)
+    if (idx >= 0) characters.value[idx].sprites = res.data.sprites
+    showSpriteDialog.value = false
+  } catch (error) {
+    showError(error)
+  } finally {
+    spriteUploading.value = false
+  }
+}
 
 const editingCharacterId = ref<number | null>(null)
 const editingPersonaId = ref<number | null>(null)
@@ -928,5 +993,39 @@ onUnmounted(() => {
   font-size: 11px;
   color: var(--text-muted, #666);
   font-weight: normal;
+}
+
+/* Sprite upload */
+.sprite-btn {
+  border-color: var(--emotion-thinking, #60a5fa) !important;
+  color: var(--emotion-thinking, #60a5fa) !important;
+}
+
+.sprite-hint {
+  font-size: 12px;
+  color: var(--text-muted, #888);
+  margin-bottom: 12px;
+}
+
+.sprite-file-input {
+  width: 100%;
+  color: var(--text-secondary, #aaa);
+  font-size: 13px;
+}
+
+.sprite-preview {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+
+.sprite-tag {
+  font-size: 12px;
+  padding: 3px 10px;
+  background: rgba(74, 223, 106, 0.1);
+  border: 1px solid var(--emotion-positive, #4adf6a);
+  border-radius: 12px;
+  color: var(--emotion-positive, #4adf6a);
 }
 </style>
