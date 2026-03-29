@@ -132,12 +132,38 @@
             <input v-model="personaForm.version" placeholder="1.0" />
           </div>
           <div class="form-group">
+            <label>教学风格</label>
+            <!-- AI Generate -->
+            <div class="ai-generate">
+              <input
+                v-model="aiDescription"
+                placeholder="描述你想要的教师风格，如：像爱因斯坦一样幽默的物理老师"
+                class="ai-input"
+              />
+              <button class="ai-btn" @click="generatePersona" :disabled="aiGenerating || !aiDescription.trim() || aiCooldown > 0">
+                {{ aiGenerating ? '生成中...' : aiCooldown > 0 ? `${aiCooldown}s` : '✨ AI 生成' }}
+              </button>
+            </div>
+            <!-- Quick Presets -->
+            <div class="preset-row">
+              <button
+                v-for="preset in PERSONA_PRESETS"
+                :key="preset.id"
+                class="preset-tag"
+                :class="{ 'preset-tag-active': selectedPreset === preset.id }"
+                @click="selectPreset(preset)"
+              >
+                {{ preset.icon }} {{ preset.name }}
+              </button>
+            </div>
+          </div>
+          <div class="form-group">
             <label>性格特质（逗号分隔）</label>
             <input v-model="personaForm.traitsInput" placeholder="如：耐心, 幽默, 严谨, 鼓励" />
           </div>
           <div class="form-group">
-            <label>系统提示词模板</label>
-            <textarea v-model="personaForm.system_prompt_template" rows="6" placeholder="设置AI教师的系统提示词..."></textarea>
+            <label>教师人格描述 <span class="label-hint">（可手动编辑）</span></label>
+            <textarea v-model="personaForm.system_prompt_template" rows="4" placeholder="AI 生成或从预设选择后可在此编辑..."></textarea>
           </div>
           <div class="dialog-actions">
             <button @click="showPersonaDialog = false">取消</button>
@@ -177,7 +203,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import axios from 'axios'
 import { useAuthStore } from '@/stores/auth'
@@ -230,6 +256,72 @@ const showSubjectDialog = ref(false)
 const editingCharacterId = ref<number | null>(null)
 const editingPersonaId = ref<number | null>(null)
 const editingSubjectId = ref<number | null>(null)
+
+// AI persona generation
+const aiDescription = ref('')
+const aiGenerating = ref(false)
+const aiCooldown = ref(0)
+let cooldownTimer: number | null = null
+const selectedPreset = ref('')
+
+const PERSONA_PRESETS = [
+  { id: 'socrates', icon: '🏛️', name: '苏格拉底',
+    prompt: '你是苏格拉底，古希腊雅典的哲学家。你相信真正的智慧始于承认自己的无知。你说话平和从容但思维极其犀利，喜欢用市集上买菜、匠人做陶这样的日常类比来探讨深刻的问题。面对学生的错误你从不恼怒，只是微笑着抛出下一个问题。',
+    traits: '平和, 犀利, 类比, 追问' },
+  { id: 'zhuge', icon: '🎯', name: '诸葛亮',
+    prompt: '你是诸葛孔明，蜀汉丞相。你运筹帷幄、思虑缜密，善于从全局出发分析问题。你说话不疾不徐、引经据典，偶尔用三国战役中的策略来类比学习中的难题。你对学生要求严格但从不苛刻，更希望他们学会"谋定而后动"。',
+    traits: '缜密, 全局, 引经据典, 战略' },
+  { id: 'explorer', icon: '🤝', name: '探险伙伴',
+    prompt: '你是一个热爱探索的冒险家，把每个知识点都当作一座待攀登的山峰。你语气轻松活泼，会说「我们一起看看这里有什么宝藏」「哇这个问题比想象的有趣」。你把犯错当作探险的一部分——「走错路也能发现新风景」。',
+    traits: '冒险, 乐观, 好奇, 轻松' },
+  { id: 'professor', icon: '📚', name: '学院导师',
+    prompt: '你是一位现代大学的资深教授，治学严谨、逻辑清晰。你习惯用专业术语讨论问题，会纠正不精确的表述，但也善于用学科内的经典案例让抽象概念变得直观。你对学术诚信和独立思考有很高的期望。',
+    traits: '严谨, 专业, 逻辑, 案例' },
+  { id: 'senpai', icon: '🌸', name: '治愈系学姐',
+    prompt: '你是一个温柔体贴的学姐，总是笑眯眯地鼓励后辈。你常说「这个想法超棒的！」「别担心，我刚学这个的时候也觉得好难」。你喜欢用生活中的小例子解释复杂的东西，犯错的时候你会说「没关系啦，我们换个角度试试～」',
+    traits: '温柔, 鼓励, 共情, 亲切' },
+]
+
+const selectPreset = (preset: typeof PERSONA_PRESETS[0]) => {
+  selectedPreset.value = preset.id
+  personaForm.value.system_prompt_template = preset.prompt
+  personaForm.value.traitsInput = preset.traits
+  if (!personaForm.value.name) {
+    personaForm.value.name = preset.name
+  }
+}
+
+const startCooldown = () => {
+  aiCooldown.value = 30
+  cooldownTimer = window.setInterval(() => {
+    aiCooldown.value--
+    if (aiCooldown.value <= 0 && cooldownTimer) {
+      clearInterval(cooldownTimer)
+      cooldownTimer = null
+    }
+  }, 1000)
+}
+
+const generatePersona = async () => {
+  if (!aiDescription.value.trim() || aiCooldown.value > 0) return
+  aiGenerating.value = true
+  try {
+    const res = await axios.post('/api/persona/generate', {
+      description: aiDescription.value.trim(),
+    }, { headers: headers() })
+    personaForm.value.system_prompt_template = res.data.system_prompt_template
+    personaForm.value.traitsInput = res.data.traits.join(', ')
+    if (!personaForm.value.name) {
+      personaForm.value.name = res.data.name_suggestion
+    }
+    selectedPreset.value = ''
+    startCooldown()
+  } catch (error) {
+    showError(error)
+  } finally {
+    aiGenerating.value = false
+  }
+}
 
 const characterForm = ref({ name: '', personality: '', background: '', speech_style: '' })
 const personaForm = ref({ name: '', version: '1.0', traitsInput: '', system_prompt_template: '' })
@@ -468,6 +560,10 @@ const deleteSubject = async (id: number) => {
 
 onMounted(() => {
   fetchCharacters()
+})
+
+onUnmounted(() => {
+  if (cooldownTimer) clearInterval(cooldownTimer)
 })
 </script>
 
@@ -753,5 +849,84 @@ onMounted(() => {
   border-radius: 8px;
   z-index: 2000;
   font-size: 14px;
+}
+
+/* AI Generate */
+.ai-generate {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.ai-input {
+  flex: 1;
+  padding: 10px;
+  background: var(--bg-secondary, #1a1a2e);
+  border: 1px solid var(--border-subtle, #4a4a8a);
+  border-radius: 6px;
+  color: var(--text-primary, #fff);
+  font-size: 13px;
+}
+
+.ai-input:focus {
+  outline: none;
+  border-color: var(--accent-gold, #ffd700);
+}
+
+.ai-btn {
+  padding: 10px 16px;
+  background: linear-gradient(135deg, var(--accent-gold, #ffd700), var(--accent-orange, #ff8c00));
+  color: var(--bg-primary, #0a0a1e);
+  border: none;
+  border-radius: 6px;
+  font-weight: bold;
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all var(--transition-fast, 0.2s);
+}
+
+.ai-btn:hover:not(:disabled) {
+  box-shadow: 0 0 12px rgba(255, 215, 0, 0.4);
+}
+
+.ai-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Preset Tags */
+.preset-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.preset-tag {
+  padding: 6px 12px;
+  background: var(--bg-secondary, #2a2a4a);
+  border: 1px solid var(--border-subtle, #4a4a8a);
+  border-radius: 16px;
+  color: var(--text-secondary, #aaa);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all var(--transition-fast, 0.2s);
+}
+
+.preset-tag:hover {
+  border-color: var(--accent-gold, #ffd700);
+  color: var(--text-primary, #fff);
+}
+
+.preset-tag-active {
+  border-color: var(--accent-gold, #ffd700);
+  color: var(--accent-gold, #ffd700);
+  background: rgba(255, 215, 0, 0.1);
+}
+
+.label-hint {
+  font-size: 11px;
+  color: var(--text-muted, #666);
+  font-weight: normal;
 }
 </style>

@@ -624,3 +624,84 @@ def update_settings(
 
     db.commit()
     return {"message": "Settings updated"}
+
+
+# Persona generation endpoint
+class PersonaGenerateRequest(BaseModel):
+    description: str = Field(..., min_length=5, max_length=500)
+
+
+class PersonaGenerateResponse(BaseModel):
+    system_prompt_template: str
+    traits: list[str]
+    name_suggestion: str
+
+
+PERSONA_GENERATE_PROMPT = """你是一个角色设计师。根据用户的描述，为一个教学系统中的"知者"（教师角色）生成人格设定。
+
+要求：
+- 输出 JSON：{{"system_prompt_template": "...", "traits": ["...", "..."], "name_suggestion": "..."}}
+- system_prompt_template：2-4 句话，只描述角色的身份背景、性格特征、说话风格
+- 不要写任何教学方法（系统会自动添加苏格拉底教学法指令）
+- 不要写"你是一位教师"这类泛化描述，要有具体的角色特色
+- traits：3-5 个性格标签，如 ["温和", "反问", "哲学思维"]
+- name_suggestion：根据描述推荐一个角色名
+
+用户描述：{description}"""
+
+# Simple in-memory cooldown (user_id → last_generate_time)
+_generate_cooldowns: dict[int, float] = {}
+_COOLDOWN_SECONDS = 30
+
+
+@router.post("/persona/generate", response_model=PersonaGenerateResponse)
+async def generate_persona(
+    req: PersonaGenerateRequest,
+    current_user: User = Depends(get_current_user),
+):
+    """Use LLM to generate a teacher persona from a natural language description."""
+    import json
+    import re
+    import time
+
+    from backend.core.security import decrypt_api_key
+    from backend.services.llm.adapter import get_llm_adapter
+
+    # Cooldown check
+    now = time.time()
+    last = _generate_cooldowns.get(current_user.id, 0)
+    if now - last < _COOLDOWN_SECONDS:
+        remaining = int(_COOLDOWN_SECONDS - (now - last))
+        raise HTTPException(status_code=429, detail=f"请 {remaining} 秒后再试")
+    _generate_cooldowns[current_user.id] = now
+
+    user_api_key = None
+    provider = current_user.default_provider or "claude"
+    if current_user.encrypted_api_key:
+        user_api_key = decrypt_api_key(current_user.encrypted_api_key)
+
+    if not user_api_key:
+        raise HTTPException(status_code=400, detail="请先在设置页配置 API Key")
+
+    adapter = get_llm_adapter(provider)
+    prompt = PERSONA_GENERATE_PROMPT.format(description=req.description)
+
+    response = await adapter.chat(
+        messages=[{"role": "user", "content": prompt}],
+        system_prompt="你是人格设计师，只输出 JSON。",
+        user_api_key=user_api_key,
+    )
+
+    # Parse JSON from response
+    try:
+        json_match = re.search(r"\{[\s\S]*\}", response)
+        if not json_match:
+            raise ValueError("No JSON found")
+        data = json.loads(json_match.group())
+        return PersonaGenerateResponse(
+            system_prompt_template=data.get("system_prompt_template", ""),
+            traits=data.get("traits", []),
+            name_suggestion=data.get("name_suggestion", "自定义人格"),
+        )
+    except (json.JSONDecodeError, ValueError):
+        raise HTTPException(status_code=500, detail="AI 生成失败，请重试或使用预设模板")
