@@ -310,6 +310,7 @@ const uploadSprites = async () => {
     // Update in characters list
     const idx = characters.value.findIndex(c => c.id === spriteCharacter.value?.id)
     if (idx >= 0) characters.value[idx].sprites = res.data.sprites
+    if (spriteFileInput.value) spriteFileInput.value.value = ''
     showSpriteDialog.value = false
   } catch (error) {
     showError(error)
@@ -374,8 +375,8 @@ const generatePersona = async () => {
     const res = await axios.post('/api/persona/generate', {
       description: aiDescription.value.trim(),
     }, { headers: headers() })
-    personaForm.value.system_prompt_template = res.data.system_prompt_template
-    personaForm.value.traitsInput = res.data.traits.join(', ')
+    personaForm.value.system_prompt_template = res.data.system_prompt_template || ''
+    personaForm.value.traitsInput = (res.data.traits || []).join(', ')
     if (!personaForm.value.name) {
       personaForm.value.name = res.data.name_suggestion
     }
