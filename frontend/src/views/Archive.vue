@@ -244,8 +244,7 @@ const loadSave = async (saveId: number) => {
       alert('存档数据缺少科目信息')
     }
   } catch (error) {
-    console.error(parseApiError(error))
-    alert('读档失败')
+    alert(parseApiError(error))
   }
 }
 
