@@ -75,7 +75,7 @@ notify_session() {
     fi
 
     if is_idle "$session"; then
-        tmux send-keys -t "$session" "$message" Enter
+        tmux send-keys -t "$session" "$message" Enter || true
         echo "[gh-notify] Sent to $session: $message"
     else
         echo "$message" >> "$queue_file"
