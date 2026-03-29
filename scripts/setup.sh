@@ -100,8 +100,18 @@ ENVEOF
 echo ""
 echo "✅ .env 已生成"
 echo ""
-echo "下一步："
-echo "  docker compose up -d"
-echo "  访问 ${CORS_ORIGIN}"
-echo "  LLM API Key 请在网页设置页配置"
+read -p "是否立即启动？(Y/n) " start
+if [[ "$start" != "n" && "$start" != "N" ]]; then
+    echo "正在构建并启动服务..."
+    docker compose up -d --build
+    echo ""
+    echo "✅ 服务已启动"
+    echo "  访问 ${CORS_ORIGIN}"
+    echo "  LLM API Key 请在网页设置页配置"
+else
+    echo "下一步："
+    echo "  docker compose up -d --build"
+    echo "  访问 ${CORS_ORIGIN}"
+    echo "  LLM API Key 请在网页设置页配置"
+fi
 echo ""

@@ -23,8 +23,8 @@ bash scripts/setup.sh
 ## 二、Docker 一键启动
 
 ```bash
-# 构建并启动所有服务
-docker compose up -d
+# 构建并启动所有服务（--build 确保使用最新代码）
+docker compose up -d --build
 
 # 查看启动状态
 docker compose ps
