@@ -115,6 +115,7 @@ import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import axios from 'axios'
 import { useAuthStore } from '@/stores/auth'
+import { parseApiError } from '@/utils/error'
 import EmotionTrajectory from '@/components/EmotionTrajectory.vue'
 
 const router = useRouter()
@@ -175,7 +176,7 @@ const fetchDiaries = async () => {
     })
     diaries.value = response.data
   } catch (error) {
-    console.error('Failed to fetch diaries:', error)
+    console.error(parseApiError(error))
   }
 }
 
@@ -187,7 +188,7 @@ const fetchProgress = async () => {
     })
     progressList.value = response.data
   } catch (error) {
-    console.error('Failed to fetch progress:', error)
+    console.error(parseApiError(error))
   }
 }
 
@@ -198,7 +199,7 @@ const fetchSaves = async () => {
     })
     saves.value = response.data
   } catch (error) {
-    console.error('Failed to fetch saves:', error)
+    console.error(parseApiError(error))
   }
 }
 
@@ -209,7 +210,7 @@ const fetchSubjects = async () => {
     })
     subjects.value = response.data
   } catch (error) {
-    console.error('Failed to fetch subjects:', error)
+    console.error(parseApiError(error))
   }
 }
 
@@ -226,7 +227,7 @@ const createDiary = async () => {
     diaryForm.value = { subject_id: null, content: '', reflection: '' }
     fetchDiaries()
   } catch (error) {
-    console.error('Failed to create diary:', error)
+    console.error(parseApiError(error))
   }
 }
 
@@ -243,7 +244,7 @@ const loadSave = async (saveId: number) => {
       alert('存档数据缺少科目信息')
     }
   } catch (error) {
-    console.error('Failed to load save:', error)
+    console.error(parseApiError(error))
     alert('读档失败')
   }
 }
@@ -256,7 +257,7 @@ const deleteSave = async (saveId: number) => {
     })
     fetchSaves()
   } catch (error) {
-    console.error('Failed to delete save:', error)
+    console.error(parseApiError(error))
   }
 }
 

@@ -63,6 +63,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import axios from 'axios'
+import { parseApiError } from '@/utils/error'
 
 const props = defineProps<{
   subjectId: number
@@ -86,7 +87,7 @@ const fetchSaves = async () => {
     })
     saves.value = response.data
   } catch (error) {
-    console.error('Failed to fetch saves:', error)
+    console.error(parseApiError(error))
   }
 }
 
@@ -107,8 +108,7 @@ const handleSave = async () => {
     await fetchSaves()
     alert('存档成功！')
   } catch (error) {
-    console.error('Save failed:', error)
-    alert('存档失败')
+    alert(parseApiError(error))
   }
 }
 
@@ -120,8 +120,7 @@ const handleLoad = async () => {
     emit('load', response.data.data)
     alert('读档成功！')
   } catch (error) {
-    console.error('Load failed:', error)
-    alert('读档失败')
+    alert(parseApiError(error))
   }
 }
 

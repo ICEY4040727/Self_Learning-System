@@ -78,6 +78,7 @@ import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import axios from 'axios'
 import { useAuthStore } from '@/stores/auth'
+import { parseApiError } from '@/utils/error'
 import CharacterDisplay from '@/components/galgame/CharacterDisplay.vue'
 import DialogBox from '@/components/galgame/DialogBox.vue'
 import HudBar from '@/components/galgame/HudBar.vue'
@@ -411,8 +412,7 @@ const sendMessage = async () => {
       }
     }
   } catch (error: any) {
-    console.error('Send message error:', error)
-    lastTeacherReply.value = error.response?.data?.detail || '发送消息失败，请重试'
+    lastTeacherReply.value = parseApiError(error)
     messages.value.push({
       id: Date.now(),
       sender_type: 'teacher',
@@ -447,7 +447,7 @@ const executeTool = async () => {
       }
     )
   } catch (error) {
-    console.error('Tool execution error:', error)
+    console.error(parseApiError(error))
   }
 }
 
@@ -481,7 +481,7 @@ const fetchSubjectInfo = async () => {
     })
     subjectName.value = response.data.name
   } catch (error) {
-    console.error('Failed to fetch subject:', error)
+    console.error(parseApiError(error))
   }
 }
 
@@ -529,7 +529,7 @@ const fetchActiveSession = async () => {
       }
     }
   } catch (error) {
-    console.error('Failed to fetch session:', error)
+    console.error(parseApiError(error))
   }
 }
 

@@ -60,10 +60,17 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { parseApiError } from '@/utils/error'
 import axios from 'axios'
 
 const router = useRouter()
 const authStore = useAuthStore()
+const errorMessage = ref('')
+
+const showError = (e: any) => {
+  errorMessage.value = parseApiError(e)
+  setTimeout(() => { errorMessage.value = '' }, 5000)
+}
 
 interface Character {
   id: number
@@ -87,7 +94,7 @@ const fetchCharacters = async () => {
     const response = await axios.get('/api/character')
     characters.value = response.data
   } catch (error) {
-    console.error('Failed to fetch characters:', error)
+    showError(error)
   }
 }
 
@@ -98,7 +105,7 @@ const fetchSubjects = async (characterId: number) => {
     })
     subjects.value = response.data
   } catch (error) {
-    console.error('Failed to fetch subjects:', error)
+    showError(error)
   }
 }
 
