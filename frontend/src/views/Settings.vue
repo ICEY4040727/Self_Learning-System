@@ -70,6 +70,7 @@ import { ref, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import axios from 'axios'
 import { useAuthStore } from '@/stores/auth'
+import { parseApiError } from '@/utils/error'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -123,7 +124,7 @@ const saveApiSettings = async () => {
     settings.value.apiKey = '' // 清除输入的key
   } catch (error: any) {
     saveSuccess.value = false
-    saveMessage.value = error.response?.data?.detail || '保存失败，请重试'
+    saveMessage.value = parseApiError(error)
   } finally {
     saving.value = false
 
@@ -144,7 +145,7 @@ const fetchSettings = async () => {
       settings.value.provider = response.data.default_provider || 'claude'
     }
   } catch (error) {
-    console.error('Failed to fetch settings:', error)
+    console.error('Failed to fetch settings:', parseApiError(error))
   }
 }
 

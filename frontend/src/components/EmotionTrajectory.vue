@@ -26,6 +26,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, nextTick } from 'vue'
 import axios from 'axios'
+import { parseApiError } from '@/utils/error'
 import * as echarts from 'echarts/core'
 import { LineChart, PieChart } from 'echarts/charts'
 import {
@@ -122,7 +123,7 @@ const fetchTrajectory = async () => {
     await nextTick()
     renderCharts()
   } catch (error) {
-    console.error('Failed to fetch trajectory:', error)
+    console.error(parseApiError(error))
   } finally {
     loading.value = false
   }
