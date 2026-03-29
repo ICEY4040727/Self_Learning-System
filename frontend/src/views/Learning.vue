@@ -460,6 +460,11 @@ const handleLoadSave = (saveData: any) => {
   if (saveData.relationship_stage) {
     relationshipStage.value = saveData.relationship_stage
   }
+  if (saveData.expression) {
+    currentExpression.value = saveData.expression
+  } else {
+    currentExpression.value = 'default'
+  }
   if (saveData.chat_history) {
     messages.value = saveData.chat_history
     const lastTeacher = [...messages.value].reverse().find(m => m.sender_type === 'teacher')

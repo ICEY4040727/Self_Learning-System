@@ -53,6 +53,7 @@
         </div>
       </section>
     </main>
+    <div v-if="errorMessage" class="error-toast">{{ errorMessage }}</div>
   </div>
 </template>
 
@@ -256,5 +257,18 @@ h2 {
   background: #4a8a4a;
   border-radius: 12px;
   font-size: 12px;
+}
+
+.error-toast {
+  position: fixed;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(215, 58, 74, 0.9);
+  color: #fff;
+  padding: 10px 24px;
+  border-radius: 8px;
+  font-size: 14px;
+  z-index: 100;
 }
 </style>
