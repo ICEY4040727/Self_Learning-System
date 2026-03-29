@@ -132,12 +132,38 @@
             <input v-model="personaForm.version" placeholder="1.0" />
           </div>
           <div class="form-group">
+            <label>教学风格</label>
+            <!-- AI Generate -->
+            <div class="ai-generate">
+              <input
+                v-model="aiDescription"
+                placeholder="描述你想要的教师风格，如：像爱因斯坦一样幽默的物理老师"
+                class="ai-input"
+              />
+              <button class="ai-btn" @click="generatePersona" :disabled="aiGenerating || !aiDescription.trim()">
+                {{ aiGenerating ? '生成中...' : '✨ AI 生成' }}
+              </button>
+            </div>
+            <!-- Quick Presets -->
+            <div class="preset-row">
+              <button
+                v-for="preset in PERSONA_PRESETS"
+                :key="preset.id"
+                class="preset-tag"
+                :class="{ 'preset-tag-active': selectedPreset === preset.id }"
+                @click="selectPreset(preset)"
+              >
+                {{ preset.icon }} {{ preset.name }}
+              </button>
+            </div>
+          </div>
+          <div class="form-group">
             <label>性格特质（逗号分隔）</label>
             <input v-model="personaForm.traitsInput" placeholder="如：耐心, 幽默, 严谨, 鼓励" />
           </div>
           <div class="form-group">
-            <label>系统提示词模板</label>
-            <textarea v-model="personaForm.system_prompt_template" rows="6" placeholder="设置AI教师的系统提示词..."></textarea>
+            <label>教师人格描述 <span class="label-hint">（可手动编辑）</span></label>
+            <textarea v-model="personaForm.system_prompt_template" rows="4" placeholder="AI 生成或从预设选择后可在此编辑..."></textarea>
           </div>
           <div class="dialog-actions">
             <button @click="showPersonaDialog = false">取消</button>
@@ -230,6 +256,58 @@ const showSubjectDialog = ref(false)
 const editingCharacterId = ref<number | null>(null)
 const editingPersonaId = ref<number | null>(null)
 const editingSubjectId = ref<number | null>(null)
+
+// AI persona generation
+const aiDescription = ref('')
+const aiGenerating = ref(false)
+const selectedPreset = ref('')
+
+const PERSONA_PRESETS = [
+  { id: 'socratic', icon: '🏛️', name: '哲思引导',
+    prompt: '你是一位沉稳的哲学家教师，善于用层层追问引导学生自己发现答案。你很少直接给出结论，更喜欢反问「你觉得呢？」「如果反过来想会怎样？」。语气平和但思维锐利。',
+    traits: '耐心, 反问, 哲学, 深度' },
+  { id: 'challenger', icon: '🎯', name: '挑战激励',
+    prompt: '你是一位不轻易认同的教师，喜欢扮演魔鬼代言人。学生给出答案时你会追问「真的吗？有没有反例？」但你的挑战出于善意——每次学生突破时你会真诚赞赏。',
+    traits: '挑战, 反例, 突破, 赞赏' },
+  { id: 'companion', icon: '🤝', name: '朋友陪伴',
+    prompt: '你是学生的学习伙伴，语气轻松随和，会用「我们一起想想」「我也觉得这里挺难的」拉近距离。你把学习当作共同探险，会分享自己的思考过程而非居高临下。',
+    traits: '轻松, 共情, 探险, 陪伴' },
+  { id: 'scholar', icon: '📚', name: '学术严谨',
+    prompt: '你是一位注重精确性的学术导师。你会纠正不严谨的表述，引用定义和原理，要求学生用专业术语回答。但你也善于用学科内的经典案例让抽象概念变得直观。',
+    traits: '严谨, 精确, 专业, 案例' },
+  { id: 'gentle', icon: '🌸', name: '温柔鼓励',
+    prompt: '你是一位极度温柔耐心的教师，总是先肯定学生做对的部分，再引导改进。你常说「这个想法很好」「你已经理解了关键的一步」。学生犯错时你会说「没关系，我们换个角度试试」。',
+    traits: '温柔, 肯定, 耐心, 鼓励' },
+]
+
+const selectPreset = (preset: typeof PERSONA_PRESETS[0]) => {
+  selectedPreset.value = preset.id
+  personaForm.value.system_prompt_template = preset.prompt
+  personaForm.value.traitsInput = preset.traits
+  if (!personaForm.value.name) {
+    personaForm.value.name = preset.name
+  }
+}
+
+const generatePersona = async () => {
+  if (!aiDescription.value.trim()) return
+  aiGenerating.value = true
+  try {
+    const res = await axios.post('/api/persona/generate', {
+      description: aiDescription.value.trim(),
+    }, { headers: headers() })
+    personaForm.value.system_prompt_template = res.data.system_prompt_template
+    personaForm.value.traitsInput = res.data.traits.join(', ')
+    if (!personaForm.value.name) {
+      personaForm.value.name = res.data.name_suggestion
+    }
+    selectedPreset.value = ''
+  } catch (error) {
+    showError(error)
+  } finally {
+    aiGenerating.value = false
+  }
+}
 
 const characterForm = ref({ name: '', personality: '', background: '', speech_style: '' })
 const personaForm = ref({ name: '', version: '1.0', traitsInput: '', system_prompt_template: '' })
@@ -753,5 +831,84 @@ onMounted(() => {
   border-radius: 8px;
   z-index: 2000;
   font-size: 14px;
+}
+
+/* AI Generate */
+.ai-generate {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.ai-input {
+  flex: 1;
+  padding: 10px;
+  background: #1a1a2e;
+  border: 1px solid #4a4a8a;
+  border-radius: 6px;
+  color: #fff;
+  font-size: 13px;
+}
+
+.ai-input:focus {
+  outline: none;
+  border-color: #ffd700;
+}
+
+.ai-btn {
+  padding: 10px 16px;
+  background: linear-gradient(135deg, #ffd700, #ff8c00);
+  color: #1a1a2e;
+  border: none;
+  border-radius: 6px;
+  font-weight: bold;
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s;
+}
+
+.ai-btn:hover:not(:disabled) {
+  box-shadow: 0 0 12px rgba(255, 215, 0, 0.4);
+}
+
+.ai-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Preset Tags */
+.preset-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.preset-tag {
+  padding: 6px 12px;
+  background: #2a2a4a;
+  border: 1px solid #4a4a8a;
+  border-radius: 16px;
+  color: #aaa;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.preset-tag:hover {
+  border-color: #ffd700;
+  color: #fff;
+}
+
+.preset-tag-active {
+  border-color: #ffd700;
+  color: #ffd700;
+  background: rgba(255, 215, 0, 0.1);
+}
+
+.label-hint {
+  font-size: 11px;
+  color: #666;
+  font-weight: normal;
 }
 </style>

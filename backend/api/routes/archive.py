@@ -624,3 +624,72 @@ def update_settings(
 
     db.commit()
     return {"message": "Settings updated"}
+
+
+# Persona generation endpoint
+class PersonaGenerateRequest(BaseModel):
+    description: str = Field(..., min_length=5, max_length=500)
+
+
+class PersonaGenerateResponse(BaseModel):
+    system_prompt_template: str
+    traits: list[str]
+    name_suggestion: str
+
+
+PERSONA_GENERATE_PROMPT = """\
+你是一个教师人格设计师。根据用户的描述，生成一个教师人格配置。
+
+用户描述：{description}
+
+请严格按以下 JSON 格式输出，不要有其他内容：
+{{
+  "system_prompt_template": "2-3句话描述这位教师的性格、说话风格和教学哲学。注意：不要写具体的教学方法（如苏格拉底式提问），那些会由系统自动附加。只写性格和风格。",
+  "traits": ["特质1", "特质2", "特质3", "特质4"],
+  "name_suggestion": "一个合适的人格名称"
+}}
+"""
+
+
+@router.post("/persona/generate", response_model=PersonaGenerateResponse)
+async def generate_persona(
+    req: PersonaGenerateRequest,
+    current_user: User = Depends(get_current_user),
+):
+    """Use LLM to generate a teacher persona from a natural language description."""
+    import json
+    import re
+
+    from backend.core.security import decrypt_api_key
+    from backend.services.llm.adapter import get_llm_adapter
+
+    user_api_key = None
+    provider = current_user.default_provider or "claude"
+    if current_user.encrypted_api_key:
+        user_api_key = decrypt_api_key(current_user.encrypted_api_key)
+
+    if not user_api_key:
+        raise HTTPException(status_code=400, detail="请先在设置页配置 API Key")
+
+    adapter = get_llm_adapter(provider)
+    prompt = PERSONA_GENERATE_PROMPT.format(description=req.description)
+
+    response = await adapter.chat(
+        messages=[{"role": "user", "content": prompt}],
+        system_prompt="你是人格设计师，只输出 JSON。",
+        user_api_key=user_api_key,
+    )
+
+    # Parse JSON from response
+    try:
+        json_match = re.search(r"\{[\s\S]*\}", response)
+        if not json_match:
+            raise ValueError("No JSON found")
+        data = json.loads(json_match.group())
+        return PersonaGenerateResponse(
+            system_prompt_template=data.get("system_prompt_template", ""),
+            traits=data.get("traits", []),
+            name_suggestion=data.get("name_suggestion", "自定义人格"),
+        )
+    except (json.JSONDecodeError, ValueError):
+        raise HTTPException(status_code=500, detail="AI 生成失败，请重试或使用预设模板")
