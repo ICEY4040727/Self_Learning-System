@@ -225,7 +225,6 @@ async def upload_sprites(
     current_user: User = Depends(get_current_user),
 ):
     """Upload character expression sprites. Filenames must be default/happy/thinking/concerned."""
-    import os
     from pathlib import Path
 
     # Verify ownership
@@ -774,5 +773,5 @@ async def generate_persona(
             traits=data.get("traits", []),
             name_suggestion=data.get("name_suggestion", "自定义人格"),
         )
-    except (json.JSONDecodeError, ValueError):
-        raise HTTPException(status_code=500, detail="AI 生成失败，请重试或使用预设模板")
+    except (json.JSONDecodeError, ValueError) as e:
+        raise HTTPException(status_code=500, detail="AI 生成失败，请重试或使用预设模板") from e

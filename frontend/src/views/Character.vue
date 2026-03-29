@@ -49,7 +49,7 @@
             />
           </div>
           <div v-if="spriteCharacter?.sprites" class="sprite-preview">
-            <span v-for="(url, expr) in spriteCharacter.sprites" :key="expr" class="sprite-tag">
+            <span v-for="(_url, expr) in spriteCharacter.sprites" :key="expr" class="sprite-tag">
               ✅ {{ expr }}
             </span>
           </div>
