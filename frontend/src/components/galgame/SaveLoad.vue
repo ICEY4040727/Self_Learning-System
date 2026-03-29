@@ -24,6 +24,7 @@
         v-for="save in saves"
         :key="save.id"
         class="save-item"
+        :class="{ 'save-item-selected': selectedSave?.id === save.id }"
         @click="selectSave(save)"
       >
         <span class="save-name">{{ save.save_name }}</span>
@@ -43,25 +44,32 @@
       />
       <button
         v-if="mode === 'save' && newSaveName.trim()"
-        class="action-button save"
+        class="action-button action-save"
         @click="handleSave"
       >
         确认存档
       </button>
       <button
         v-if="selectedSave && mode === 'load'"
-        class="action-button load"
+        class="action-button action-load"
         @click="handleLoad"
       >
         确认读档
       </button>
     </div>
+
+    <!-- Toast 通知 -->
+    <Transition name="toast">
+      <div v-if="toast.show" class="toast" :class="toast.type">
+        {{ toast.message }}
+      </div>
+    </Transition>
   </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 import axios from 'axios'
 import { parseApiError } from '@/utils/error'
 
@@ -79,6 +87,14 @@ const mode = ref<'save' | 'load'>('save')
 const saves = ref<any[]>([])
 const selectedSave = ref<any>(null)
 const newSaveName = ref('')
+const toast = reactive({ show: false, message: '', type: 'success' as 'success' | 'error' })
+
+const showToast = (message: string, type: 'success' | 'error' = 'success') => {
+  toast.show = true
+  toast.message = message
+  toast.type = type
+  setTimeout(() => { toast.show = false }, 2500)
+}
 
 const fetchSaves = async () => {
   try {
@@ -87,7 +103,7 @@ const fetchSaves = async () => {
     })
     saves.value = response.data
   } catch (error) {
-    console.error(parseApiError(error))
+    showToast(parseApiError(error), 'error')
   }
 }
 
@@ -106,9 +122,9 @@ const handleSave = async () => {
     })
     newSaveName.value = ''
     await fetchSaves()
-    alert('存档成功！')
+    showToast('存档成功')
   } catch (error) {
-    alert(parseApiError(error))
+    showToast(parseApiError(error), 'error')
   }
 }
 
@@ -118,9 +134,9 @@ const handleLoad = async () => {
   try {
     const response = await axios.get(`/api/save/${selectedSave.value.id}`)
     emit('load', response.data.data)
-    alert('读档成功！')
+    showToast('读档成功')
   } catch (error) {
-    alert(parseApiError(error))
+    showToast(parseApiError(error), 'error')
   }
 }
 
@@ -134,10 +150,7 @@ onMounted(fetchSaves)
 <style scoped>
 .save-load-overlay {
   position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  inset: 0;
   background: rgba(0, 0, 0, 0.6);
   display: flex;
   align-items: center;
@@ -146,11 +159,13 @@ onMounted(fetchSaves)
 }
 
 .save-load-panel {
-  background: rgba(0, 0, 0, 0.9);
-  border: 2px solid #4a4a8a;
+  position: relative;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-subtle);
   border-radius: 12px;
   padding: 20px;
-  min-width: 400px;
+  width: 90%;
+  max-width: 460px;
 }
 
 .panel-header {
@@ -163,14 +178,15 @@ onMounted(fetchSaves)
 .close-btn {
   background: none;
   border: none;
-  color: #888;
+  color: var(--text-muted);
   font-size: 18px;
   cursor: pointer;
   padding: 4px 8px;
+  transition: color var(--transition-fast);
 }
 
 .close-btn:hover {
-  color: #fff;
+  color: var(--text-primary);
 }
 
 .tabs {
@@ -182,17 +198,18 @@ onMounted(fetchSaves)
 .tabs button {
   flex: 1;
   padding: 10px;
-  background: #2a2a4a;
+  background: var(--bg-secondary);
   border: none;
-  color: #aaa;
+  color: var(--text-secondary);
   cursor: pointer;
   border-radius: 6px;
-  transition: all 0.3s;
+  transition: all var(--transition-normal);
+  font-family: var(--font-ui);
 }
 
 .tabs button.active {
-  background: #4a4a8a;
-  color: #ffd700;
+  background: var(--border-subtle);
+  color: var(--accent-gold);
 }
 
 .save-list {
@@ -204,20 +221,36 @@ onMounted(fetchSaves)
   display: flex;
   justify-content: space-between;
   padding: 12px;
-  background: #1a1a2e;
+  background: var(--bg-secondary);
   margin-bottom: 8px;
   border-radius: 6px;
   cursor: pointer;
-  transition: all 0.3s;
+  transition: all var(--transition-fast);
+  border: 1px solid transparent;
 }
 
 .save-item:hover {
-  background: #2a2a4a;
+  background: rgba(42, 42, 74, 0.8);
+}
+
+.save-item-selected {
+  border-color: var(--accent-gold);
+  background: rgba(42, 42, 74, 0.8);
+}
+
+.save-name {
+  color: var(--text-primary);
+  font-size: 14px;
+}
+
+.save-date {
+  color: var(--text-muted);
+  font-size: 12px;
 }
 
 .no-saves {
   text-align: center;
-  color: #666;
+  color: var(--text-muted);
   padding: 40px;
 }
 
@@ -230,10 +263,17 @@ onMounted(fetchSaves)
 
 .save-name-input {
   padding: 10px;
-  background: #1a1a2e;
-  border: 1px solid #4a4a8a;
-  color: #fff;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-primary);
   border-radius: 6px;
+  font-family: var(--font-ui);
+  transition: border-color var(--transition-fast);
+}
+
+.save-name-input:focus {
+  outline: none;
+  border-color: var(--accent-gold);
 }
 
 .action-button {
@@ -242,16 +282,55 @@ onMounted(fetchSaves)
   border-radius: 6px;
   cursor: pointer;
   font-weight: bold;
-  transition: all 0.3s;
+  font-family: var(--font-ui);
+  transition: all var(--transition-normal);
 }
 
-.action-button.save {
+.action-save {
   background: linear-gradient(135deg, #4a8a4a, #3a7a3a);
   color: #fff;
 }
 
-.action-button.load {
-  background: linear-gradient(135deg, #4a4a8a, #3a3a7a);
+.action-save:hover {
+  box-shadow: 0 0 12px rgba(74, 138, 74, 0.4);
+}
+
+.action-load {
+  background: linear-gradient(135deg, var(--border-subtle), #3a3a7a);
   color: #fff;
+}
+
+.action-load:hover {
+  box-shadow: 0 0 12px rgba(74, 74, 138, 0.4);
+}
+
+/* Toast */
+.toast {
+  position: absolute;
+  bottom: -40px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 8px 20px;
+  border-radius: 6px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.toast.success {
+  background: rgba(74, 138, 74, 0.9);
+  color: #fff;
+}
+
+.toast.error {
+  background: rgba(223, 74, 74, 0.9);
+  color: #fff;
+}
+
+.toast-enter-active, .toast-leave-active {
+  transition: all 0.3s ease;
+}
+.toast-enter-from, .toast-leave-to {
+  opacity: 0;
+  transform: translateX(-50%) translateY(8px);
 }
 </style>
