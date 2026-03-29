@@ -203,7 +203,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import axios from 'axios'
 import { useAuthStore } from '@/stores/auth'
@@ -561,6 +561,10 @@ const deleteSubject = async (id: number) => {
 onMounted(() => {
   fetchCharacters()
 })
+
+onUnmounted(() => {
+  if (cooldownTimer) clearInterval(cooldownTimer)
+})
 </script>
 
 <style scoped>
@@ -857,29 +861,29 @@ onMounted(() => {
 .ai-input {
   flex: 1;
   padding: 10px;
-  background: #1a1a2e;
-  border: 1px solid #4a4a8a;
+  background: var(--bg-secondary, #1a1a2e);
+  border: 1px solid var(--border-subtle, #4a4a8a);
   border-radius: 6px;
-  color: #fff;
+  color: var(--text-primary, #fff);
   font-size: 13px;
 }
 
 .ai-input:focus {
   outline: none;
-  border-color: #ffd700;
+  border-color: var(--accent-gold, #ffd700);
 }
 
 .ai-btn {
   padding: 10px 16px;
-  background: linear-gradient(135deg, #ffd700, #ff8c00);
-  color: #1a1a2e;
+  background: linear-gradient(135deg, var(--accent-gold, #ffd700), var(--accent-orange, #ff8c00));
+  color: var(--bg-primary, #0a0a1e);
   border: none;
   border-radius: 6px;
   font-weight: bold;
   font-size: 13px;
   cursor: pointer;
   white-space: nowrap;
-  transition: all 0.2s;
+  transition: all var(--transition-fast, 0.2s);
 }
 
 .ai-btn:hover:not(:disabled) {
@@ -900,29 +904,29 @@ onMounted(() => {
 
 .preset-tag {
   padding: 6px 12px;
-  background: #2a2a4a;
-  border: 1px solid #4a4a8a;
+  background: var(--bg-secondary, #2a2a4a);
+  border: 1px solid var(--border-subtle, #4a4a8a);
   border-radius: 16px;
-  color: #aaa;
+  color: var(--text-secondary, #aaa);
   font-size: 12px;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--transition-fast, 0.2s);
 }
 
 .preset-tag:hover {
-  border-color: #ffd700;
-  color: #fff;
+  border-color: var(--accent-gold, #ffd700);
+  color: var(--text-primary, #fff);
 }
 
 .preset-tag-active {
-  border-color: #ffd700;
-  color: #ffd700;
+  border-color: var(--accent-gold, #ffd700);
+  color: var(--accent-gold, #ffd700);
   background: rgba(255, 215, 0, 0.1);
 }
 
 .label-hint {
   font-size: 11px;
-  color: #666;
+  color: var(--text-muted, #666);
   font-weight: normal;
 }
 </style>
