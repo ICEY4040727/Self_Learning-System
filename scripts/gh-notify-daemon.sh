@@ -75,7 +75,7 @@ notify_session() {
     fi
 
     if is_idle "$session"; then
-        tmux send-keys -t "$session" "$message" Enter
+        tmux send-keys -t "$session" "$message" Enter || true
         echo "[gh-notify] Sent to $session: $message"
     else
         echo "$message" >> "$queue_file"
@@ -148,7 +148,8 @@ check_approved_issues() {
         done <<< "$new_issues"
     fi
 
-    echo "$current" > "$state_file"
+    # Don't overwrite state with empty result (API failure fallback)
+    [[ "$current" != "[]" ]] && echo "$current" > "$state_file"
 }
 
 # Check for PRs needing review → notify Reviewer
@@ -178,7 +179,8 @@ check_needs_review() {
         done <<< "$new_prs"
     fi
 
-    echo "$current" > "$state_file"
+    # Don't overwrite state with empty result (API failure fallback)
+    [[ "$current" != "[]" ]] && echo "$current" > "$state_file"
 }
 
 # Check for PR updates (new commits pushed) → notify Reviewer to re-review
@@ -212,7 +214,8 @@ check_pr_updates() {
         done <<< "$updated_prs"
     fi
 
-    echo "$current" > "$state_file"
+    # Don't overwrite state with empty result (API failure fallback)
+    [[ "$current" != "[]" ]] && echo "$current" > "$state_file"
 }
 
 # Check for new reviewer-assigned issues → notify Reviewer
@@ -242,7 +245,8 @@ check_reviewer_issues() {
         done <<< "$new_issues"
     fi
 
-    echo "$current" > "$state_file"
+    # Don't overwrite state with empty result (API failure fallback)
+    [[ "$current" != "[]" ]] && echo "$current" > "$state_file"
 }
 
 # ---------------------------------------------------------------------------
