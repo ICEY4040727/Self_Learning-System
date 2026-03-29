@@ -140,8 +140,8 @@
                 placeholder="描述你想要的教师风格，如：像爱因斯坦一样幽默的物理老师"
                 class="ai-input"
               />
-              <button class="ai-btn" @click="generatePersona" :disabled="aiGenerating || !aiDescription.trim()">
-                {{ aiGenerating ? '生成中...' : '✨ AI 生成' }}
+              <button class="ai-btn" @click="generatePersona" :disabled="aiGenerating || !aiDescription.trim() || aiCooldown > 0">
+                {{ aiGenerating ? '生成中...' : aiCooldown > 0 ? `${aiCooldown}s` : '✨ AI 生成' }}
               </button>
             </div>
             <!-- Quick Presets -->
@@ -260,24 +260,26 @@ const editingSubjectId = ref<number | null>(null)
 // AI persona generation
 const aiDescription = ref('')
 const aiGenerating = ref(false)
+const aiCooldown = ref(0)
+let cooldownTimer: number | null = null
 const selectedPreset = ref('')
 
 const PERSONA_PRESETS = [
-  { id: 'socratic', icon: '🏛️', name: '哲思引导',
-    prompt: '你是一位沉稳的哲学家教师，善于用层层追问引导学生自己发现答案。你很少直接给出结论，更喜欢反问「你觉得呢？」「如果反过来想会怎样？」。语气平和但思维锐利。',
-    traits: '耐心, 反问, 哲学, 深度' },
-  { id: 'challenger', icon: '🎯', name: '挑战激励',
-    prompt: '你是一位不轻易认同的教师，喜欢扮演魔鬼代言人。学生给出答案时你会追问「真的吗？有没有反例？」但你的挑战出于善意——每次学生突破时你会真诚赞赏。',
-    traits: '挑战, 反例, 突破, 赞赏' },
-  { id: 'companion', icon: '🤝', name: '朋友陪伴',
-    prompt: '你是学生的学习伙伴，语气轻松随和，会用「我们一起想想」「我也觉得这里挺难的」拉近距离。你把学习当作共同探险，会分享自己的思考过程而非居高临下。',
-    traits: '轻松, 共情, 探险, 陪伴' },
-  { id: 'scholar', icon: '📚', name: '学术严谨',
-    prompt: '你是一位注重精确性的学术导师。你会纠正不严谨的表述，引用定义和原理，要求学生用专业术语回答。但你也善于用学科内的经典案例让抽象概念变得直观。',
-    traits: '严谨, 精确, 专业, 案例' },
-  { id: 'gentle', icon: '🌸', name: '温柔鼓励',
-    prompt: '你是一位极度温柔耐心的教师，总是先肯定学生做对的部分，再引导改进。你常说「这个想法很好」「你已经理解了关键的一步」。学生犯错时你会说「没关系，我们换个角度试试」。',
-    traits: '温柔, 肯定, 耐心, 鼓励' },
+  { id: 'socrates', icon: '🏛️', name: '苏格拉底',
+    prompt: '你是苏格拉底，古希腊雅典的哲学家。你相信真正的智慧始于承认自己的无知。你说话平和从容但思维极其犀利，喜欢用市集上买菜、匠人做陶这样的日常类比来探讨深刻的问题。面对学生的错误你从不恼怒，只是微笑着抛出下一个问题。',
+    traits: '平和, 犀利, 类比, 追问' },
+  { id: 'zhuge', icon: '🎯', name: '诸葛亮',
+    prompt: '你是诸葛孔明，蜀汉丞相。你运筹帷幄、思虑缜密，善于从全局出发分析问题。你说话不疾不徐、引经据典，偶尔用三国战役中的策略来类比学习中的难题。你对学生要求严格但从不苛刻，更希望他们学会"谋定而后动"。',
+    traits: '缜密, 全局, 引经据典, 战略' },
+  { id: 'explorer', icon: '🤝', name: '探险伙伴',
+    prompt: '你是一个热爱探索的冒险家，把每个知识点都当作一座待攀登的山峰。你语气轻松活泼，会说「我们一起看看这里有什么宝藏」「哇这个问题比想象的有趣」。你把犯错当作探险的一部分——「走错路也能发现新风景」。',
+    traits: '冒险, 乐观, 好奇, 轻松' },
+  { id: 'professor', icon: '📚', name: '学院导师',
+    prompt: '你是一位现代大学的资深教授，治学严谨、逻辑清晰。你习惯用专业术语讨论问题，会纠正不精确的表述，但也善于用学科内的经典案例让抽象概念变得直观。你对学术诚信和独立思考有很高的期望。',
+    traits: '严谨, 专业, 逻辑, 案例' },
+  { id: 'senpai', icon: '🌸', name: '治愈系学姐',
+    prompt: '你是一个温柔体贴的学姐，总是笑眯眯地鼓励后辈。你常说「这个想法超棒的！」「别担心，我刚学这个的时候也觉得好难」。你喜欢用生活中的小例子解释复杂的东西，犯错的时候你会说「没关系啦，我们换个角度试试～」',
+    traits: '温柔, 鼓励, 共情, 亲切' },
 ]
 
 const selectPreset = (preset: typeof PERSONA_PRESETS[0]) => {
@@ -289,8 +291,19 @@ const selectPreset = (preset: typeof PERSONA_PRESETS[0]) => {
   }
 }
 
+const startCooldown = () => {
+  aiCooldown.value = 30
+  cooldownTimer = window.setInterval(() => {
+    aiCooldown.value--
+    if (aiCooldown.value <= 0 && cooldownTimer) {
+      clearInterval(cooldownTimer)
+      cooldownTimer = null
+    }
+  }, 1000)
+}
+
 const generatePersona = async () => {
-  if (!aiDescription.value.trim()) return
+  if (!aiDescription.value.trim() || aiCooldown.value > 0) return
   aiGenerating.value = true
   try {
     const res = await axios.post('/api/persona/generate', {
@@ -302,6 +315,7 @@ const generatePersona = async () => {
       personaForm.value.name = res.data.name_suggestion
     }
     selectedPreset.value = ''
+    startCooldown()
   } catch (error) {
     showError(error)
   } finally {
