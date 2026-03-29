@@ -195,7 +195,7 @@ const handleRegister = async () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: radial-gradient(ellipse at 50% 30%, #1a1a3e 0%, #0a0a1e 70%);
+  background: radial-gradient(ellipse at 50% 30%, var(--bg-secondary) 0%, var(--bg-primary) 70%);
 }
 
 .login-container {
