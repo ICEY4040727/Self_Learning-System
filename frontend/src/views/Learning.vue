@@ -645,7 +645,9 @@ onUnmounted(() => {
 /* Mobile */
 @media (max-width: 768px) {
   .character-layer {
-    display: none;
+    transform: translateX(-50%) scale(0.5);
+    bottom: 200px;
+    opacity: 0.7;
   }
   .dialog-layer {
     left: 2%;

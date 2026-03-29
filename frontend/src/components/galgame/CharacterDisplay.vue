@@ -1,5 +1,5 @@
 <template>
-  <div class="character-display" :class="position">
+  <div class="character-display" :class="position" :key="jumpKey" :style="jumpKey > 0 ? { animation: 'jumpOnce 0.3s ease' } : {}">
     <Transition name="sprite-switch" mode="out-in">
       <img
         v-if="spriteUrl"
@@ -34,8 +34,13 @@ const spriteError = ref(false)
 
 const currentExpression = computed(() => props.expression || 'default')
 
-// Reset error when expression changes so new sprite gets a chance to load
-watch(currentExpression, () => { spriteError.value = false })
+const jumpKey = ref(0)
+
+// Reset error and trigger jump when expression changes
+watch(currentExpression, () => {
+  spriteError.value = false
+  jumpKey.value++
+})
 
 const spriteUrl = computed(() => {
   if (spriteError.value) return null
@@ -152,5 +157,11 @@ const expressionClass = computed(() => `expr-${currentExpression.value}`)
     height: 80px;
     font-size: 32px;
   }
+}
+
+@keyframes jumpOnce {
+  0% { transform: translateY(0); }
+  40% { transform: translateY(-15px); }
+  100% { transform: translateY(0); }
 }
 </style>

@@ -105,9 +105,11 @@ const handleSend = () => {
 
 <style scoped>
 .dialog-box {
-  background: var(--bg-panel);
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   border: 1px solid var(--border-accent);
-  border-radius: 4px;
+  border-radius: 12px;
   padding: 20px 24px;
   min-height: 160px;
   max-height: 240px;
@@ -140,7 +142,7 @@ const handleSend = () => {
 /* Dialog text */
 .dialog-text {
   color: var(--text-primary);
-  font-size: 17px;
+  font-size: 19px;
   line-height: 1.9;
   white-space: pre-wrap;
   margin-top: 4px;
@@ -260,7 +262,7 @@ const handleSend = () => {
     min-height: 140px;
   }
   .dialog-text {
-    font-size: 15px;
+    font-size: 16px;
   }
 }
 </style>
