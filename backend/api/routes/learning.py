@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from backend.api.routes.auth import get_current_user
 from backend.core.security import decrypt_api_key
 from backend.db.database import get_db
-from backend.models.models import ChatMessage, LearnerProfile, Subject, TeacherPersona, User
+from backend.models.models import Character, ChatMessage, LearnerProfile, Subject, TeacherPersona, User
 from backend.models.models import Session as SessionModel
 from backend.services.learning_engine import learning_engine
 
@@ -83,16 +83,20 @@ async def start_learning(
 
     if existing:
         teacher_persona = None
+        character = None
         if existing.teacher_persona_id:
             teacher_persona = db.query(TeacherPersona).filter(
                 TeacherPersona.id == existing.teacher_persona_id
             ).first()
+            if teacher_persona:
+                character = db.query(Character).filter(Character.id == teacher_persona.character_id).first()
         return {
             "session_id": existing.id,
             "teacher_persona": teacher_persona.name if teacher_persona else None,
             "subject": subject.name,
             "relationship_stage": existing.relationship_stage,
             "greeting": _get_greeting(existing.relationship_stage or "stranger", teacher_persona.name if teacher_persona else None),
+            "character_sprites": character.sprites if character else None,
         }
 
     # Get active teacher persona
@@ -120,11 +124,17 @@ async def start_learning(
     db.commit()
     db.refresh(db_session)
 
+    # Get character for sprites
+    character = None
+    if teacher_persona:
+        character = db.query(Character).filter(Character.id == teacher_persona.character_id).first()
+
     return {
         "session_id": db_session.id,
         "teacher_persona": teacher_persona.name if teacher_persona else None,
         "subject": subject.name,
         "greeting": _get_greeting("stranger", teacher_persona.name if teacher_persona else None),
+        "character_sprites": character.sprites if character else None,
     }
 
 

@@ -501,6 +501,9 @@ const fetchActiveSession = async () => {
     if (response.data.relationship_stage) {
       relationshipStage.value = response.data.relationship_stage
     }
+    if (response.data.character_sprites) {
+      characterSprites.value = response.data.character_sprites
+    }
 
     if (response.data.session_id) {
       sessionId.value = response.data.session_id

@@ -1,6 +1,6 @@
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, UploadFile
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -209,6 +209,77 @@ def delete_character(
     db.delete(character)
     db.commit()
     return {"message": "Character deleted"}
+
+
+# Character sprite upload
+ALLOWED_EXPRESSIONS = {"default", "happy", "thinking", "concerned"}
+ALLOWED_MIME_TYPES = {"image/png", "image/jpeg", "image/webp"}
+MAX_FILE_SIZE = 2 * 1024 * 1024  # 2MB
+
+
+@router.post("/characters/{character_id}/sprites")
+async def upload_sprites(
+    character_id: int,
+    files: list[UploadFile],
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Upload character expression sprites. Filenames must be default/happy/thinking/concerned."""
+    import os
+    from pathlib import Path
+
+    # Verify ownership
+    character = db.query(Character).filter(
+        Character.id == character_id,
+        Character.user_id == current_user.id,
+    ).first()
+    if not character:
+        raise HTTPException(status_code=404, detail="Character not found")
+
+    # Prepare storage directory
+    static_base = Path(__file__).resolve().parents[2] / "static" / "characters" / str(character_id)
+    static_base.mkdir(parents=True, exist_ok=True)
+
+    sprites = dict(character.sprites or {})
+
+    for file in files:
+        # Extract expression name from filename (e.g. "happy.png" → "happy")
+        name_stem = Path(file.filename or "").stem
+        if name_stem not in ALLOWED_EXPRESSIONS:
+            raise HTTPException(
+                status_code=422,
+                detail=f"文件名 '{file.filename}' 无效，允许的表情名：{', '.join(ALLOWED_EXPRESSIONS)}"
+            )
+
+        # Validate content type
+        if file.content_type not in ALLOWED_MIME_TYPES:
+            raise HTTPException(
+                status_code=422,
+                detail=f"文件类型 '{file.content_type}' 不支持，允许：png, jpeg, webp"
+            )
+
+        # Read and check size
+        content = await file.read()
+        if len(content) > MAX_FILE_SIZE:
+            raise HTTPException(
+                status_code=413,
+                detail=f"文件 '{file.filename}' 超过 2MB 限制"
+            )
+
+        # Save file
+        ext = Path(file.filename or "").suffix or ".png"
+        save_path = static_base / f"{name_stem}{ext}"
+        save_path.write_bytes(content)
+
+        # Update sprites dict
+        sprites[name_stem] = f"/static/characters/{character_id}/{name_stem}{ext}"
+
+    # Write to DB
+    character.sprites = sprites
+    db.commit()
+    db.refresh(character)
+
+    return {"sprites": sprites}
 
 
 # Teacher Persona endpoints
