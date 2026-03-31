@@ -18,7 +18,6 @@ from backend.models.models import (
     Session as SessionModel,
 )
 from backend.services.dynamic_analyzer import DynamicAnalyzer
-from backend.services.knowledge_graph import knowledge_graph_service
 from backend.services.llm.adapter import get_llm_adapter
 from backend.services.memory import memory_service
 
@@ -272,14 +271,8 @@ class LearningEngine:
                 if avg is not None:
                     mastery_level = int(avg)
 
-            # 4.7 Get knowledge graph context (if enabled)
+            # 4.7 Knowledge graph context (stub — Phase 1 will implement)
             knowledge_context = ""
-            if knowledge_graph_service.available and session.subject_id:
-                knowledge_context = await knowledge_graph_service.get_relevant_knowledge(
-                    user_id=session.user_id,
-                    subject_id=session.subject_id,
-                    query=user_message,
-                )
 
             # 5. Build dynamic system prompt (dual-layer architecture + ZPD scaffold)
             system_prompt = self.build_system_prompt(
@@ -361,18 +354,7 @@ class LearningEngine:
                 {"type": "teacher"}
             )
 
-            # 13. Update knowledge graph (async, non-blocking)
-            if knowledge_graph_service.available and session.subject_id:
-                try:
-                    await knowledge_graph_service.add_conversation_turn(
-                        user_id=session.user_id,
-                        subject_id=session.subject_id,
-                        user_message=user_message,
-                        teacher_response=llm_response,
-                        session_id=session_id,
-                    )
-                except Exception as e:
-                    logger.warning("Knowledge graph update failed: %s", e)
+            # 13. Knowledge graph update (stub — Phase 1 will implement)
 
             # 14. Commit DB changes
             db.commit()

@@ -69,7 +69,7 @@ async def start_learning(
 ):
     subject = db.query(Subject).filter(
         Subject.id == subject_id,
-        Subject.tenant_id == current_user.tenant_id
+        Subject.character_id.in_(db.query(Character.id).filter(Character.user_id == current_user.id))
     ).first()
     if not subject:
         raise HTTPException(status_code=404, detail="Subject not found")
@@ -113,8 +113,7 @@ async def start_learning(
 
     # Create new session
     db_session = SessionModel(
-        tenant_id=current_user.tenant_id,
-        subject_id=subject_id,
+                subject_id=subject_id,
         user_id=current_user.id,
         system_prompt=teacher_persona.system_prompt_template if teacher_persona else None,
         teacher_persona_id=teacher_persona.id if teacher_persona else None,

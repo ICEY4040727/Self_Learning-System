@@ -1,7 +1,9 @@
+import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
@@ -21,21 +23,8 @@ if settings.sentry_dsn:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup
     init_db()
-    if settings.knowledge_graph_enabled:
-        from backend.services.knowledge_graph import knowledge_graph_service
-        knowledge_graph_service.configure(
-            neo4j_uri=settings.neo4j_uri,
-            neo4j_user=settings.neo4j_user,
-            neo4j_password=settings.neo4j_password,
-        )
-        await knowledge_graph_service.initialize()
     yield
-    # Shutdown
-    if settings.knowledge_graph_enabled:
-        from backend.services.knowledge_graph import knowledge_graph_service
-        await knowledge_graph_service.close()
 
 
 app = FastAPI(
@@ -69,7 +58,6 @@ async def health_check():
     from sqlalchemy import text
 
     from backend.db.database import SessionLocal
-    from backend.services.memory import memory_service
 
     checks = {"api": "ok"}
 
@@ -84,12 +72,6 @@ async def health_check():
         if db:
             db.close()
 
-    try:
-        memory_service.client.heartbeat()
-        checks["chromadb"] = "ok"
-    except Exception:
-        checks["chromadb"] = "error"
-
     status = "healthy" if all(v == "ok" for v in checks.values()) else "degraded"
     return {"status": status, "checks": checks}
 
@@ -102,17 +84,7 @@ app.include_router(archive.router, prefix="/api", tags=["archive"])
 app.include_router(learning.router, prefix="/api", tags=["learning"])
 app.include_router(save.router, prefix="/api", tags=["save"])
 
-# Static files (character sprites, scene backgrounds)
-import os  # noqa: E402
-
-from fastapi.staticfiles import StaticFiles  # noqa: E402
-
+# Static files
 static_dir = os.path.join(os.path.dirname(__file__), "static")
 os.makedirs(static_dir, exist_ok=True)
 app.mount("/static", StaticFiles(directory=static_dir), name="static")
-
-
-# Voice endpoint (reserved, returns 501)
-@app.post("/api/voice", status_code=501)
-async def voice_input():
-    return {"message": "Voice input not yet implemented"}

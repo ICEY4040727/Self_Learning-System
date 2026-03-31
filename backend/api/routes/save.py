@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from backend.api.routes.auth import get_current_user
 from backend.core.config import get_settings
 from backend.db.database import get_db
-from backend.models.models import ChatMessage, Save, Subject, User
+from backend.models.models import Character, ChatMessage, Save, Subject, User
 from backend.models.models import Session as SessionModel
 
 router = APIRouter()
@@ -49,7 +49,7 @@ async def create_save(
 ):
     subject = db.query(Subject).filter(
         Subject.id == save_data.subject_id,
-        Subject.tenant_id == current_user.tenant_id
+        Subject.character_id.in_(db.query(Character.id).filter(Character.user_id == current_user.id))
     ).first()
     if not subject:
         raise HTTPException(status_code=404, detail="Subject not found")
