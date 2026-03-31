@@ -7,8 +7,8 @@ _DEFAULT_SECRET = "your-secret-key-change-in-production"
 
 
 class Settings(BaseSettings):
-    # Database
-    database_url: str = "postgresql://user:password@localhost:5432/socratic_learning"
+    # Database (SQLite single file)
+    database_url: str = "sqlite:///./data/socratic_learning.db"
 
     # CORS
     cors_origin: str = "http://localhost:5173"
@@ -32,12 +32,6 @@ class Settings(BaseSettings):
             "model": "gpt-4"
         }
     }
-
-    # Neo4j (for Graphiti knowledge graph)
-    neo4j_uri: str = "bolt://localhost:7687"
-    neo4j_user: str = "neo4j"
-    neo4j_password: str = "socratic_learning"
-    knowledge_graph_enabled: bool = False
 
     # Sentry
     sentry_dsn: str = ""
