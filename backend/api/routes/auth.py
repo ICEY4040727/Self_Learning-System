@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from backend.core.security import create_access_token, decode_access_token, get_password_hash, verify_password
 from backend.db.database import get_db
-from backend.models.models import Tenant, User
+from backend.models.models import User
 
 router = APIRouter()
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
@@ -20,7 +20,6 @@ limiter = Limiter(key_func=get_remote_address)
 class UserCreate(BaseModel):
     username: str = Field(..., min_length=3, max_length=50, pattern=r'^[a-zA-Z0-9_-]+$')
     password: str = Field(..., min_length=8, max_length=128)
-    tenant_name: str | None = "default"
 
 
 class UserResponse(BaseModel):
@@ -70,20 +69,11 @@ def register(user_data: UserCreate, db: Session = Depends(get_db)):
             detail="Username already registered"
         )
 
-    # Get or create tenant
-    tenant = db.query(Tenant).filter(Tenant.name == user_data.tenant_name).first()
-    if not tenant:
-        tenant = Tenant(name=user_data.tenant_name)
-        db.add(tenant)
-        db.commit()
-        db.refresh(tenant)
-
     # Create user
     hashed_password = get_password_hash(user_data.password)
     user = User(
         username=user_data.username,
         password_hash=hashed_password,
-        tenant_id=tenant.id
     )
     db.add(user)
     db.commit()
@@ -111,7 +101,7 @@ def login(request: Request, form_data: OAuth2PasswordRequestForm = Depends(), db
         )
 
     access_token = create_access_token(
-        data={"user_id": user.id, "username": user.username, "tenant_id": user.tenant_id}
+        data={"user_id": user.id, "username": user.username}
     )
     return {"access_token": access_token, "token_type": "bearer"}
 

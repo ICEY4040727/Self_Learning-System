@@ -136,7 +136,6 @@ def create_character(
 ):
     db_character = Character(
         **character.model_dump(),
-        tenant_id=current_user.tenant_id,
         user_id=current_user.id
     )
     db.add(db_character)
@@ -151,7 +150,7 @@ def get_characters(
     current_user: User = Depends(get_current_user)
 ):
     return db.query(Character).filter(
-        Character.tenant_id == current_user.tenant_id,
+        Character.user_id == current_user.id,
         Character.user_id == current_user.id
     ).all()
 
@@ -164,7 +163,7 @@ def get_character(
 ):
     character = db.query(Character).filter(
         Character.id == character_id,
-        Character.tenant_id == current_user.tenant_id
+        Character.user_id == current_user.id
     ).first()
     if not character:
         raise HTTPException(status_code=404, detail="Character not found")
@@ -180,7 +179,7 @@ def update_character(
 ):
     db_character = db.query(Character).filter(
         Character.id == character_id,
-        Character.tenant_id == current_user.tenant_id
+        Character.user_id == current_user.id
     ).first()
     if not db_character:
         raise HTTPException(status_code=404, detail="Character not found")
@@ -201,7 +200,7 @@ def delete_character(
 ):
     character = db.query(Character).filter(
         Character.id == character_id,
-        Character.tenant_id == current_user.tenant_id
+        Character.user_id == current_user.id
     ).first()
     if not character:
         raise HTTPException(status_code=404, detail="Character not found")
@@ -289,8 +288,7 @@ def create_teacher_persona(
     current_user: User = Depends(get_current_user)
 ):
     db_persona = TeacherPersona(
-        **persona.model_dump(),
-        tenant_id=current_user.tenant_id
+        **persona.model_dump()
     )
     db.add(db_persona)
     db.commit()
@@ -304,7 +302,7 @@ def get_teacher_personas(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    query = db.query(TeacherPersona).filter(TeacherPersona.tenant_id == current_user.tenant_id)
+    query = db.query(TeacherPersona).filter(TeacherPersona.character_id.in_(db.query(Character.id).filter(Character.user_id == current_user.id)))
     if character_id:
         query = query.filter(TeacherPersona.character_id == character_id)
     return query.all()
@@ -318,7 +316,7 @@ def activate_teacher_persona(
 ):
     persona = db.query(TeacherPersona).filter(
         TeacherPersona.id == persona_id,
-        TeacherPersona.tenant_id == current_user.tenant_id
+        TeacherPersona.character_id.in_(db.query(Character.id).filter(Character.user_id == current_user.id))
     ).first()
     if not persona:
         raise HTTPException(status_code=404, detail="Teacher persona not found")
@@ -343,7 +341,7 @@ def update_teacher_persona(
 ):
     db_persona = db.query(TeacherPersona).filter(
         TeacherPersona.id == persona_id,
-        TeacherPersona.tenant_id == current_user.tenant_id
+        TeacherPersona.character_id.in_(db.query(Character.id).filter(Character.user_id == current_user.id))
     ).first()
     if not db_persona:
         raise HTTPException(status_code=404, detail="Teacher persona not found")
@@ -364,7 +362,7 @@ def delete_teacher_persona(
 ):
     persona = db.query(TeacherPersona).filter(
         TeacherPersona.id == persona_id,
-        TeacherPersona.tenant_id == current_user.tenant_id
+        TeacherPersona.character_id.in_(db.query(Character.id).filter(Character.user_id == current_user.id))
     ).first()
     if not persona:
         raise HTTPException(status_code=404, detail="Teacher persona not found")
@@ -383,7 +381,6 @@ def create_learner_profile(
 ):
     db_profile = LearnerProfile(
         **profile.model_dump(),
-        tenant_id=current_user.tenant_id,
         user_id=current_user.id
     )
     db.add(db_profile)
@@ -399,7 +396,7 @@ def get_learner_profiles(
     current_user: User = Depends(get_current_user)
 ):
     query = db.query(LearnerProfile).filter(
-        LearnerProfile.tenant_id == current_user.tenant_id,
+        
         LearnerProfile.user_id == current_user.id
     )
     if subject_id:
@@ -437,8 +434,7 @@ def create_subject(
     current_user: User = Depends(get_current_user)
 ):
     db_subject = Subject(
-        **subject.model_dump(),
-        tenant_id=current_user.tenant_id
+        **subject.model_dump()
     )
     db.add(db_subject)
     db.commit()
@@ -452,7 +448,7 @@ def get_subjects(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    query = db.query(Subject).filter(Subject.tenant_id == current_user.tenant_id)
+    query = db.query(Subject).filter(Subject.character_id.in_(db.query(Character.id).filter(Character.user_id == current_user.id)))
     if character_id:
         query = query.filter(Subject.character_id == character_id)
     return query.all()
@@ -466,7 +462,7 @@ def get_subject(
 ):
     subject = db.query(Subject).filter(
         Subject.id == subject_id,
-        Subject.tenant_id == current_user.tenant_id
+        Subject.character_id.in_(db.query(Character.id).filter(Character.user_id == current_user.id))
     ).first()
     if not subject:
         raise HTTPException(status_code=404, detail="Subject not found")
@@ -482,7 +478,7 @@ def update_subject(
 ):
     db_subject = db.query(Subject).filter(
         Subject.id == subject_id,
-        Subject.tenant_id == current_user.tenant_id
+        Subject.character_id.in_(db.query(Character.id).filter(Character.user_id == current_user.id))
     ).first()
     if not db_subject:
         raise HTTPException(status_code=404, detail="Subject not found")
@@ -503,7 +499,7 @@ def delete_subject(
 ):
     subject = db.query(Subject).filter(
         Subject.id == subject_id,
-        Subject.tenant_id == current_user.tenant_id
+        Subject.character_id.in_(db.query(Character.id).filter(Character.user_id == current_user.id))
     ).first()
     if not subject:
         raise HTTPException(status_code=404, detail="Subject not found")
