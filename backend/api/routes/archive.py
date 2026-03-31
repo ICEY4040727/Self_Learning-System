@@ -287,6 +287,14 @@ def create_teacher_persona(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
+    # Verify character ownership
+    char = db.query(Character).filter(
+        Character.id == persona.character_id,
+        Character.user_id == current_user.id,
+    ).first()
+    if not char:
+        raise HTTPException(status_code=404, detail="Character not found")
+
     db_persona = TeacherPersona(
         **persona.model_dump()
     )
@@ -413,7 +421,7 @@ def update_learner_profile(
 ):
     db_profile = db.query(LearnerProfile).filter(
         LearnerProfile.id == profile_id,
-        LearnerProfile.tenant_id == current_user.tenant_id
+        LearnerProfile.user_id == current_user.id
     ).first()
     if not db_profile:
         raise HTTPException(status_code=404, detail="Learner profile not found")
@@ -433,6 +441,14 @@ def create_subject(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
+    # Verify character ownership
+    char = db.query(Character).filter(
+        Character.id == subject.character_id,
+        Character.user_id == current_user.id,
+    ).first()
+    if not char:
+        raise HTTPException(status_code=404, detail="Character not found")
+
     db_subject = Subject(
         **subject.model_dump()
     )
