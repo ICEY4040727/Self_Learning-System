@@ -1,481 +1,695 @@
-# 世界系统 + 双角色模型 + 三层记忆架构 — 技术设计文档
+# World 系统架构设计
 
 > **文档类型**：Reviewer 架构设计（Owner 确认后 Creator 实施）
-> **关联**：design_UI.md、galgame_visual_guide.md
-> **日期**：2026-03-29（v2，基于 Owner 确认的世界观、存档方案、记忆架构）
-> **前提**：Galgame UI 重构基本完成后执行
+> **日期**：2026-03-31（v3，整合 SQLite 单文件 + JSON 列存储方案）
+> **已确认决策**：World 概念、双角色、版本控制式存档、SQLite 单文件存储、知识图谱 JSON 列、去掉 ChromaDB/Neo4j/PostgreSQL
 
 ---
 
 ## 一、核心概念
 
-### World（世界）— 取代原 Course
+### 1.1 三个实体
 
-World 是用户进入的**完整沉浸式环境**——有自己的世界观、场景、角色。在 Galgame 中，World 就是"游戏"本身。
+**World（世界）**：用户进入的完整沉浸式环境——自己的世界观、场景集、角色组合。在 Galgame 中就是"一个游戏"。
+
+**Course（课程）**：World 中的学习内容。不限于传统学科，可以是"战略思维"、"谈判术"、任何要学的东西。一个 World 下多门课程。
+
+**Character（角色）**：分两类。Sage（知者）= 教师，有人格模板和立绘。Traveler（旅者）= 用户本人，可有立绘但不生成内心独白。一个 World 可有多个 Sage。
 
 ```
 World "雅典学院"
-├── 世界观：古希腊哲学之城，阳光石柱广场
-├── 场景集：学院回廊、市集、橄榄树下
+├── 世界观：古希腊哲学之城
+├── 场景集：{academy: "学院回廊.jpg", market: "市集.jpg", garden: "橄榄树下.jpg"}
 ├── Characters
-│   ├── 苏格拉底 (sage，知者)
-│   └── 我 (traveler，旅者)
+│   ├── 苏格拉底 (sage) ← 有 TeacherPersona
+│   ├── 柏拉图 (sage)   ← 有 TeacherPersona
+│   └── 我 (traveler)
 ├── Courses
 │   ├── 哲学导论
 │   ├── 逻辑学
 │   └── 伦理学
+├── Knowledge（知识图谱）→ 跨所有课程统一，JSON 列
 ├── 关系阶段 → 跨所有课程统一
-├── 记忆 → 跨所有课程统一
-└── 回忆库（存档）→ 按 World 组织
+└── 回忆库（检查点 + 时间线分叉）→ 按 World 组织
 ```
 
-### Course（课程）— 取代原 Subject
-
-World 中的具体学习内容。一个 World 可以有多门课程。课程不限于传统学科——可以是"战略思维"、"谈判术"、任何要学的东西。
-
-数据库：原 `subjects` 表重命名为 `courses`（Migration 中执行 `ALTER TABLE subjects RENAME TO courses`）。
-
-### Character 双角色
-
-| 类型 | 角色 | 说明 |
-|------|------|------|
-| sage（知者） | 教师 | 有 TeacherPersona、立绘、表情切换 |
-| traveler（旅者） | 用户自己 | 可上传立绘，无则显示默认；不生成内心独白 |
-
-一个 World 可以有多个 sage（如"三国"中诸葛亮+赵云都可以教学）。
-
-### 设计决策（Owner 确认）
+### 1.2 已确认设计决策
 
 1. 旅者可上传立绘，无则显示默认图片
 2. 回忆库需要场景缩略图
-3. "进度"概念另议
-4. 允许一个 World 有多个 sage
-5. 旅者无内心独白——旅者就是用户本人
-6. 存档基于版本控制模型（COMMIT/BRANCH，不是快照覆盖）
+3. 允许一个 World 有多个 Sage
+4. 旅者无内心独白——旅者就是用户本人
+5. 存档基于版本控制模型（COMMIT/BRANCH，不覆盖）
+6. 存储：SQLite 单文件，知识图谱用 JSON 列
+7. 去掉 ChromaDB 和 Neo4j
 
 ---
 
-## 二、数据模型
+## 二、存储架构
 
-### 当前 → 目标对比
+### 2.1 单文件 SQLite
+
+所有数据存在一个 `socratic_learning.db` 文件中。
+
+**为什么不用 PostgreSQL**：个人本地应用，单用户，无需独立数据库服务。SQLite 嵌入应用内，零配置。
+
+**为什么不用纯 JSON 文件**：对话消息会无限增长（数千条），JSON 文件每次追加需全量读写。SQLite 追加一行不需要读取已有数据。
+
+**为什么知识图谱用 JSON 列而不是关系表**：知识图谱是图结构，拆成 nodes 表 + edges 表再 JOIN 是用错误的模型存正确的数据。JSON 列直接存图对象，读出来直接给 LLM 推理、给 D3 渲染，不需要 SQL→JSON 的转换。
+
+**为什么不用 ChromaDB**：个人知识图谱几十到几百个概念，不需要向量索引加速。LLM 本身就是最好的语义匹配引擎——给它整个知识图谱 JSON，它自己判断哪些概念与当前问题相关。
+
+### 2.2 表结构总览
 
 ```
-当前：
-User → Character → Course → Session → ChatMessage
-                 → TeacherPersona ↗
-
-目标：
-User → World ←→ Character (多对多，via WorldCharacter)
-         ↓           ↓
-       Course     type: "traveler" | "sage"
-         ↓
-       Session (时间线，可分叉)
-         ↓
-       ChatMessage
-         ↓
-    三层记忆：PostgreSQL + ChromaDB(时态) + Neo4j(知识图谱)
+socratic_learning.db
+│
+├── users               # 用户认证
+├── worlds              # 世界定义（JSON 列存场景集）
+├── world_characters    # 世界-角色多对多
+├── characters          # 角色定义（JSON 列存 sprites）
+├── teacher_personas    # 教师人格模板
+├── courses             # 课程定义（原 subjects）
+├── sessions            # 时间线（含分叉指针）
+├── chat_messages       # 对话消息（高频追加，行存储）
+├── checkpoints         # 检查点/存档（JSON 列存状态快照）
+├── knowledge           # 知识图谱（JSON 列存整个图）
+├── learner_profiles    # 学习者画像（JSON 列）
+├── fsrs_states         # 间隔重复状态（原子读写）
+└── learning_diaries    # 学习日记
 ```
 
-### 新增表
+### 2.3 每张表的详细设计
 
-#### `worlds` 表
+#### users（认证）
 
 ```sql
-worlds
-├── id              INTEGER PRIMARY KEY
-├── tenant_id       INTEGER FK → tenants.id
-├── user_id         INTEGER FK → users.id
-├── name            VARCHAR(100) NOT NULL      -- "雅典学院"
-├── description     TEXT                       -- 世界观描述
-├── scene_backgrounds JSON                     -- {"default": "url", "library": "url", "garden": "url"}
-├── created_at      DATETIME
+CREATE TABLE users (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    username    TEXT UNIQUE NOT NULL,
+    password_hash TEXT NOT NULL,
+    encrypted_api_key TEXT,        -- LLM API Key（加密存储）
+    default_provider TEXT,         -- "claude" | "openai" | "ollama"
+    created_at  TEXT DEFAULT (datetime('now'))
+);
 ```
 
-注意：`scene_backgrounds` 是 JSON（一个 World 有多个场景），不是单个 String。
+**存储原因**：密码哈希需要索引查找（按 username），认证是事务性操作。
+**简化**：去掉 `tenant_id`（单用户本地应用不需要多租户）。
 
-#### `world_characters` 多对多中间表
+#### worlds（世界定义）
 
 ```sql
-world_characters
-├── id              INTEGER PRIMARY KEY
-├── world_id        INTEGER FK → worlds.id
-├── character_id    INTEGER FK → characters.id
-├── role            VARCHAR(20) NOT NULL       -- "traveler" | "sage"
-├── is_primary      BOOLEAN DEFAULT FALSE      -- 主角色标记
-└── UNIQUE(world_id, character_id)
+CREATE TABLE worlds (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id     INTEGER REFERENCES users(id),
+    name        TEXT NOT NULL,               -- "雅典学院"
+    description TEXT,                        -- 世界观描述
+    scenes      JSON DEFAULT '{}',           -- {"academy":"path","market":"path","garden":"path"}
+    created_at  TEXT DEFAULT (datetime('now'))
+);
 ```
 
-### 修改表
+**scenes 用 JSON 列**：一个 World 有 N 个场景，数量不固定。JSON 比建子表简单。读取时 `json_extract(scenes, '$.academy')` 取单个场景。
 
-#### `characters` 新增
-
-```sql
-+ type  VARCHAR(20) DEFAULT 'sage'   -- "traveler" | "sage"
+**一条实际数据**：
+```json
+{
+  "id": 1,
+  "name": "雅典学院",
+  "description": "古希腊哲学之城，阳光下的石柱广场，思想在这里自由碰撞",
+  "scenes": {
+    "academy": "/assets/scenes/academy.jpg",
+    "market": "/assets/scenes/market.jpg",
+    "garden": "/assets/scenes/garden.jpg"
+  }
+}
 ```
 
-现有 Character 全部默认 `type = 'sage'`。
-
-#### `courses`（原 `subjects`）新增
+#### characters（角色定义）
 
 ```sql
-+ world_id  INTEGER FK → worlds.id (nullable，迁移期间)
--- character_id 保留，迁移完成后删除
--- scene_background 保留，迁移到 World 后删除
+CREATE TABLE characters (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id     INTEGER REFERENCES users(id),
+    name        TEXT NOT NULL,               -- "苏格拉底"
+    type        TEXT DEFAULT 'sage',         -- "sage" | "traveler"
+    personality TEXT,                        -- 性格描述
+    background  TEXT,                        -- 角色背景
+    speech_style TEXT,                       -- 说话风格
+    sprites     JSON DEFAULT '{}',           -- {"default":"path","happy":"path","thinking":"path","concerned":"path"}
+    created_at  TEXT DEFAULT (datetime('now'))
+);
 ```
 
-#### `sessions` 新增（支持分叉）
+**不变的字段**：和当前基本一致。新增 `type` 区分知者/旅者。
+
+#### world_characters（世界-角色关联）
 
 ```sql
-+ world_id               INTEGER FK → worlds.id
-+ sage_character_id       INTEGER FK → characters.id
-+ traveler_character_id   INTEGER FK → characters.id
-+ parent_checkpoint_id    INTEGER FK → saves.id    -- 从哪个检查点分叉（NULL=根时间线）
-+ branch_name             VARCHAR(100)              -- 可选，用户命名
+CREATE TABLE world_characters (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    world_id      INTEGER REFERENCES worlds(id) ON DELETE CASCADE,
+    character_id  INTEGER REFERENCES characters(id) ON DELETE CASCADE,
+    role          TEXT NOT NULL,              -- "sage" | "traveler"
+    is_primary    INTEGER DEFAULT 0,         -- 1=主角色
+    UNIQUE(world_id, character_id)
+);
 ```
 
-#### `saves` 改造（检查点模型）
+**为什么用中间表**：World 和 Character 是多对多——同一个"苏格拉底"可以出现在"雅典学院"和"古罗马议事堂"两个世界中。
+
+#### teacher_personas（教师人格）
 
 ```sql
-saves（重新定义为检查点）
-├── id                    INTEGER PRIMARY KEY
-├── user_id               INTEGER FK → users.id
-├── world_id              INTEGER FK → worlds.id        -- 替代原 subject_id
-├── session_id            INTEGER FK → sessions.id      -- 属于哪个时间线
-├── save_name             VARCHAR(100)
-├── message_index         INTEGER                        -- 对话到第几条
-├── checkpoint_timestamp  DATETIME                       -- 精确时间点
-├── state_snapshot        JSON                           -- 见下
-├── thumbnail_path        VARCHAR(255)                   -- 场景缩略图
-├── created_at            DATETIME
+CREATE TABLE teacher_personas (
+    id                      INTEGER PRIMARY KEY AUTOINCREMENT,
+    character_id            INTEGER REFERENCES characters(id) ON DELETE CASCADE,
+    name                    TEXT NOT NULL,           -- "默认人格"
+    version                 TEXT DEFAULT '1.0',
+    traits                  JSON,                    -- ["温和","反问","哲学思维"]
+    system_prompt_template  TEXT,                     -- 人格描述（2-4句）
+    is_active               INTEGER DEFAULT 0,
+    created_at              TEXT DEFAULT (datetime('now'))
+);
+```
 
--- state_snapshot:
+**不变**：和当前基本一致。去掉 `tenant_id`。
+
+#### courses（课程，原 subjects）
+
+```sql
+CREATE TABLE courses (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    world_id    INTEGER REFERENCES worlds(id) ON DELETE CASCADE,
+    name        TEXT NOT NULL,               -- "哲学导论"
+    description TEXT,
+    target_level TEXT,                       -- "理解基本概念"
+    created_at  TEXT DEFAULT (datetime('now'))
+);
+```
+
+**变化**：`character_id` FK 改为 `world_id` FK。`scene_background` 移到 World。
+
+#### sessions（时间线）
+
+```sql
+CREATE TABLE sessions (
+    id                      INTEGER PRIMARY KEY AUTOINCREMENT,
+    world_id                INTEGER REFERENCES worlds(id),
+    course_id               INTEGER REFERENCES courses(id),
+    user_id                 INTEGER REFERENCES users(id),
+    sage_character_id       INTEGER REFERENCES characters(id),
+    traveler_character_id   INTEGER REFERENCES characters(id),
+    teacher_persona_id      INTEGER REFERENCES teacher_personas(id),
+    relationship_stage      TEXT DEFAULT 'stranger',
+    parent_checkpoint_id    INTEGER REFERENCES checkpoints(id),  -- 分叉来源（NULL=根时间线）
+    branch_name             TEXT,                                -- 可选，用户命名
+    started_at              TEXT DEFAULT (datetime('now')),
+    ended_at                TEXT
+);
+```
+
+**新增字段说明**：
+- `sage_character_id` + `traveler_character_id`：明确记录本次对话的两个角色
+- `parent_checkpoint_id`：不为 NULL 时表示这是从某个检查点分叉出来的时间线
+- `branch_name`：用户给分叉命名（如"换个思路"）
+
+#### chat_messages（对话消息）
+
+```sql
+CREATE TABLE chat_messages (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id      INTEGER REFERENCES sessions(id) ON DELETE CASCADE,
+    sender_type     TEXT NOT NULL,            -- "user" | "sage"
+    content         TEXT NOT NULL,
+    emotion_analysis JSON,                    -- {"emotion_type":"curiosity","valence":0.7,"confidence":0.85}
+    timestamp       TEXT DEFAULT (datetime('now'))
+);
+
+CREATE INDEX idx_messages_session ON chat_messages(session_id);
+```
+
+**为什么是 SQLite 行存储**：这是唯一会无限增长的表。每轮对话 INSERT 一行，不需要读取已有数据。索引保证按 session_id 查询是 O(log N)。
+
+#### checkpoints（检查点/存档）
+
+```sql
+CREATE TABLE checkpoints (
+    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id             INTEGER REFERENCES users(id),
+    world_id            INTEGER REFERENCES worlds(id),
+    session_id          INTEGER REFERENCES sessions(id),
+    save_name           TEXT NOT NULL,            -- "逻辑突破"
+    message_index       INTEGER NOT NULL,         -- 对话到第几条
+    state               JSON NOT NULL,            -- 状态快照（见下）
+    thumbnail_path      TEXT,                     -- 场景缩略图路径
+    created_at          TEXT DEFAULT (datetime('now'))
+);
+```
+
+**state JSON 内容**：
+```json
 {
   "relationship_stage": "friend",
   "emotion": "curiosity",
   "expression": "thinking",
   "scene_key": "garden",
   "sage_character_id": 1,
-  "traveler_character_id": 2,
-  "last_teacher_reply": "你觉得这个定理...",
-  "course_id": 3,
-  "valid_memory_ids": ["mem_001", "mem_002"]
+  "traveler_character_id": 3,
+  "course_id": 2,
+  "last_reply_preview": "你刚才的推理非常精彩！"
 }
 ```
 
----
+**为什么 state 用 JSON 列**：快照是一次写入、偶尔读取的文档。字段组合随版本可能变化。JSON 列比固定列更灵活。
 
-## 三、三层记忆架构
+#### knowledge（知识图谱）
 
-### 总览
-
-```
-┌─ PostgreSQL（关系层）─────────────────────────┐
-│ chat_messages: 情景记忆（完整对话记录）          │
-│ sessions: 时间线（含分叉关系）                  │
-│ saves: 检查点（版本控制式存档）                  │
-│ learner_profiles: 事实记忆（跨时间线累积）       │
-└──────────────────────────────────────────────┘
-              ↕ 双向关联
-┌─ ChromaDB（向量层）──────────────────────────┐
-│ 语义记忆：从对话中提取的认知摘要                 │
-│ 每条记忆带:                                    │
-│   t_valid: 认知形成时间                        │
-│   t_invalid: 认知被推翻时间（NULL=仍有效）       │
-│   episode_id: 来源消息 ID                      │
-│   concept_ids: 关联的知识图谱节点 ID            │
-└──────────────────────────────────────────────┘
-              ↕ 概念 ID 关联
-┌─ Neo4j（图层）───────────────────────────────┐
-│ 概念节点: (Concept {name, mastery, t_updated})│
-│ 关系边（带时态）:                               │
-│   prerequisite_of — A 是 B 的前置知识           │
-│   builds_on      — A 在 B 基础上深化            │
-│   contradicts    — A 和 B 矛盾                 │
-│   example_of     — A 是 B 的实例                │
-│ 时态属性:                                      │
-│   edge.t_valid   — 关系何时被发现               │
-│   edge.t_invalid — 何时被推翻                   │
-└──────────────────────────────────────────────┘
-```
-
-### 第 1 层：工作记忆（每轮重建，不存储）
-
-**是什么**：发送给 LLM 的完整 prompt，从其他三层提取数据临时组装。
-
-**组装过程**（`learning_engine.build_system_prompt()`）：
-```
-静态层:
-  教师人格模板（来自 TeacherPersona）
-  苏格拉底教学法规则（硬编码）
-  Mermaid 图表指南（硬编码）
-
-动态层（每轮不同）:
-  ① 关系阶段指令 ← Session.relationship_stage
-  ② 脚手架等级    ← 由 emotion + mastery 计算
-  ③ 学习者画像    ← LearnerProfile（第 4 层事实记忆）
-  ④ 相关语义记忆  ← ChromaDB 混合检索（第 3 层）
-  ⑤ 知识图谱上下文 ← Neo4j 图遍历（第 3 层）
-
-对话历史:
-  最近 N 条 chat_messages ← PostgreSQL（第 2 层情景记忆）
-```
-
-### 第 2 层：情景记忆（PostgreSQL `chat_messages`）
-
-**是什么**：一次对话的完整记录。按时间线（Session）隔离。
-
-**数据结构**：
 ```sql
-chat_messages
-├── id               INTEGER PRIMARY KEY
-├── session_id       INTEGER FK → sessions.id
-├── sender_type      VARCHAR(20)          -- "user" | "teacher"
-├── content          TEXT
-├── timestamp        DATETIME
-├── emotion_analysis JSON                 -- {"emotion_type": "curiosity", "valence": 0.7}
-└── used_memory_ids  JSON                 -- ["mem_001"] 本轮检索到的语义记忆
+CREATE TABLE knowledge (
+    world_id    INTEGER PRIMARY KEY REFERENCES worlds(id),
+    graph       JSON NOT NULL DEFAULT '{}'
+);
 ```
 
-**检索**：`SELECT * FROM chat_messages WHERE session_id = ? ORDER BY timestamp`
+**一个 World 一行。整个知识图谱是一个 JSON 对象。**
 
-**与存档的关系**：检查点记录 `message_index`。分叉时复制该 index 之前的消息到新 Session。
-
-### 第 3 层：语义记忆（ChromaDB 时态向量）+ 知识图谱（Neo4j）
-
-**语义记忆（ChromaDB）**——每条是从对话中提取的认知摘要：
-
-```
-Collection: "learning_memories"
-
-id:        "mem_003"
-document:  "学生理解了递归基本概念，能正确写出阶乘函数，但对终止条件的必要性需更多引导"
-metadata:  {
-  "user_id": 1,
-  "world_id": 1,
-  "session_id": 5,
-  "episode_id": 42,              -- 来源消息 ID（溯源）
-  "t_valid": "2026-03-29T16:30", -- 认知形成时间
-  "t_invalid": null,             -- NULL=仍有效；被推翻时填入时间
-  "concept_ids": ["c_recursion", "c_termination"],
-  "memory_type": "learning_insight"
+**graph JSON 结构**：
+```json
+{
+  "concepts": {
+    "recursion": {
+      "name": "递归",
+      "mastery": 0.7,
+      "status": "learning",
+      "content": "理解了基本概念，能写阶乘函数，但对终止条件的必要性仍有困惑",
+      "t_valid": "2026-03-29T16:30",
+      "t_invalid": null,
+      "episodes": ["session:5#msg:15", "session:5#msg:22"],
+      "edges": {
+        "termination": {"type": "prerequisite_of", "t_valid": "2026-03-29T16:35"},
+        "factorial": {"type": "has_example", "t_valid": "2026-03-29T16:32"},
+        "stack": {"type": "related_to", "t_valid": "2026-03-29T16:40"}
+      }
+    },
+    "termination": {
+      "name": "终止条件",
+      "mastery": 0.3,
+      "status": "confused",
+      "content": "能说出需要终止条件，但不清楚为什么没有终止条件会导致栈溢出",
+      "t_valid": "2026-03-29T16:35",
+      "t_invalid": null,
+      "episodes": ["session:5#msg:23"],
+      "edges": {}
+    }
+  }
 }
-embedding: FLOAT[384]             -- 自动生成
 ```
 
-**知识图谱（Neo4j）**——概念之间的结构化关系：
+**为什么一个 World 只有一行**：
+- 一个 World 的知识概念最多几百个，JSON 几十 KB
+- 读取：`SELECT graph FROM knowledge WHERE world_id = ?` → 一次查询拿到整个图
+- 更新单概念掌握度：`UPDATE knowledge SET graph = json_set(graph, '$.concepts.recursion.mastery', 0.8) WHERE world_id = ?`
+- 整个图交给 LLM 推理 / D3 渲染，无需额外转换
 
-```cypher
--- 概念节点
-(:Concept {id: "c_recursion", name: "递归", user_id: 1, world_id: 1,
-           mastery: 0.7, t_updated: "2026-03-29T16:35"})
-
-(:Concept {id: "c_termination", name: "终止条件", user_id: 1, world_id: 1,
-           mastery: 0.3, t_updated: "2026-03-29T16:35"})
-
--- 关系边（带时态）
-(c_recursion)-[:PREREQUISITE_OF {t_valid: "2026-03-29T16:30", t_invalid: null}]->(c_termination)
-(c_factorial)-[:EXAMPLE_OF {t_valid: "2026-03-29T16:32", t_invalid: null}]->(c_recursion)
-```
-
-**混合检索（每轮对话时）**：
-
+**时态过滤（读档时）**：
 ```python
-async def retrieve_context(user_message, session):
-    checkpoint_time = session.created_from_checkpoint_time or datetime.max
-
-    # 1. ChromaDB 语义搜索（时态过滤）
-    vector_results = chromadb.query(
-        query_texts=[user_message],
-        n_results=5,
-        where={
-            "user_id": user_id,
-            "world_id": world_id,
-            "t_valid": {"$lte": checkpoint_time},
-            "$or": [
-                {"t_invalid": None},
-                {"t_invalid": {"$gt": checkpoint_time}}
-            ]
-        }
-    )
-
-    # 2. Neo4j 图遍历（从命中概念出发，找关联）
-    concept_ids = extract_concept_ids(vector_results)
-    graph_context = neo4j.query("""
-        MATCH (c:Concept)-[r*1..2]-(related:Concept)
-        WHERE c.id IN $ids AND c.user_id = $uid
-          AND r.t_valid <= $time
-          AND (r.t_invalid IS NULL OR r.t_invalid > $time)
-        RETURN related.name, related.mastery, type(r)
-    """, ids=concept_ids, uid=user_id, time=checkpoint_time)
-
-    # 3. 合并
-    return format_context(vector_results, graph_context)
+# Python 侧过滤，不用 SQL
+graph = json.loads(row["graph"])
+checkpoint_time = "2026-03-29T16:30"
+valid_concepts = {
+    k: v for k, v in graph["concepts"].items()
+    if v["t_valid"] <= checkpoint_time
+    and (v["t_invalid"] is None or v["t_invalid"] > checkpoint_time)
+}
 ```
 
-### 第 4 层：事实记忆（PostgreSQL `learner_profiles`）
+#### learner_profiles（学习者画像）
 
-**是什么**：跨所有时间线累积的学习者画像。只增长不回滚。
-
-**数据结构**：
 ```sql
-learner_profiles
-├── user_id          INTEGER FK → users.id
-├── course_id        INTEGER FK → courses.id (nullable)
-├── learning_style   JSON    -- {"visual": 0.7, "auditory": 0.3}
-├── cognitive_traits JSON    -- {"abstraction": "high"}
-├── emotional_traits JSON    -- {"frustration_tolerance": "low"}
-├── knowledge_graph  JSON    -- 简化版，Neo4j 的摘要
-└── updated_at       DATETIME
+CREATE TABLE learner_profiles (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id     INTEGER REFERENCES users(id),
+    world_id    INTEGER REFERENCES worlds(id),
+    profile     JSON DEFAULT '{}',
+    updated_at  TEXT DEFAULT (datetime('now'))
+);
 ```
 
-**与存档的关系**：检查点保存快照，但读档时**不回滚**。多条时间线的学习成果都累积到同一个 Profile。
+**profile JSON**：
+```json
+{
+  "learning_style": {"visual": 0.7, "auditory": 0.3, "kinesthetic": 0.5},
+  "cognitive_traits": {"abstraction": "high", "attention_span": "medium"},
+  "emotional_traits": {"frustration_tolerance": "low", "curiosity_baseline": "high"}
+}
+```
+
+**不随存档回滚**：多条时间线的学习成果累积到同一个 Profile。
+
+#### fsrs_states（间隔重复）
+
+```sql
+CREATE TABLE fsrs_states (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    world_id    INTEGER REFERENCES worlds(id),
+    concept_id  TEXT NOT NULL,              -- "recursion"
+    difficulty  REAL,
+    stability   REAL,
+    last_review TEXT,
+    next_review TEXT,
+    reps        INTEGER DEFAULT 0,
+    UNIQUE(world_id, concept_id)
+);
+```
+
+**为什么单独建表不用 JSON**：FSRS 算法需要原子的读-改-写。SQLite 事务保证 `SELECT → 计算 → UPDATE` 的原子性。
 
 ---
 
-## 四、存档系统（版本控制模型）
+## 三、数据流
 
-### COMMIT（存档）
+### 3.1 一轮对话的完整流程
+
+```
+用户发送消息
+  │
+  ├─ 1. INSERT chat_messages（SQLite 事务开始）
+  │
+  ├─ 2. 构建 LLM prompt（工作记忆组装）
+  │     ├── 静态层：teacher_persona.system_prompt_template
+  │     ├── 动态层
+  │     │   ├── STAGE_PROMPTS[session.relationship_stage]
+  │     │   ├── SCAFFOLD_INSTRUCTIONS[compute_scaffold(emotion, mastery)]
+  │     │   ├── learner_profile JSON → 直接嵌入 prompt
+  │     │   └── knowledge.graph JSON → 直接嵌入 prompt（或 LLM 判断相关子集）
+  │     └── 最近 N 条 chat_messages → SELECT ... ORDER BY id DESC LIMIT 20
+  │
+  ├─ 3. 调用 LLM → 获得回复
+  │
+  ├─ 4. 情感分析（dynamic_analyzer）
+  │
+  ├─ 5. INSERT chat_messages（教师回复）
+  │
+  ├─ 6. 知识图谱更新（LLM 提取概念 → json_set 更新 knowledge.graph）
+  │
+  ├─ 7. 关系阶段检查（是否进化）
+  │
+  └─ 8. COMMIT（SQLite 事务结束——消息+知识+阶段 一致性保证）
+```
+
+### 3.2 存档（COMMIT）
 
 ```python
-async def create_checkpoint(session_id, save_name, user):
-    session = db.query(Session).get(session_id)
-    messages = get_messages(session_id)
-    last_teacher = find_last_teacher_message(messages)
+def create_checkpoint(db, session_id, save_name):
+    session = db.execute("SELECT * FROM sessions WHERE id = ?", [session_id]).fetchone()
+    msg_count = db.execute("SELECT COUNT(*) FROM chat_messages WHERE session_id = ?", [session_id]).fetchone()[0]
+    last_msg = db.execute(
+        "SELECT content, emotion_analysis FROM chat_messages WHERE session_id = ? ORDER BY id DESC LIMIT 1",
+        [session_id]
+    ).fetchone()
 
-    # 1. 保存对话状态
-    checkpoint = Save(
-        user_id=user.id,
-        world_id=session.world_id,
-        session_id=session_id,
-        save_name=save_name,
-        message_index=len(messages),
-        checkpoint_timestamp=datetime.utcnow(),
-        state_snapshot={
-            "relationship_stage": session.relationship_stage,
-            "emotion": last_teacher.emotion_analysis.get("emotion_type"),
+    emotion = json.loads(last_msg["emotion_analysis"] or "{}").get("emotion_type", "neutral")
+
+    db.execute("""
+        INSERT INTO checkpoints (user_id, world_id, session_id, save_name, message_index, state)
+        VALUES (?, ?, ?, ?, ?, ?)
+    """, [
+        session["user_id"],
+        session["world_id"],
+        session_id,
+        save_name,
+        msg_count,
+        json.dumps({
+            "relationship_stage": session["relationship_stage"],
+            "emotion": emotion,
             "expression": EXPRESSION_MAP.get(emotion, "default"),
-            "scene_key": current_scene_key,
-            "last_teacher_reply": last_teacher.content[:100],
-            "course_id": session.course_id,
-        }
-    )
-
-    # 2. 记录有效语义记忆 ID（时态快照）
-    checkpoint.state_snapshot["valid_memory_ids"] = get_valid_memory_ids(
-        user_id, checkpoint.checkpoint_timestamp
-    )
-
-    db.add(checkpoint)
+            "scene_key": current_scene,
+            "sage_character_id": session["sage_character_id"],
+            "traveler_character_id": session["traveler_character_id"],
+            "course_id": session["course_id"],
+            "last_reply_preview": last_msg["content"][:80],
+        })
+    ])
     db.commit()
 ```
 
-### BRANCH（读档 = 从检查点分叉）
+### 3.3 读档（BRANCH）
 
 ```python
-async def load_checkpoint(checkpoint_id, user):
-    checkpoint = db.query(Save).get(checkpoint_id)
+def branch_from_checkpoint(db, checkpoint_id, user_id):
+    cp = db.execute("SELECT * FROM checkpoints WHERE id = ?", [checkpoint_id]).fetchone()
+    state = json.loads(cp["state"])
 
     # 1. 创建新 Session（分叉）
-    new_session = Session(
-        world_id=checkpoint.world_id,
-        course_id=checkpoint.state_snapshot["course_id"],
-        user_id=user.id,
-        relationship_stage=checkpoint.state_snapshot["relationship_stage"],
-        parent_checkpoint_id=checkpoint.id,
-        sage_character_id=checkpoint.state_snapshot.get("sage_character_id"),
-        traveler_character_id=checkpoint.state_snapshot.get("traveler_character_id"),
-    )
-    db.add(new_session)
-    db.flush()
+    db.execute("""
+        INSERT INTO sessions
+        (world_id, course_id, user_id, sage_character_id, traveler_character_id,
+         teacher_persona_id, relationship_stage, parent_checkpoint_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    """, [
+        cp["world_id"], state["course_id"], user_id,
+        state["sage_character_id"], state["traveler_character_id"],
+        get_active_persona(state["sage_character_id"]),
+        state["relationship_stage"], checkpoint_id
+    ])
+    new_session_id = db.execute("SELECT last_insert_rowid()").fetchone()[0]
 
-    # 2. 复制检查点之前的消息到新时间线
-    old_messages = get_messages(
-        checkpoint.session_id,
-        limit=checkpoint.message_index
-    )
-    for msg in old_messages:
-        db.add(ChatMessage(
-            session_id=new_session.id,
-            sender_type=msg.sender_type,
-            content=msg.content,
-            timestamp=msg.timestamp,
-            emotion_analysis=msg.emotion_analysis,
-        ))
+    # 2. 复制检查点之前的消息
+    db.execute("""
+        INSERT INTO chat_messages (session_id, sender_type, content, emotion_analysis, timestamp)
+        SELECT ?, sender_type, content, emotion_analysis, timestamp
+        FROM chat_messages
+        WHERE session_id = ?
+        ORDER BY id
+        LIMIT ?
+    """, [new_session_id, cp["session_id"], cp["message_index"]])
 
     db.commit()
-    # 3. 新时间线的语义检索自动按 checkpoint_timestamp 过滤
-    return new_session
+
+    # 3. 知识图谱：读档时 Python 侧按 t_valid <= checkpoint_time 过滤
+    #    不需要复制或修改 knowledge 表——同一个 World 共享知识，时态过滤在读取时做
+
+    return new_session_id
 ```
 
-### 回忆库 UI
+### 3.4 知识图谱检索（替代 ChromaDB）
 
+```python
+def get_relevant_knowledge(db, world_id, user_message, checkpoint_time=None):
+    """获取知识图谱，交给 LLM 判断相关性"""
+    row = db.execute("SELECT graph FROM knowledge WHERE world_id = ?", [world_id]).fetchone()
+    if not row:
+        return ""
+
+    graph = json.loads(row["graph"])
+
+    # 时态过滤（如果在分叉时间线中）
+    if checkpoint_time:
+        filtered = {}
+        for concept_id, concept in graph.get("concepts", {}).items():
+            if concept["t_valid"] <= checkpoint_time:
+                if concept["t_invalid"] is None or concept["t_invalid"] > checkpoint_time:
+                    filtered[concept_id] = concept
+        graph["concepts"] = filtered
+
+    # 返回整个图（或摘要）给 LLM
+    # LLM 自己判断哪些概念与 user_message 相关
+    return json.dumps(graph, ensure_ascii=False, indent=2)
 ```
-┌─ World: 雅典学院 ──────────────────────┐
-│                                        │
-│  📌 主时间线                            │
-│  ├── "初见苏格拉底"  msg#1-20           │
-│  │    2026-03-28 | 陌生人 | 平静        │
-│  │    「你好，我是苏格拉底...」          │
-│  │                                      │
-│  └── "逻辑突破"  msg#21-45             │
-│       2026-03-29 | 朋友 | 兴奋          │
-│       「你刚才的推理非常精彩！」          │
-│                                        │
-│  📌 从"初见苏格拉底"分叉的时间线        │
-│  └── "换个话题"  msg#1-20 + 新对话      │
-│       2026-03-30 | 熟人 | 好奇          │
-│       「我们来聊聊伦理学吧」             │
-│                                        │
-│  [+ 新的旅程]                           │
-└────────────────────────────────────────┘
+
+**为什么让 LLM 自己判断相关性**：
+- 知识图谱几十 KB，在 LLM 的 context window 内（100K+ tokens）
+- LLM 的语义理解能力远超向量相似度
+- 不需要额外的嵌入模型和向量数据库
+
+**当图太大时的优化**：如果某个 World 的知识概念超过 200 个（几十 KB 以上），可以先只传概念名+掌握度列表（不含 content），让 LLM 选出相关概念，再查询详情。两步检索，仍然不需要向量。
+
+### 3.5 知识图谱更新（LLM 提取概念）
+
+```python
+def update_knowledge_after_chat(db, world_id, user_msg, teacher_reply, emotion):
+    """每轮对话后，让 LLM 提取/更新知识概念"""
+
+    # 读取当前知识图谱
+    row = db.execute("SELECT graph FROM knowledge WHERE world_id = ?", [world_id]).fetchone()
+    graph = json.loads(row["graph"]) if row else {"concepts": {}}
+
+    # 让 LLM 分析这轮对话，提取知识变化
+    extraction_prompt = f"""根据以下对话，分析学生的知识状态变化。
+
+当前知识图谱：
+{json.dumps(graph, ensure_ascii=False)}
+
+本轮对话：
+学生：{user_msg}
+教师：{teacher_reply}
+学生情绪：{emotion}
+
+请输出 JSON，格式：
+{{
+  "updates": [
+    {{"concept": "概念名", "mastery_delta": 0.1, "status": "learning", "insight": "新的理解描述"}},
+  ],
+  "new_concepts": [
+    {{"name": "新概念", "mastery": 0.2, "content": "...", "edges": {{"existing_concept": "prerequisite_of"}}}}
+  ]
+}}
+只输出 JSON。如果没有知识变化，输出 {{"updates":[],"new_concepts":[]}}"""
+
+    result = await llm_adapter.chat(messages=[{"role": "user", "content": extraction_prompt}], ...)
+    changes = json.loads(result)
+
+    # 应用变化
+    now = datetime.utcnow().isoformat()
+    for update in changes.get("updates", []):
+        concept_id = update["concept"]
+        if concept_id in graph["concepts"]:
+            old_mastery = graph["concepts"][concept_id]["mastery"]
+            graph["concepts"][concept_id]["mastery"] = min(1.0, max(0, old_mastery + update["mastery_delta"]))
+            if update.get("insight"):
+                graph["concepts"][concept_id]["content"] = update["insight"]
+            graph["concepts"][concept_id]["status"] = update.get("status", "learning")
+
+    for new_concept in changes.get("new_concepts", []):
+        graph["concepts"][new_concept["name"]] = {
+            "name": new_concept["name"],
+            "mastery": new_concept["mastery"],
+            "status": "new",
+            "content": new_concept.get("content", ""),
+            "t_valid": now,
+            "t_invalid": None,
+            "episodes": [],
+            "edges": new_concept.get("edges", {})
+        }
+        # 给 edges 加时态
+        for target, edge_type in new_concept.get("edges", {}).items():
+            graph["concepts"][new_concept["name"]]["edges"][target] = {
+                "type": edge_type, "t_valid": now
+            }
+
+    # 写回（SQLite 事务内，和消息 INSERT 一起 COMMIT）
+    db.execute("UPDATE knowledge SET graph = ? WHERE world_id = ?",
+               [json.dumps(graph, ensure_ascii=False), world_id])
 ```
 
 ---
 
-## 五、API 变更
+## 四、知识图谱可视化
 
-### 新增
+### 4.1 API
 
-| 端点 | 说明 |
-|------|------|
-| `POST /api/worlds` | 创建世界 |
-| `GET /api/worlds` | 列出用户的世界 |
-| `GET /api/worlds/{id}` | 世界详情（含角色、科目） |
-| `PUT /api/worlds/{id}` | 更新世界 |
-| `DELETE /api/worlds/{id}` | 删除世界 |
-| `POST /api/worlds/{id}/characters` | 为世界添加角色 |
-| `DELETE /api/worlds/{id}/characters/{cid}` | 从世界移除角色 |
-| `GET /api/worlds/{id}/timelines` | 获取世界的所有时间线（Session 列表） |
-| `GET /api/worlds/{id}/checkpoints` | 获取世界的回忆库（存档列表） |
-| `POST /api/checkpoints` | 创建检查点（COMMIT） |
-| `POST /api/checkpoints/{id}/branch` | 从检查点分叉（BRANCH） |
+```
+GET /api/worlds/{world_id}/knowledge-graph
+参数：?checkpoint_time=2026-03-29T16:30（可选，用于查看某个检查点时刻的知识状态）
 
-### 修改
+返回：
+{
+  "nodes": [
+    {"id": "recursion", "name": "递归", "mastery": 0.7, "status": "learning"},
+    {"id": "termination", "name": "终止条件", "mastery": 0.3, "status": "confused"}
+  ],
+  "edges": [
+    {"source": "recursion", "target": "termination", "type": "prerequisite_of"},
+    {"source": "factorial", "target": "recursion", "type": "has_example"}
+  ]
+}
+```
 
-| 端点 | 变更 |
-|------|------|
-| `POST /courses/{id}/start` | 增加 `world_id`；返回 `sage_sprites` + `traveler_sprites` + `scene_backgrounds` |
-| `POST /courses/{id}/chat` | 语义检索增加时态过滤 + Neo4j 图遍历 |
+后端实现：从 `knowledge.graph` JSON 提取 nodes 和 edges，做时态过滤（如有 checkpoint_time），转成 D3 格式返回。
+
+### 4.2 前端渲染（D3.js force-directed）
+
+```
+HudBar 新增：[📊 知识图谱]
+
+点击弹出全屏 overlay：
+┌──────────────────────────────────────┐
+│  我的知识网络 — 雅典学院              │
+│  ┌────────────────────────────────┐  │
+│  │     ◉ 递归(0.7)               │  │
+│  │    ╱         ╲                │  │
+│  │   ◎ 阶乘     ◌ 终止条件(0.3)  │  │
+│  │              ╲                │  │
+│  │               ◉ 栈(0.6)      │  │
+│  └────────────────────────────────┘  │
+│  节点大小=掌握度  颜色=状态           │
+│  🟢已掌握  🟡学习中  🔴困惑  ⚪未接触  │
+│  点击节点查看详情                      │
+└──────────────────────────────────────┘
+```
+
+节点大小 = mastery 值。颜色 = status。边类型用不同样式（实线/虚线/红线）。
+
+---
+
+## 五、API 设计
+
+### 5.1 World CRUD
+
+| 方法 | 端点 | 说明 |
+|------|------|------|
+| POST | `/api/worlds` | 创建世界 |
+| GET | `/api/worlds` | 列出用户所有世界 |
+| GET | `/api/worlds/{id}` | 世界详情（含角色、课程列表） |
+| PUT | `/api/worlds/{id}` | 更新世界 |
+| DELETE | `/api/worlds/{id}` | 删除世界（级联删除课程、时间线、检查点、知识） |
+
+### 5.2 World-Character 关联
+
+| 方法 | 端点 | 说明 |
+|------|------|------|
+| POST | `/api/worlds/{id}/characters` | 添加角色到世界（指定 role） |
+| DELETE | `/api/worlds/{id}/characters/{char_id}` | 移除角色 |
+
+### 5.3 Course CRUD（原 Subject）
+
+| 方法 | 端点 | 说明 |
+|------|------|------|
+| POST | `/api/worlds/{world_id}/courses` | 创建课程 |
+| GET | `/api/worlds/{world_id}/courses` | 列出世界下的课程 |
+
+### 5.4 学习流程
+
+| 方法 | 端点 | 说明 |
+|------|------|------|
+| POST | `/api/courses/{id}/start` | 开始学习（返回 session_id + 角色信息 + 场景集） |
+| POST | `/api/courses/{id}/chat` | 发送消息 |
+| GET | `/api/sessions/{id}/history` | 获取对话历史 |
+
+### 5.5 存档系统
+
+| 方法 | 端点 | 说明 |
+|------|------|------|
+| POST | `/api/checkpoints` | 创建检查点（COMMIT） |
+| GET | `/api/worlds/{id}/checkpoints` | 获取世界的所有检查点 |
+| POST | `/api/checkpoints/{id}/branch` | 从检查点分叉新时间线（BRANCH） |
+| GET | `/api/worlds/{id}/timelines` | 获取世界的所有时间线 |
+
+### 5.6 知识图谱
+
+| 方法 | 端点 | 说明 |
+|------|------|------|
+| GET | `/api/worlds/{id}/knowledge-graph` | 获取知识图谱（D3 格式，支持 checkpoint_time 过滤） |
 
 ---
 
 ## 六、前端变更
 
-### Home.vue — 世界入口
+### 6.1 Home.vue — 世界入口
 
 ```
-主菜单 → "开始学习" → 世界列表（"雅典学院" / "三国军帐" / ...）
-                        ↓
-                    选择世界 → 回忆库
-                                ↓
-                            选择时间线 或 "新的旅程"
-                                ↓
-                            选择科目（对话框选择）
-                                ↓
-                            进入 Learning.vue
+主菜单 → "开始学习"
+  → 世界列表（"雅典学院" / "三国军帐" / [+ 创建新世界]）
+    → 选择世界
+      → 回忆库（时间线列表 + 检查点列表）
+        → 选择 "继续" / "从检查点分叉" / "新的旅程"
+          → 选择课程（对话框选择面板）
+            → 进入 Learning.vue
 ```
 
-### Learning.vue — 双角色
+### 6.2 Learning.vue — 双角色布局
 
 ```
 ┌─────────────────────────────────┐
@@ -489,82 +703,71 @@ async def load_checkpoint(checkpoint_id, user):
 │ ┌─────────────────────────────┐ │
 │ │    对话框（名牌切换）         │ │
 │ └─────────────────────────────┘ │
-│ [HUD]                           │
+│ [存档][读档][跳过][自动][回忆]   │
+│ [知识图谱][设置][返回]           │
 └─────────────────────────────────┘
 ```
 
----
+### 6.3 知识图谱页面
 
-## 七、Migration 策略（4 步渐进）
-
-### Migration 003: 新增（非破坏性）
-
-- 创建 `worlds` 表
-- 创建 `world_characters` 表
-- `characters` 加 `type` 字段（default='sage'）
-- 原 `subjects` 重命名为 `courses` + 加 `world_id`（nullable）
-- `sessions` 加 `world_id` + `sage_character_id` + `traveler_character_id` + `parent_checkpoint_id`
-- `saves` 加 `world_id` + `message_index` + `checkpoint_timestamp` + `state_snapshot` + `thumbnail_path`
-
-### Migration 004: 数据迁移
-
-- 为每个 Character 自动创建 World
-- 建立 WorldCharacter 关联
-- courses.world_id 回填
-- Session/Save 的 world_id 回填
-
-### Migration 005: 激活 Neo4j
-
-- `KNOWLEDGE_GRAPH_ENABLED=true`
-- ChromaDB metadata 增加 `t_valid` / `t_invalid` / `concept_ids`
-
-### Migration 006: 清理（高风险，最后执行）
-
-- `courses.character_id` 删除
-- `courses.scene_background` 删除
-- `saves` 旧字段清理
+- HudBar 新增 `📊 知识图谱` 按钮
+- 全屏 overlay，D3.js force-directed 渲染
+- 节点可点击查看详情（概念名、掌握度、学习历史、关联概念）
+- 可按 checkpoint_time 查看"那个时候我知道什么"
 
 ---
 
-## 八、实施顺序
+## 七、Migration 路径
+
+### 从当前系统迁移
 
 ```
-Phase 1: 后端模型扩展
-  ├── Migration 003（新增表和字段）
-  ├── World CRUD API
-  ├── WorldCharacter 关联 API
-  └── 检查点 COMMIT/BRANCH API
+Phase 0: 基础设施切换
+  ├── PostgreSQL → SQLite（改 DATABASE_URL + SQLAlchemy 微调）
+  ├── 去掉 ChromaDB 依赖（替换 memory.py 为知识图谱服务）
+  ├── 去掉 Docker 中的 PostgreSQL + ChromaDB 容器
+  └── 更新 requirements.txt
 
-Phase 2: 数据迁移 + 记忆架构
-  ├── Migration 004（自动迁移数据）
-  ├── Migration 005（激活 Neo4j + ChromaDB 时态）
-  ├── 混合检索（ChromaDB + Neo4j）
-  └── learning_engine 集成
+Phase 1: 数据模型扩展
+  ├── 创建 worlds 表 + world_characters 表
+  ├── 创建 knowledge 表（JSON 列）
+  ├── 创建 checkpoints 表
+  ├── courses 表（rename subjects + 加 world_id）
+  ├── sessions 加分叉字段
+  ├── characters 加 type 字段
+  └── 自动迁移：为每个现有 Character 创建 World
 
-Phase 3: 前端迁移
-  ├── Home.vue 世界入口
+Phase 2: 后端 API
+  ├── World CRUD + WorldCharacter 关联
+  ├── Checkpoint COMMIT/BRANCH
+  ├── 知识图谱 API
+  ├── learning_engine 集成知识图谱（替代 ChromaDB 检索）
+  └── 知识提取（LLM 每轮对话后更新 knowledge.graph）
+
+Phase 3: 前端
+  ├── Home.vue 世界入口 + 回忆库
   ├── Learning.vue 双角色布局
-  ├── Character.vue 角色类型
-  └── 回忆库 UI
+  ├── 知识图谱可视化（D3.js）
+  └── Character.vue 角色类型选择
 
 Phase 4: 清理
-  ├── Migration 006
-  ├── 旧 API deprecated
-  └── 文档更新
+  ├── 删除旧字段（courses.character_id 等）
+  ├── 删除 ChromaDB/Neo4j 相关代码
+  └── 更新部署文档
 ```
 
 ---
 
-## 九、风险评估
+## 八、风险评估
 
 | 风险 | 影响 | 缓解 |
 |------|------|------|
-| Neo4j 增加部署复杂度 | 运维负担 | Docker profile 可选启用；不启用时 fallback 到纯 ChromaDB |
-| 三层记忆检索延迟 | 对话响应变慢 | 向量搜索和图遍历并行执行；设超时 fallback |
-| Migration 004 数据迁移出错 | 数据丢失 | 先备份；migration 有 downgrade |
+| SQLite 并发限制 | 单用户本地 app 不存在此问题 | 如果未来做多用户 Web 版，切回 PostgreSQL（SQLAlchemy 只改连接字符串） |
+| 知识图谱 JSON 过大 | 单个 World 200+ 概念时 JSON 可能几百 KB | 分两步检索：先传概念列表让 LLM 选，再查详情 |
+| LLM 知识提取不准确 | 概念和关系可能有误 | 用户可在知识图谱界面手动修正；提取结果是建议不是确定 |
+| 数据迁移丢失 | 现有 PostgreSQL 数据 | 写迁移脚本；SQLite 迁移前先备份 |
 | 双角色布局移动端拥挤 | 体验差 | 移动端只显示当前说话的角色 |
-| 旅者 prompt 设计 | 影响对话质量 | 旅者无内心独白，只是视觉存在 |
 
 ---
 
-*本文档由 Reviewer 编写。Owner 已确认核心概念（World、版本控制存档、三层记忆）。待 Owner 最终审批后拆分为独立 Issue，Creator 按 Phase 顺序实施。*
+*本文档由 Reviewer 编写。Owner 已确认所有核心决策。待 Owner 最终审批后拆分为独立 Issue，Creator 按 Phase 顺序实施。*
