@@ -202,7 +202,7 @@ CREATE TABLE sessions (
     sage_character_id       INTEGER REFERENCES characters(id),
     traveler_character_id   INTEGER REFERENCES characters(id),
     teacher_persona_id      INTEGER REFERENCES teacher_personas(id),
-    relationship_stage      TEXT DEFAULT 'stranger',
+    relationship             JSON DEFAULT '{"trust":0,"familiarity":0,"respect":0,"comfort":0,"stage":"stranger"}',
     parent_checkpoint_id    INTEGER REFERENCES checkpoints(id),  -- 分叉来源（NULL=根时间线）
     branch_name             TEXT,                                -- 可选，用户命名
     started_at              TEXT DEFAULT (datetime('now')),
@@ -213,6 +213,51 @@ CREATE TABLE sessions (
 **新增字段说明**：
 - `sage_character_id` + `traveler_character_id`：明确记录本次对话的两个角色
 - `parent_checkpoint_id`：不为 NULL 时表示这是从某个检查点分叉出来的时间线
+- `relationship`：四维关系模型（详见 `relationship_theory.md`）
+
+**relationship JSON 结构**：
+
+```json
+{
+  "dimensions": {
+    "trust": 0.45,
+    "familiarity": 0.52,
+    "respect": 0.38,
+    "comfort": 0.41
+  },
+  "stage": "friend",
+  "history": [
+    {"dim": "trust", "delta": 0.02, "trigger": "student admitted confusion", "t": "2026-03-29T16:30"},
+    {"dim": "comfort", "delta": 0.02, "trigger": "supported during frustration", "t": "2026-03-29T16:35"}
+  ]
+}
+```
+
+**四个维度**（理论依据详见 `relationship_theory.md`）：
+
+| 维度 | 含义 | 教学影响 | 增长信号 | 下降信号 |
+|------|------|---------|---------|---------|
+| **Trust（信任）** | 学生是否敢暴露脆弱 | 苏格拉底追问深度 | 主动说"我不懂"、接受纠正 | 只给安全答案、回避深入 |
+| **Familiarity（默契）** | 教师对学生的了解 | 教学个性化程度 | 成功使用学生偏好的方式、交互次数 | — （只增不减） |
+| **Respect（敬意）** | 学生认可教师价值 | 学生接受挑战的意愿 | 突破时刻、获得新洞察 | 无聊、教师回答无价值 |
+| **Comfort（舒适）** | 互动的放松程度 | 认知负荷和焦虑水平 | 积极情绪、被支持 | 沮丧时未被支持 |
+
+**阶段派生规则**：
+
+```python
+def derive_stage(trust, familiarity, respect, comfort):
+    avg = (trust + familiarity + respect + comfort) / 4
+    min_dim = min(trust, familiarity, respect, comfort)
+    if min_dim < 0.15: return "stranger"
+    if avg < 0.3: return "acquaintance"
+    if avg < 0.5 or min_dim < 0.3: return "friend"
+    if avg < 0.7 or min_dim < 0.5: return "mentor"
+    return "partner"
+```
+
+**关系事件触发**：
+- 阶段变化 → 大事件（全屏覆盖层 + 金色文字 + 角色台词）
+- 单维度突破阈值（0.3 / 0.5 / 0.7）→ 微事件（对话框内一句特殊旁白）
 - `branch_name`：用户给分叉命名（如"换个思路"）
 
 #### chat_messages（对话消息）
@@ -251,7 +296,7 @@ CREATE TABLE checkpoints (
 **state JSON 内容**：
 ```json
 {
-  "relationship_stage": "friend",
+  "relationship": {"trust": 0.45, "familiarity": 0.52, "respect": 0.38, "comfort": 0.41, "stage": "friend"},
   "emotion": "curiosity",
   "expression": "thinking",
   "scene_key": "garden",
@@ -460,7 +505,8 @@ CREATE TABLE fsrs_states (
   ├─ 2. 构建 LLM prompt（工作记忆组装）
   │     ├── 静态层：teacher_persona.system_prompt_template
   │     ├── 动态层（按记忆分类组装，顺序有意义）
-  │     │   ├── STAGE_PROMPTS[session.relationship_stage]
+  │     │   ├── STAGE_PROMPTS[derive_stage(session.relationship)]
+  │     │   ├── relationship_instructions(session.relationship.dimensions)
   │     │   ├── SCAFFOLD_INSTRUCTIONS[compute_scaffold(emotion, mastery)]
   │     │   ├── 【知识状态】knowledge 类型按 bloom_level 分组（已掌握/学习中/初识）
   │     │   ├── 【程序性技能】skill 类型按 proficiency 排列
@@ -507,7 +553,7 @@ def create_checkpoint(db, session_id, save_name):
         save_name,
         msg_count,
         json.dumps({
-            "relationship_stage": session["relationship_stage"],
+            "relationship": json.loads(session["relationship"]),
             "emotion": emotion,
             "expression": EXPRESSION_MAP.get(emotion, "default"),
             "scene_key": current_scene,
@@ -531,13 +577,13 @@ def branch_from_checkpoint(db, checkpoint_id, user_id):
     db.execute("""
         INSERT INTO sessions
         (world_id, course_id, user_id, sage_character_id, traveler_character_id,
-         teacher_persona_id, relationship_stage, parent_checkpoint_id)
+         teacher_persona_id, relationship, parent_checkpoint_id)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     """, [
         cp["world_id"], state["course_id"], user_id,
         state["sage_character_id"], state["traveler_character_id"],
         get_active_persona(state["sage_character_id"]),
-        state["relationship_stage"], checkpoint_id
+        json.dumps(state["relationship"]), checkpoint_id
     ])
     new_session_id = db.execute("SELECT last_insert_rowid()").fetchone()[0]
 
