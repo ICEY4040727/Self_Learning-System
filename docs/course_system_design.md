@@ -275,36 +275,96 @@ CREATE TABLE knowledge (
 
 **一个 World 一行。整个知识图谱是一个 JSON 对象。**
 
-**graph JSON 结构**：
+**graph JSON 结构**（7 种记忆分类，详见 `learning_memory_theory.md`）：
+
 ```json
 {
   "concepts": {
     "recursion": {
+      "type": "knowledge",
       "name": "递归",
       "mastery": 0.7,
-      "status": "learning",
-      "content": "理解了基本概念，能写阶乘函数，但对终止条件的必要性仍有困惑",
+      "bloom_level": "apply",
+      "content": "理解了递归是函数调用自身来解决子问题的方法，能写阶乘函数",
       "t_valid": "2026-03-29T16:30",
       "t_invalid": null,
       "episodes": ["session:5#msg:15", "session:5#msg:22"],
       "edges": {
         "termination": {"type": "prerequisite_of", "t_valid": "2026-03-29T16:35"},
-        "factorial": {"type": "has_example", "t_valid": "2026-03-29T16:32"},
-        "stack": {"type": "related_to", "t_valid": "2026-03-29T16:40"}
+        "factorial": {"type": "example_of", "t_valid": "2026-03-29T16:32"},
+        "iteration": {"type": "alternative_to", "t_valid": "2026-03-29T16:40"}
       }
     },
+    "recursion_misconception_1": {
+      "type": "misconception",
+      "name": "递归必须函数自调用",
+      "severity": "moderate",
+      "related_concept": "recursion",
+      "content": "学生认为递归只能通过函数调用自身实现，不知道可以用栈模拟",
+      "t_valid": "2026-03-29T16:32",
+      "t_invalid": "2026-03-29T17:15",
+      "corrected_by": "session:5#msg:45"
+    },
+    "write_recursive_function": {
+      "type": "skill",
+      "name": "编写递归函数",
+      "proficiency": 0.6,
+      "related_concept": "recursion",
+      "content": "能写阶乘和斐波那契，但复杂递归（树遍历）仍需引导",
+      "demonstrations": ["session:5#msg:30", "session:5#msg:38"],
+      "t_valid": "2026-03-29T16:35",
+      "t_invalid": null
+    },
     "termination": {
+      "type": "knowledge",
       "name": "终止条件",
       "mastery": 0.3,
-      "status": "confused",
+      "bloom_level": "remember",
       "content": "能说出需要终止条件，但不清楚为什么没有终止条件会导致栈溢出",
       "t_valid": "2026-03-29T16:35",
       "t_invalid": null,
       "episodes": ["session:5#msg:23"],
       "edges": {}
     }
-  }
+  },
+  "episodes": [
+    {
+      "type": "episode",
+      "session_id": 5,
+      "message_range": [30, 38],
+      "t_valid": "2026-03-29T16:45",
+      "summary": "学生通过阶乘例子理解了为什么需要 base case。关键转折：教师问'如果没有终止条件会怎样'，学生自己推导出无限递归→栈溢出",
+      "significance": "breakthrough",
+      "related_concepts": ["recursion", "termination"]
+    }
+  ]
 }
+```
+
+**type 字段值域**（来源见 `learning_memory_theory.md`）：
+
+| type | 来源理论 | 含义 | 时态行为 |
+|------|---------|------|---------|
+| `knowledge` | Bloom Factual/Conceptual + ITS Overlay | 事实/概念知识 + 掌握度 | 随存档回滚 |
+| `misconception` | ITS Perturbation Model | 错误认知（比"不知道"更危险） | 随存档回滚 |
+| `skill` | Bloom Procedural + KT Skill | 程序性能力（能做什么） | 随存档回滚 |
+| `episode` | 认知科学 Episodic Memory | 关键交互事件摘要 | 随存档回滚 |
+
+**bloom_level**（仅 knowledge 类型）：`remember` → `understand` → `apply` → `analyze` → `evaluate` → `create`
+
+**severity**（仅 misconception 类型）：`minor`（表述不精确）/ `moderate`（导致错误但可局部纠正）/ `critical`（根本性错误）
+
+**significance**（仅 episode 类型）：`breakthrough` / `struggle` / `correction` / `connection`
+
+**边关系类型**：
+| 关系 | 教学意义 |
+|------|---------|
+| `prerequisite_of` | 学 B 之前要先会 A |
+| `builds_on` | B 在 A 基础上深化 |
+| `example_of` | A 是 B 的具体实例 |
+| `alternative_to` | A 和 B 是不同方法 |
+| `contradicts` | A 和 B 矛盾 |
+| `part_of` | A 是 B 的组成部分 |
 ```
 
 **为什么一个 World 只有一行**：
@@ -337,16 +397,36 @@ CREATE TABLE learner_profiles (
 );
 ```
 
-**profile JSON**：
+**profile JSON**（累积记忆，3 类 — 详见 `learning_memory_theory.md`）：
+
 ```json
 {
-  "learning_style": {"visual": 0.7, "auditory": 0.3, "kinesthetic": 0.5},
-  "cognitive_traits": {"abstraction": "high", "attention_span": "medium"},
-  "emotional_traits": {"frustration_tolerance": "low", "curiosity_baseline": "high"}
+  "preferences": {
+    "visual_examples": {"value": 0.8, "t_updated": "2026-03-29T16:30", "evidence": "多次要求画图解释"},
+    "analogy_based": {"value": 0.7, "t_updated": "2026-03-28T14:00", "evidence": "用做菜类比递归时理解最快"},
+    "pace": {"value": "slow_deliberate", "t_updated": "2026-03-29", "evidence": "不喜欢被催促"}
+  },
+  "affect": {
+    "frustration_tolerance": {"value": "low", "t_updated": "2026-03-29T16:40", "evidence": "连续3轮卡住会沮丧"},
+    "curiosity_baseline": {"value": "high", "t_updated": "2026-03-28T10:00", "evidence": "经常主动追问延伸问题"},
+    "encouragement_response": {"value": "strong", "t_updated": "2026-03-29T16:45", "evidence": "被肯定后积极性明显提升"}
+  },
+  "metacognition": {
+    "planning": {"value": "moderate", "t_updated": "2026-03-29", "evidence": "偶尔主动规划，多数时候跟着教师走"},
+    "monitoring": {"value": "weak", "t_updated": "2026-03-29", "evidence": "经常说'我懂了'但做题时暴露出不理解"},
+    "regulating": {"value": "moderate", "t_updated": "2026-03-29", "evidence": "提示后能换思路，但不会主动尝试"},
+    "reflecting": {"value": "strong", "t_updated": "2026-03-28", "evidence": "每次对话结束前能准确总结学到的内容"}
+  }
 }
 ```
 
-**不随存档回滚**：多条时间线的学习成果累积到同一个 Profile。
+| 类别 | 来源理论 | 含义 | 时态行为 |
+|------|---------|------|---------|
+| `preferences` | ITS Learner Characteristics | 学习偏好（怎么学最有效） | 累积，每个 trait 带 t_updated |
+| `affect` | Jarvis Emotional State Tracking | 情感模式（情绪反应规律） | 累积，每个 trait 带 t_updated |
+| `metacognition` | MSKT 四维度 | 元认知能力（自我调控学习） | 累积，每个 trait 带 t_updated |
+
+**时态行为**：不随存档回滚——这些是关于学习者**作为人**的特征。但每个 trait 有 `t_updated`，分叉时间线按 `t_updated <= checkpoint_time` 取历史值（避免使用检查点之后才观察到的特征）。
 
 #### fsrs_states（间隔重复）
 
@@ -379,11 +459,16 @@ CREATE TABLE fsrs_states (
   │
   ├─ 2. 构建 LLM prompt（工作记忆组装）
   │     ├── 静态层：teacher_persona.system_prompt_template
-  │     ├── 动态层
+  │     ├── 动态层（按记忆分类组装，顺序有意义）
   │     │   ├── STAGE_PROMPTS[session.relationship_stage]
   │     │   ├── SCAFFOLD_INSTRUCTIONS[compute_scaffold(emotion, mastery)]
-  │     │   ├── learner_profile JSON → 直接嵌入 prompt
-  │     │   └── knowledge.graph JSON → 直接嵌入 prompt（或 LLM 判断相关子集）
+  │     │   ├── 【知识状态】knowledge 类型按 bloom_level 分组（已掌握/学习中/初识）
+  │     │   ├── 【程序性技能】skill 类型按 proficiency 排列
+  │     │   ├── 【⚠️ 误解】misconception 类型（未纠正的，带 severity）
+  │     │   ├── 【近期事件】episode 类型（最近 3 条，按 significance 排序）
+  │     │   ├── 【学习偏好】profile.preferences
+  │     │   ├── 【情感模式】profile.affect
+  │     │   └── 【元认知】profile.metacognition
   │     └── 最近 N 条 chat_messages → SELECT ... ORDER BY id DESC LIMIT 20
   │
   ├─ 3. 调用 LLM → 获得回复
