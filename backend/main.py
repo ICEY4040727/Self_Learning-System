@@ -82,7 +82,7 @@ from backend.api.routes import archive, auth, learning, save  # noqa: E402
 app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 app.include_router(archive.router, prefix="/api", tags=["archive"])
 app.include_router(learning.router, prefix="/api", tags=["learning"])
-app.include_router(save.router, prefix="/api", tags=["save"])
+app.include_router(save.router, prefix="/api", tags=["checkpoints"])
 
 # Static files
 static_dir = os.path.join(os.path.dirname(__file__), "static")

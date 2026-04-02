@@ -38,6 +38,14 @@ chroma_data/
 # Save files (runtime generated)
 saves/
 
+# SQLite databases (runtime data)
+data/
+*.db
+*.db.bak.*
+
+# Migration evidence (test artifacts)
+backend/migration_evidence/
+
 # Vite
 *.local
 .claude/

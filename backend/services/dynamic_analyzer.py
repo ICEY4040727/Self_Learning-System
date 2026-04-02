@@ -286,6 +286,6 @@ class DynamicAnalyzer:
             if own_db:
                 db.close()
 
-    async def update_learner_profile(self, user_id: int, subject_id: int, interaction: dict, db=None):
+    async def update_learner_profile(self, user_id: int, world_id: int, interaction: dict, db=None):
         """Update learner profile based on interaction data"""
         pass

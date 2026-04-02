@@ -1,0 +1,11 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "sync-issues-local",
+			"type": "shell",
+			"command": "echo task placeholder",
+			"isBackground": false
+		}
+	]
+}

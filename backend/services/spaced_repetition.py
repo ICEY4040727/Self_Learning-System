@@ -1,7 +1,7 @@
 """Spaced repetition service based on FSRS (Free Spaced Repetition Scheduler).
 
 Wraps py-fsrs to provide topic-level review scheduling for the learning system.
-Each ProgressTracking record stores an FSRS Card state in its `fsrs_state` JSON column.
+The state payload is persisted in `fsrs_states` table and loaded into this service.
 """
 
 from datetime import UTC, datetime

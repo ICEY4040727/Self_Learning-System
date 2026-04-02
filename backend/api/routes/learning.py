@@ -7,7 +7,16 @@ from sqlalchemy.orm import Session
 from backend.api.routes.auth import get_current_user
 from backend.core.security import decrypt_api_key
 from backend.db.database import get_db
-from backend.models.models import Character, ChatMessage, LearnerProfile, Subject, TeacherPersona, User
+from backend.models.models import (
+    Character,
+    ChatMessage,
+    Course,
+    LearnerProfile,
+    TeacherPersona,
+    User,
+    World,
+    WorldCharacter,
+)
 from backend.models.models import Session as SessionModel
 from backend.services.learning_engine import learning_engine
 
@@ -54,6 +63,27 @@ def _get_greeting(stage: str, persona_name: str | None) -> str:
     return template.format(name=persona_name or "老师")
 
 
+def _relationship_stage(relationship: dict | None) -> str:
+    if isinstance(relationship, dict):
+        stage = relationship.get("stage")
+        if isinstance(stage, str) and stage:
+            return stage
+    return "stranger"
+
+
+def _default_relationship() -> dict:
+    return {
+        "dimensions": {
+            "trust": 0.0,
+            "familiarity": 0.0,
+            "respect": 0.0,
+            "comfort": 0.0,
+        },
+        "stage": "stranger",
+        "history": [],
+    }
+
+
 class ToolConfirmRequest(BaseModel):
     tool: str
     query: str
@@ -61,22 +91,22 @@ class ToolConfirmRequest(BaseModel):
 
 
 # Start learning session
-@router.post("/subjects/{subject_id}/start")
+@router.post("/courses/{course_id}/start")
 async def start_learning(
-    subject_id: int,
+    course_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    subject = db.query(Subject).filter(
-        Subject.id == subject_id,
-        Subject.character_id.in_(db.query(Character.id).filter(Character.user_id == current_user.id))
+    course = db.query(Course).join(World, Course.world_id == World.id).filter(
+        Course.id == course_id,
+        World.user_id == current_user.id,
     ).first()
-    if not subject:
-        raise HTTPException(status_code=404, detail="Subject not found")
+    if not course:
+        raise HTTPException(status_code=404, detail="Course not found")
 
     # Reuse existing active session if available
     existing = db.query(SessionModel).filter(
-        SessionModel.subject_id == subject_id,
+        SessionModel.course_id == course_id,
         SessionModel.user_id == current_user.id,
         SessionModel.ended_at == None
     ).order_by(SessionModel.started_at.desc()).first()
@@ -90,31 +120,49 @@ async def start_learning(
             ).first()
             if teacher_persona:
                 character = db.query(Character).filter(Character.id == teacher_persona.character_id).first()
+        stage = _relationship_stage(existing.relationship)
         return {
             "session_id": existing.id,
             "teacher_persona": teacher_persona.name if teacher_persona else None,
-            "subject": subject.name,
-            "relationship_stage": existing.relationship_stage,
-            "greeting": _get_greeting(existing.relationship_stage or "stranger", teacher_persona.name if teacher_persona else None),
+            "course": course.name,
+            "relationship_stage": stage,
+            "greeting": _get_greeting(stage, teacher_persona.name if teacher_persona else None),
             "character_sprites": character.sprites if character else None,
         }
 
-    # Get active teacher persona
-    teacher_persona = db.query(TeacherPersona).filter(
-        TeacherPersona.character_id == subject.character_id,
-        TeacherPersona.is_active == True
-    ).first()
+    sage_link = db.query(WorldCharacter).filter(
+        WorldCharacter.world_id == course.world_id,
+        WorldCharacter.role == "sage",
+    ).order_by(WorldCharacter.is_primary.desc(), WorldCharacter.id.asc()).first()
+    traveler_link = db.query(WorldCharacter).filter(
+        WorldCharacter.world_id == course.world_id,
+        WorldCharacter.role == "traveler",
+    ).order_by(WorldCharacter.is_primary.desc(), WorldCharacter.id.asc()).first()
 
-    # Get learner profile for this subject
+    sage_character_id = sage_link.character_id if sage_link else None
+    traveler_character_id = traveler_link.character_id if traveler_link else None
+
+    teacher_persona = None
+    if sage_character_id is not None:
+        teacher_persona = db.query(TeacherPersona).filter(
+            TeacherPersona.character_id == sage_character_id,
+            TeacherPersona.is_active == True,
+        ).first()
+
+    # Get learner profile for this world
     learner_profile = db.query(LearnerProfile).filter(
         LearnerProfile.user_id == current_user.id,
-        LearnerProfile.subject_id == subject_id,
+        LearnerProfile.world_id == course.world_id,
     ).first()
 
     # Create new session
     db_session = SessionModel(
-                subject_id=subject_id,
+        course_id=course_id,
         user_id=current_user.id,
+        world_id=course.world_id,
+        sage_character_id=sage_character_id,
+        traveler_character_id=traveler_character_id,
+        relationship=_default_relationship(),
         system_prompt=teacher_persona.system_prompt_template if teacher_persona else None,
         teacher_persona_id=teacher_persona.id if teacher_persona else None,
         learner_profile_id=learner_profile.id if learner_profile else None,
@@ -131,33 +179,33 @@ async def start_learning(
     return {
         "session_id": db_session.id,
         "teacher_persona": teacher_persona.name if teacher_persona else None,
-        "subject": subject.name,
+        "course": course.name,
         "greeting": _get_greeting("stranger", teacher_persona.name if teacher_persona else None),
         "character_sprites": character.sprites if character else None,
     }
 
 
 # Send chat message
-@router.post("/subjects/{subject_id}/chat", response_model=ChatResponse)
+@router.post("/courses/{course_id}/chat", response_model=ChatResponse)
 async def send_message(
-    subject_id: int,
+    course_id: int,
     chat_request: ChatRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    # Get active session for this subject
+    # Get active session for this course
     db_session = db.query(SessionModel).filter(
-        SessionModel.subject_id == subject_id,
+        SessionModel.course_id == course_id,
         SessionModel.user_id == current_user.id,
         SessionModel.ended_at == None
     ).order_by(SessionModel.started_at.desc()).first()
 
     if not db_session:
         # Auto-start a new session
-        await start_learning(subject_id, db, current_user)
+        await start_learning(course_id, db, current_user)
         # Get the newly created session
         db_session = db.query(SessionModel).filter(
-            SessionModel.subject_id == subject_id,
+            SessionModel.course_id == course_id,
             SessionModel.user_id == current_user.id,
             SessionModel.ended_at == None
         ).order_by(SessionModel.started_at.desc()).first()
@@ -282,15 +330,15 @@ async def get_history(
 # List user's sessions
 @router.get("/sessions")
 async def list_sessions(
-    subject_id: int | None = None,
+    course_id: int | None = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     query = db.query(SessionModel).filter(
         SessionModel.user_id == current_user.id
     )
-    if subject_id:
-        query = query.filter(SessionModel.subject_id == subject_id)
+    if course_id:
+        query = query.filter(SessionModel.course_id == course_id)
 
     sessions = query.order_by(SessionModel.started_at.desc()).all()
     return [
@@ -298,8 +346,8 @@ async def list_sessions(
             "id": s.id,
             "started_at": s.started_at,
             "ended_at": s.ended_at,
-            "relationship_stage": s.relationship_stage,
-            "subject_name": s.subject.name if s.subject else None,
+            "relationship_stage": _relationship_stage(s.relationship),
+            "course_name": s.course.name if s.course else None,
         }
         for s in sessions
     ]

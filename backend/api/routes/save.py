@@ -1,186 +1,157 @@
-import json
-import os
 from datetime import datetime
-from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from backend.api.routes.auth import get_current_user
-from backend.core.config import get_settings
 from backend.db.database import get_db
-from backend.models.models import Character, ChatMessage, Save, Subject, User
+from backend.models.models import Checkpoint, ChatMessage, User, World
 from backend.models.models import Session as SessionModel
 
 router = APIRouter()
-settings = get_settings()
 
 
-class SaveCreate(BaseModel):
-    subject_id: int
-    save_name: str = Field(..., max_length=100, pattern=r'^[a-zA-Z0-9_\-\u4e00-\u9fff]+$')
+class CheckpointCreate(BaseModel):
+    world_id: int
+    save_name: str = Field(..., max_length=100, pattern=r"^[a-zA-Z0-9_\-\u4e00-\u9fff]+$")
     session_id: int | None = None
+    message_index: int | None = None
+    thumbnail_path: str | None = None
 
 
-def _verify_save_path(file_path: str, user_id: int) -> None:
-    """Verify file_path is within the user's save directory."""
-    base = Path(settings.save_directory) / str(user_id)
-    target = Path(file_path).resolve()
-    if not str(target).startswith(str(base.resolve())):
-        raise HTTPException(status_code=403, detail="Access denied")
-
-
-class SaveResponse(BaseModel):
+class CheckpointResponse(BaseModel):
     id: int
+    world_id: int
+    session_id: int | None = None
     save_name: str
+    message_index: int
+    thumbnail_path: str | None = None
     created_at: datetime
 
     class Config:
         from_attributes = True
 
 
-# Create save
-@router.post("/save", response_model=SaveResponse)
-async def create_save(
-    save_data: SaveCreate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    subject = db.query(Subject).filter(
-        Subject.id == save_data.subject_id,
-        Subject.character_id.in_(db.query(Character.id).filter(Character.user_id == current_user.id))
-    ).first()
-    if not subject:
-        raise HTTPException(status_code=404, detail="Subject not found")
-
-    session = None
-    if save_data.session_id:
-        session = db.query(SessionModel).filter(
-            SessionModel.id == save_data.session_id,
-            SessionModel.user_id == current_user.id
-        ).first()
-
-    # Gather save data
-    save_content = {
-        "session_meta": {
-            "relationship_stage": session.relationship_stage if session else "stranger",
-            "teacher_persona_id": session.teacher_persona_id if session else None,
-            "subject_id": save_data.subject_id
+def _default_relationship() -> dict:
+    return {
+        "dimensions": {
+            "trust": 0.0,
+            "familiarity": 0.0,
+            "respect": 0.0,
+            "comfort": 0.0,
         },
-        "chat_history": [],
-        "progress": {},
-        "learner_profile_snapshot": None,
-        "memory_ids": []
+        "stage": "stranger",
+        "history": [],
     }
 
-    # Get chat history
-    if session:
-        messages = db.query(ChatMessage).filter(
-            ChatMessage.session_id == session.id
-        ).order_by(ChatMessage.timestamp).all()
 
-        save_content["chat_history"] = [
-            {
-                "sender_type": m.sender_type,
-                "content": m.content,
-                "timestamp": m.timestamp.isoformat() if m.timestamp else None
-            }
-            for m in messages
-        ]
-
-    # Create save directory if not exists
-    save_dir = os.path.join(settings.save_directory, str(current_user.id))
-    os.makedirs(save_dir, exist_ok=True)
-
-    # Write save file
-    file_name = f"{save_data.save_name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
-    file_path = os.path.join(save_dir, file_name)
-
-    with open(file_path, 'w', encoding='utf-8') as f:
-        json.dump(save_content, f, ensure_ascii=False, indent=2)
-
-    # Create save record
-    db_save = Save(
-        user_id=current_user.id,
-        subject_id=save_data.subject_id,
-        session_id=save_data.session_id,
-        save_name=save_data.save_name,
-        file_path=file_path,
-        memory_ids=save_content["memory_ids"]
-    )
-    db.add(db_save)
-    db.commit()
-    db.refresh(db_save)
-
-    return db_save
-
-
-# Get saves list
-@router.get("/save", response_model=list[SaveResponse])
-async def get_saves(
-    subject_id: int | None = None,
+@router.post("/checkpoints", response_model=CheckpointResponse)
+async def create_checkpoint(
+    payload: CheckpointCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
-    query = db.query(Save).filter(Save.user_id == current_user.id)
-    if subject_id:
-        query = query.filter(Save.subject_id == subject_id)
-    return query.order_by(Save.created_at.desc()).all()
-
-
-# Get save by id
-@router.get("/save/{save_id}")
-async def get_save(
-    save_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    save = db.query(Save).filter(
-        Save.id == save_id,
-        Save.user_id == current_user.id
+    world = db.query(World).filter(
+        World.id == payload.world_id,
+        World.user_id == current_user.id,
     ).first()
-    if not save:
-        raise HTTPException(status_code=404, detail="Save not found")
+    if not world:
+        raise HTTPException(status_code=404, detail="World not found")
 
-    # Verify path is within user's save directory
-    _verify_save_path(save.file_path, current_user.id)
+    db_session = None
+    if payload.session_id is not None:
+        db_session = db.query(SessionModel).filter(
+            SessionModel.id == payload.session_id,
+            SessionModel.user_id == current_user.id,
+            SessionModel.world_id == payload.world_id,
+        ).first()
+        if not db_session:
+            raise HTTPException(status_code=404, detail="Session not found in world")
 
-    if not os.path.exists(save.file_path):
-        raise HTTPException(status_code=404, detail="Save file not found")
+    message_index = payload.message_index
+    if message_index is None:
+        if db_session:
+            message_index = int(
+                db.query(ChatMessage).filter(ChatMessage.session_id == db_session.id).count()
+            )
+        else:
+            message_index = 0
 
-    with open(save.file_path, encoding='utf-8') as f:
-        save_data = json.load(f)
+    relationship = db_session.relationship if db_session and db_session.relationship else _default_relationship()
+
+    state = {
+        "relationship": relationship,
+        "course_id": db_session.course_id if db_session else None,
+        "sage_character_id": db_session.sage_character_id if db_session else None,
+        "traveler_character_id": db_session.traveler_character_id if db_session else None,
+    }
+
+    checkpoint = Checkpoint(
+        user_id=current_user.id,
+        world_id=payload.world_id,
+        session_id=payload.session_id,
+        save_name=payload.save_name,
+        message_index=message_index,
+        state=state,
+        thumbnail_path=payload.thumbnail_path,
+    )
+    db.add(checkpoint)
+    db.commit()
+    db.refresh(checkpoint)
+    return checkpoint
+
+
+@router.get("/checkpoints", response_model=list[CheckpointResponse])
+async def list_checkpoints(
+    world_id: int | None = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    query = db.query(Checkpoint).filter(Checkpoint.user_id == current_user.id)
+    if world_id is not None:
+        query = query.filter(Checkpoint.world_id == world_id)
+    return query.order_by(Checkpoint.created_at.desc()).all()
+
+
+@router.get("/checkpoints/{checkpoint_id}")
+async def get_checkpoint(
+    checkpoint_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    checkpoint = db.query(Checkpoint).filter(
+        Checkpoint.id == checkpoint_id,
+        Checkpoint.user_id == current_user.id,
+    ).first()
+    if not checkpoint:
+        raise HTTPException(status_code=404, detail="Checkpoint not found")
 
     return {
-        "id": save.id,
-        "save_name": save.save_name,
-        "created_at": save.created_at,
-        "data": save_data
+        "id": checkpoint.id,
+        "world_id": checkpoint.world_id,
+        "session_id": checkpoint.session_id,
+        "save_name": checkpoint.save_name,
+        "message_index": checkpoint.message_index,
+        "thumbnail_path": checkpoint.thumbnail_path,
+        "created_at": checkpoint.created_at,
+        "state": checkpoint.state,
     }
 
 
-# Delete save
-@router.delete("/save/{save_id}")
-async def delete_save(
-    save_id: int,
+@router.delete("/checkpoints/{checkpoint_id}")
+async def delete_checkpoint(
+    checkpoint_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
-    save = db.query(Save).filter(
-        Save.id == save_id,
-        Save.user_id == current_user.id
+    checkpoint = db.query(Checkpoint).filter(
+        Checkpoint.id == checkpoint_id,
+        Checkpoint.user_id == current_user.id,
     ).first()
-    if not save:
-        raise HTTPException(status_code=404, detail="Save not found")
+    if not checkpoint:
+        raise HTTPException(status_code=404, detail="Checkpoint not found")
 
-    # Verify path and delete file
-    _verify_save_path(save.file_path, current_user.id)
-    if os.path.exists(save.file_path):
-        os.remove(save.file_path)
-
-    # Delete record
-    db.delete(save)
+    db.delete(checkpoint)
     db.commit()
-
-    return {"message": "Save deleted"}
+    return {"message": "Checkpoint deleted"}

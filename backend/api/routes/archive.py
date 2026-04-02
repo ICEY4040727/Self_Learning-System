@@ -8,12 +8,14 @@ from backend.api.routes.auth import get_current_user
 from backend.db.database import get_db
 from backend.models.models import (
     Character,
+    Course,
+    FSRSState,
     LearnerProfile,
     LearningDiary,
     ProgressTracking,
-    Subject,
     TeacherPersona,
     User,
+    World,
 )
 from backend.services import spaced_repetition
 
@@ -23,6 +25,7 @@ router = APIRouter()
 # Pydantic Schemas
 class CharacterCreate(BaseModel):
     name: str
+    type: str = "sage"
     avatar: str | None = None
     personality: str | None = None
     background: str | None = None
@@ -32,6 +35,20 @@ class CharacterCreate(BaseModel):
 
 class CharacterResponse(CharacterCreate):
     id: int
+
+    class Config:
+        from_attributes = True
+
+
+class WorldCreate(BaseModel):
+    name: str
+    description: str | None = None
+    scenes: dict | None = None
+
+
+class WorldResponse(WorldCreate):
+    id: int
+    user_id: int
 
     class Config:
         from_attributes = True
@@ -54,11 +71,8 @@ class TeacherPersonaResponse(TeacherPersonaCreate):
 
 
 class LearnerProfileCreate(BaseModel):
-    subject_id: int | None = None
-    learning_style: dict | None = None
-    cognitive_traits: dict | None = None
-    emotional_traits: dict | None = None
-    knowledge_graph: dict | None = None
+    world_id: int
+    profile: dict | None = None
 
 
 class LearnerProfileResponse(LearnerProfileCreate):
@@ -69,15 +83,14 @@ class LearnerProfileResponse(LearnerProfileCreate):
         from_attributes = True
 
 
-class SubjectCreate(BaseModel):
-    character_id: int
+class CourseCreate(BaseModel):
+    world_id: int
     name: str
     description: str | None = None
     target_level: str | None = None
-    scene_background: str | None = None
 
 
-class SubjectResponse(SubjectCreate):
+class CourseResponse(CourseCreate):
     id: int
 
     class Config:
@@ -85,7 +98,7 @@ class SubjectResponse(SubjectCreate):
 
 
 class LessonPlanCreate(BaseModel):
-    subject_id: int
+    course_id: int
     content: str
 
 
@@ -97,7 +110,7 @@ class LessonPlanResponse(LessonPlanCreate):
 
 
 class LearningDiaryCreate(BaseModel):
-    subject_id: int
+    course_id: int
     date: datetime
     content: str
     reflection: str | None = None
@@ -112,7 +125,7 @@ class LearningDiaryResponse(LearningDiaryCreate):
 
 
 class ProgressTrackingCreate(BaseModel):
-    subject_id: int
+    course_id: int
     topic: str
     mastery_level: int = 0
     next_review: datetime | None = None
@@ -208,6 +221,92 @@ def delete_character(
     db.delete(character)
     db.commit()
     return {"message": "Character deleted"}
+
+
+# World endpoints
+@router.post("/worlds", response_model=WorldResponse)
+def create_world(
+    world: WorldCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    db_world = World(
+        user_id=current_user.id,
+        name=world.name,
+        description=world.description,
+        scenes=world.scenes or {},
+    )
+    db.add(db_world)
+    db.commit()
+    db.refresh(db_world)
+    return db_world
+
+
+@router.get("/worlds", response_model=list[WorldResponse])
+def get_worlds(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return (
+        db.query(World)
+        .filter(World.user_id == current_user.id)
+        .order_by(World.created_at.desc())
+        .all()
+    )
+
+
+@router.get("/worlds/{world_id}", response_model=WorldResponse)
+def get_world(
+    world_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    world = db.query(World).filter(
+        World.id == world_id,
+        World.user_id == current_user.id,
+    ).first()
+    if not world:
+        raise HTTPException(status_code=404, detail="World not found")
+    return world
+
+
+@router.put("/worlds/{world_id}", response_model=WorldResponse)
+def update_world(
+    world_id: int,
+    world: WorldCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    db_world = db.query(World).filter(
+        World.id == world_id,
+        World.user_id == current_user.id,
+    ).first()
+    if not db_world:
+        raise HTTPException(status_code=404, detail="World not found")
+
+    db_world.name = world.name
+    db_world.description = world.description
+    db_world.scenes = world.scenes or {}
+    db.commit()
+    db.refresh(db_world)
+    return db_world
+
+
+@router.delete("/worlds/{world_id}")
+def delete_world(
+    world_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    world = db.query(World).filter(
+        World.id == world_id,
+        World.user_id == current_user.id,
+    ).first()
+    if not world:
+        raise HTTPException(status_code=404, detail="World not found")
+    db.delete(world)
+    db.commit()
+    return {"message": "World deleted"}
 
 
 # Character sprite upload
@@ -387,9 +486,17 @@ def create_learner_profile(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
+    world = db.query(World).filter(
+        World.id == profile.world_id,
+        World.user_id == current_user.id,
+    ).first()
+    if not world:
+        raise HTTPException(status_code=404, detail="World not found")
+
     db_profile = LearnerProfile(
-        **profile.model_dump(),
-        user_id=current_user.id
+        user_id=current_user.id,
+        world_id=profile.world_id,
+        profile=profile.profile or {},
     )
     db.add(db_profile)
     db.commit()
@@ -399,16 +506,15 @@ def create_learner_profile(
 
 @router.get("/learner_profile", response_model=list[LearnerProfileResponse])
 def get_learner_profiles(
-    subject_id: int | None = None,
+    world_id: int | None = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     query = db.query(LearnerProfile).filter(
-        
         LearnerProfile.user_id == current_user.id
     )
-    if subject_id:
-        query = query.filter(LearnerProfile.subject_id == subject_id)
+    if world_id:
+        query = query.filter(LearnerProfile.world_id == world_id)
     return query.all()
 
 
@@ -426,103 +532,118 @@ def update_learner_profile(
     if not db_profile:
         raise HTTPException(status_code=404, detail="Learner profile not found")
 
-    for key, value in profile.model_dump().items():
-        setattr(db_profile, key, value)
+    world = db.query(World).filter(
+        World.id == profile.world_id,
+        World.user_id == current_user.id,
+    ).first()
+    if not world:
+        raise HTTPException(status_code=404, detail="World not found")
+
+    db_profile.world_id = profile.world_id
+    db_profile.profile = profile.profile or {}
 
     db.commit()
     db.refresh(db_profile)
     return db_profile
 
 
-# Subject endpoints
-@router.post("/subjects", response_model=SubjectResponse)
-def create_subject(
-    subject: SubjectCreate,
+# Course endpoints
+@router.post("/courses", response_model=CourseResponse)
+def create_course(
+    course: CourseCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    # Verify character ownership
-    char = db.query(Character).filter(
-        Character.id == subject.character_id,
-        Character.user_id == current_user.id,
+    world = db.query(World).filter(
+        World.id == course.world_id,
+        World.user_id == current_user.id,
     ).first()
-    if not char:
-        raise HTTPException(status_code=404, detail="Character not found")
+    if not world:
+        raise HTTPException(status_code=404, detail="World not found")
 
-    db_subject = Subject(
-        **subject.model_dump()
+    db_course = Course(
+        **course.model_dump()
     )
-    db.add(db_subject)
+    db.add(db_course)
     db.commit()
-    db.refresh(db_subject)
-    return db_subject
+    db.refresh(db_course)
+    return db_course
 
 
-@router.get("/subjects", response_model=list[SubjectResponse])
-def get_subjects(
-    character_id: int | None = None,
+@router.get("/courses", response_model=list[CourseResponse])
+def get_courses(
+    world_id: int | None = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    query = db.query(Subject).filter(Subject.character_id.in_(db.query(Character.id).filter(Character.user_id == current_user.id)))
-    if character_id:
-        query = query.filter(Subject.character_id == character_id)
+    query = db.query(Course).join(World, Course.world_id == World.id).filter(
+        World.user_id == current_user.id
+    )
+    if world_id:
+        query = query.filter(Course.world_id == world_id)
     return query.all()
 
 
-@router.get("/subjects/{subject_id}", response_model=SubjectResponse)
-def get_subject(
-    subject_id: int,
+@router.get("/courses/{course_id}", response_model=CourseResponse)
+def get_course(
+    course_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    subject = db.query(Subject).filter(
-        Subject.id == subject_id,
-        Subject.character_id.in_(db.query(Character.id).filter(Character.user_id == current_user.id))
+    course = db.query(Course).join(World, Course.world_id == World.id).filter(
+        Course.id == course_id,
+        World.user_id == current_user.id,
     ).first()
-    if not subject:
-        raise HTTPException(status_code=404, detail="Subject not found")
-    return subject
+    if not course:
+        raise HTTPException(status_code=404, detail="Course not found")
+    return course
 
 
-@router.put("/subjects/{subject_id}", response_model=SubjectResponse)
-def update_subject(
-    subject_id: int,
-    subject: SubjectCreate,
+@router.put("/courses/{course_id}", response_model=CourseResponse)
+def update_course(
+    course_id: int,
+    course: CourseCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    db_subject = db.query(Subject).filter(
-        Subject.id == subject_id,
-        Subject.character_id.in_(db.query(Character.id).filter(Character.user_id == current_user.id))
+    world = db.query(World).filter(
+        World.id == course.world_id,
+        World.user_id == current_user.id,
     ).first()
-    if not db_subject:
-        raise HTTPException(status_code=404, detail="Subject not found")
+    if not world:
+        raise HTTPException(status_code=404, detail="World not found")
 
-    for key, value in subject.model_dump().items():
-        setattr(db_subject, key, value)
+    db_course = db.query(Course).join(World, Course.world_id == World.id).filter(
+        Course.id == course_id,
+        World.user_id == current_user.id,
+    ).first()
+    if not db_course:
+        raise HTTPException(status_code=404, detail="Course not found")
+
+    for key, value in course.model_dump().items():
+        setattr(db_course, key, value)
 
     db.commit()
-    db.refresh(db_subject)
-    return db_subject
+    db.refresh(db_course)
+    return db_course
 
 
-@router.delete("/subjects/{subject_id}")
-def delete_subject(
-    subject_id: int,
+@router.delete("/courses/{course_id}")
+def delete_course(
+    course_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    subject = db.query(Subject).filter(
-        Subject.id == subject_id,
-        Subject.character_id.in_(db.query(Character.id).filter(Character.user_id == current_user.id))
+    course = db.query(Course).join(World, Course.world_id == World.id).filter(
+        Course.id == course_id,
+        World.user_id == current_user.id,
     ).first()
-    if not subject:
-        raise HTTPException(status_code=404, detail="Subject not found")
+    if not course:
+        raise HTTPException(status_code=404, detail="Course not found")
 
-    db.delete(subject)
+    db.delete(course)
     db.commit()
-    return {"message": "Subject deleted"}
+    return {"message": "Course deleted"}
 
 
 # Learning Diary endpoints
@@ -532,6 +653,13 @@ def create_learning_diary(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
+    course = db.query(Course).join(World, Course.world_id == World.id).filter(
+        Course.id == diary.course_id,
+        World.user_id == current_user.id,
+    ).first()
+    if not course:
+        raise HTTPException(status_code=404, detail="Course not found")
+
     db_diary = LearningDiary(
         **diary.model_dump(),
         user_id=current_user.id
@@ -544,13 +672,18 @@ def create_learning_diary(
 
 @router.get("/learning_diary", response_model=list[LearningDiaryResponse])
 def get_learning_diaries(
-    subject_id: int | None = None,
+    course_id: int | None = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    query = db.query(LearningDiary).filter(LearningDiary.user_id == current_user.id)
-    if subject_id:
-        query = query.filter(LearningDiary.subject_id == subject_id)
+    query = db.query(LearningDiary).join(Course, LearningDiary.course_id == Course.id).join(
+        World, Course.world_id == World.id
+    ).filter(
+        LearningDiary.user_id == current_user.id,
+        World.user_id == current_user.id,
+    )
+    if course_id:
+        query = query.filter(LearningDiary.course_id == course_id)
     return query.order_by(LearningDiary.date.desc()).all()
 
 
@@ -561,6 +694,13 @@ def create_progress(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
+    course = db.query(Course).join(World, Course.world_id == World.id).filter(
+        Course.id == progress.course_id,
+        World.user_id == current_user.id,
+    ).first()
+    if not course:
+        raise HTTPException(status_code=404, detail="Course not found")
+
     db_progress = ProgressTracking(
         **progress.model_dump(),
         user_id=current_user.id
@@ -573,13 +713,18 @@ def create_progress(
 
 @router.get("/progress", response_model=list[ProgressTrackingResponse])
 def get_progress(
-    subject_id: int | None = None,
+    course_id: int | None = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    query = db.query(ProgressTracking).filter(ProgressTracking.user_id == current_user.id)
-    if subject_id:
-        query = query.filter(ProgressTracking.subject_id == subject_id)
+    query = db.query(ProgressTracking).join(Course, ProgressTracking.course_id == Course.id).join(
+        World, Course.world_id == World.id
+    ).filter(
+        ProgressTracking.user_id == current_user.id,
+        World.user_id == current_user.id,
+    )
+    if course_id:
+        query = query.filter(ProgressTracking.course_id == course_id)
     return query.all()
 
 
@@ -627,19 +772,54 @@ def review_progress(
     current_user: User = Depends(get_current_user),
 ):
     """Record a review for a topic and compute next review date via FSRS."""
-    db_progress = db.query(ProgressTracking).filter(
+    db_progress = db.query(ProgressTracking).join(Course, ProgressTracking.course_id == Course.id).join(
+        World, Course.world_id == World.id
+    ).filter(
         ProgressTracking.id == progress_id,
         ProgressTracking.user_id == current_user.id,
+        World.user_id == current_user.id,
     ).first()
     if not db_progress:
         raise HTTPException(status_code=404, detail="Progress not found")
 
-    result = spaced_repetition.review(db_progress.fsrs_state, req.rating)
+    course = db.query(Course).filter(Course.id == db_progress.course_id).first()
+    if not course:
+        raise HTTPException(status_code=404, detail="Course not found")
 
-    db_progress.fsrs_state = result["fsrs_state"]
+    fsrs_state_row = db.query(FSRSState).filter(
+        FSRSState.world_id == course.world_id,
+        FSRSState.concept_id == db_progress.topic,
+    ).first()
+
+    existing_fsrs_state = None
+    if fsrs_state_row:
+        existing_fsrs_state = {
+            "difficulty": fsrs_state_row.difficulty,
+            "stability": fsrs_state_row.stability,
+            "last_review": fsrs_state_row.last_review,
+            "due": fsrs_state_row.next_review,
+            "reps": fsrs_state_row.reps,
+        }
+
+    result = spaced_repetition.review(existing_fsrs_state, req.rating)
+
     db_progress.last_review = result["last_review"]
     db_progress.next_review = result["due"]
     db_progress.mastery_level = result["mastery_level"]
+
+    fsrs_payload = result["fsrs_state"]
+    if fsrs_state_row is None:
+        fsrs_state_row = FSRSState(
+            world_id=course.world_id,
+            concept_id=db_progress.topic,
+        )
+        db.add(fsrs_state_row)
+
+    fsrs_state_row.difficulty = fsrs_payload.get("difficulty")
+    fsrs_state_row.stability = fsrs_payload.get("stability")
+    fsrs_state_row.reps = fsrs_payload.get("reps") or 0
+    fsrs_state_row.last_review = result["last_review"]
+    fsrs_state_row.next_review = result["due"]
 
     db.commit()
     db.refresh(db_progress)
@@ -656,18 +836,21 @@ def review_progress(
 
 @router.get("/progress/due", response_model=list[ProgressTrackingResponse])
 def get_due_reviews(
-    subject_id: int | None = None,
+    course_id: int | None = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """Get topics that are due for review (next_review <= now)."""
     now = datetime.now(UTC)
-    query = db.query(ProgressTracking).filter(
+    query = db.query(ProgressTracking).join(Course, ProgressTracking.course_id == Course.id).join(
+        World, Course.world_id == World.id
+    ).filter(
         ProgressTracking.user_id == current_user.id,
         ProgressTracking.next_review <= now,
+        World.user_id == current_user.id,
     )
-    if subject_id:
-        query = query.filter(ProgressTracking.subject_id == subject_id)
+    if course_id:
+        query = query.filter(ProgressTracking.course_id == course_id)
     return query.order_by(ProgressTracking.next_review).all()
 
 
