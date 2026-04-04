@@ -197,10 +197,7 @@ class KnowledgeService:
             limited_concepts[concept_id] = copied
 
         episodes = graph.get("episodes") or []
-        if isinstance(episodes, list):
-            episodes = episodes[-max_episodes:]
-        else:
-            episodes = []
+        episodes = episodes[-max_episodes:] if isinstance(episodes, list) else []
 
         return {"concepts": limited_concepts, "episodes": episodes}
 
