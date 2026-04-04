@@ -18,9 +18,14 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/views/Home.vue')
   },
   {
-    path: '/learning/:subjectId',
+    path: '/learning/:courseId',
     name: 'Learning',
     component: () => import('@/views/Learning.vue')
+  },
+  {
+    path: '/learning/legacy/:subjectId',
+    name: 'LearningLegacy',
+    redirect: to => `/learning/${to.params.subjectId}`
   },
   {
     path: '/archive',

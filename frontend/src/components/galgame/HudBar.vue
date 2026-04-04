@@ -10,6 +10,8 @@
         @click="$emit('toggle-auto')"
       >▶ 自动</button>
       <button class="hud-btn" @click="$emit('backlog')">📖 回忆</button>
+      <button class="hud-btn" @click="$emit('knowledge-graph')">📊 图谱</button>
+      <button class="hud-btn" @click="$emit('toggle-ui')">🙈 隐藏UI</button>
       <button class="hud-btn" @click="$emit('settings')">⚙ 设置</button>
       <button class="hud-btn" @click="$emit('exit')">🏠 主页</button>
     </div>
@@ -37,6 +39,8 @@ defineEmits<{
   skip: []
   'toggle-auto': []
   backlog: []
+  'knowledge-graph': []
+  'toggle-ui': []
   settings: []
   exit: []
 }>()
