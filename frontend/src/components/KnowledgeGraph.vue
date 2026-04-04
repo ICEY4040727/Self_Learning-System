@@ -7,6 +7,19 @@
       </label>
       <button @click="fetchGraph" :disabled="loading">{{ loading ? '加载中...' : '刷新图谱' }}</button>
     </div>
+    <div v-if="edgeTypes.length > 0" class="legend">
+      <span v-for="type in edgeTypes" :key="type" class="legend-item">
+        <span
+          class="legend-line"
+          :style="{
+            borderTopColor: edgeStroke(type),
+            borderTopStyle: edgeDash(type) === 'none' ? 'solid' : 'dashed',
+            borderTopWidth: `${edgeWidth(type)}px`,
+          }"
+        ></span>
+        {{ type }}
+      </span>
+    </div>
 
     <div v-if="errorMessage" class="error">{{ errorMessage }}</div>
     <svg ref="svgRef" class="graph-svg"></svg>
@@ -66,6 +79,23 @@ const statusColor = (status: string) => {
   return '#888'
 }
 
+const edgeStroke = (type: string) => {
+  if (type === 'prerequisite') return '#ffb347'
+  if (type === 'causes') return '#ff7b7b'
+  if (type === 'example_of') return '#7dc7ff'
+  return '#9a9ad6'
+}
+
+const edgeWidth = (type: string) => {
+  if (type === 'prerequisite') return 2
+  if (type === 'causes') return 1.8
+  return 1.2
+}
+
+const edgeDash = (type: string) => (type === 'example_of' ? '4,3' : 'none')
+
+const edgeTypes = ref<string[]>([])
+
 const toCheckpointIso = (): string | undefined => {
   if (!checkpointInput.value) return undefined
   const parsed = new Date(checkpointInput.value)
@@ -88,6 +118,7 @@ const fetchGraph = async () => {
       nodes: Array.isArray(response.data?.nodes) ? response.data.nodes : [],
       edges: Array.isArray(response.data?.edges) ? response.data.edges : [],
     }
+    edgeTypes.value = [...new Set(graph.value.edges.map((edge) => edge.type || 'related_to'))]
     renderGraph()
   } catch (error) {
     errorMessage.value = parseApiError(error)
@@ -118,12 +149,13 @@ const renderGraph = () => {
 
   const link = svg
     .append('g')
-    .attr('stroke', '#6b6b9d')
     .attr('stroke-opacity', 0.6)
     .selectAll('line')
     .data(links)
     .join('line')
-    .attr('stroke-width', 1.2)
+    .attr('stroke', (d) => edgeStroke(d.type || 'related_to'))
+    .attr('stroke-width', (d) => edgeWidth(d.type || 'related_to'))
+    .attr('stroke-dasharray', (d) => edgeDash(d.type || 'related_to'))
 
   const node = svg
     .append('g')
@@ -224,6 +256,32 @@ onMounted(() => {
 
 .toolbar button {
   cursor: pointer;
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  background: rgba(24, 24, 38, 0.85);
+  border: 1px solid rgba(74, 74, 138, 0.5);
+  border-radius: 999px;
+  padding: 3px 8px;
+}
+
+.legend-line {
+  display: inline-block;
+  width: 18px;
+  height: 0;
+  border-top-color: currentColor;
 }
 
 .graph-svg {
