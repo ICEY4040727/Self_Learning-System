@@ -24,6 +24,7 @@
           >
             <div class="char-avatar">{{ char.name?.[0] || '?' }}</div>
             <h3>{{ char.name }}</h3>
+            <span class="role-tag">{{ char.type === 'traveler' ? '旅者' : '知者' }}</span>
             <p>{{ char.personality || '暂无描述' }}</p>
             <div class="card-actions">
               <button @click.stop="openEditCharacter(char)">编辑</button>
@@ -126,6 +127,13 @@
           <div class="form-group">
             <label>角色名称</label>
             <input v-model="characterForm.name" placeholder="输入角色名称" />
+          </div>
+          <div class="form-group">
+            <label>角色类型</label>
+            <select v-model="characterForm.type">
+              <option value="sage">知者（sage）</option>
+              <option value="traveler">旅者（traveler）</option>
+            </select>
           </div>
           <div class="form-group">
             <label>性格描述</label>
@@ -250,6 +258,7 @@ const showError = (e: any) => {
 interface Character {
   id: number
   name: string
+  type?: 'sage' | 'traveler'
   personality?: string
   sprites?: Record<string, string>
   background?: string
@@ -389,7 +398,7 @@ const generatePersona = async () => {
   }
 }
 
-const characterForm = ref({ name: '', personality: '', background: '', speech_style: '' })
+const characterForm = ref({ name: '', type: 'sage' as 'sage' | 'traveler', personality: '', background: '', speech_style: '' })
 const personaForm = ref({ name: '', version: '1.0', traitsInput: '', system_prompt_template: '' })
 const subjectForm = ref({ name: '', description: '', target_level: '' })
 
@@ -445,7 +454,7 @@ const selectCharacter = (char: Character) => {
 // --- Character CRUD ---
 
 const resetCharacterForm = () => {
-  characterForm.value = { name: '', personality: '', background: '', speech_style: '' }
+  characterForm.value = { name: '', type: 'sage', personality: '', background: '', speech_style: '' }
   editingCharacterId.value = null
 }
 
@@ -458,6 +467,7 @@ const openEditCharacter = (char: Character) => {
   editingCharacterId.value = char.id
   characterForm.value = {
     name: char.name,
+    type: char.type || 'sage',
     personality: char.personality || '',
     background: char.background || '',
     speech_style: char.speech_style || '',
@@ -748,6 +758,16 @@ onUnmounted(() => {
   border-radius: 12px;
   font-size: 12px;
   color: #fff;
+}
+
+.role-tag {
+  display: inline-block;
+  margin-bottom: 8px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  color: #fff;
+  background: #4a4a8a;
 }
 
 .card-actions {

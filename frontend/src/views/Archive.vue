@@ -233,16 +233,22 @@ const createDiary = async () => {
 
 const loadSave = async (saveId: number) => {
   try {
-    const response = await axios.get(`/api/save/${saveId}`, {
+    const response = await axios.post(`/api/checkpoints/${saveId}/branch`, {}, {
       headers: { Authorization: `Bearer ${authStore.token}` }
     })
     const data = response.data
-    const subjectId = data.data?.session_meta?.subject_id
-    if (subjectId) {
-      router.push({ path: `/learning/${subjectId}`, query: { save_id: String(saveId) } })
-    } else {
-      alert('存档数据缺少科目信息')
+    const courseId = data.course_id
+    if (!courseId) {
+      alert('分叉结果缺少课程信息')
+      return
     }
+    router.push({
+      path: `/learning/${courseId}`,
+      query: {
+        worldId: String(data.world_id || ''),
+        sessionId: String(data.session_id || '')
+      }
+    })
   } catch (error) {
     alert(parseApiError(error))
   }
