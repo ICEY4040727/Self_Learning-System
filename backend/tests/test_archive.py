@@ -250,3 +250,100 @@ class TestWorldKnowledgeInitialization:
         knowledge = db_session.query(Knowledge).filter(Knowledge.world_id == world_id).first()
         assert knowledge is not None
         assert knowledge.graph == {}
+
+    def test_existing_world_link_backfills_missing_knowledge(self, client, auth_headers, db_session):
+        character = client.post(
+            "/api/character",
+            json={"name": "KnowledgeBackfill", "type": "sage"},
+            headers=auth_headers,
+        )
+        assert character.status_code == 200
+        character_id = character.json()["id"]
+
+        world = client.post(
+            "/api/worlds",
+            json={"name": "Backfill World", "description": "test"},
+            headers=auth_headers,
+        )
+        assert world.status_code == 200
+        world_id = world.json()["id"]
+
+        bind = client.post(
+            f"/api/worlds/{world_id}/characters",
+            json={"character_id": character_id, "role": "sage", "is_primary": True},
+            headers=auth_headers,
+        )
+        assert bind.status_code == 200
+
+        db_session.query(Knowledge).filter(Knowledge.world_id == world_id).delete()
+        db_session.commit()
+        assert db_session.query(Knowledge).filter(Knowledge.world_id == world_id).count() == 0
+
+        create_subject = client.post(
+            "/api/subjects",
+            json={
+                "character_id": character_id,
+                "name": "Backfill Trigger",
+                "description": "legacy resolver path",
+                "target_level": "beginner",
+            },
+            headers=auth_headers,
+        )
+        assert create_subject.status_code == 200
+        assert create_subject.json()["world_id"] == world_id
+
+        knowledge_rows = db_session.query(Knowledge).filter(Knowledge.world_id == world_id).all()
+        assert len(knowledge_rows) == 1
+        assert knowledge_rows[0].graph == {}
+
+    def test_resolver_path_is_idempotent_for_knowledge(self, client, auth_headers, db_session):
+        character = client.post(
+            "/api/character",
+            json={"name": "KnowledgeIdempotent", "type": "sage"},
+            headers=auth_headers,
+        )
+        assert character.status_code == 200
+        character_id = character.json()["id"]
+
+        world = client.post(
+            "/api/worlds",
+            json={"name": "Idempotent World", "description": "test"},
+            headers=auth_headers,
+        )
+        assert world.status_code == 200
+        world_id = world.json()["id"]
+
+        bind = client.post(
+            f"/api/worlds/{world_id}/characters",
+            json={"character_id": character_id, "role": "sage", "is_primary": True},
+            headers=auth_headers,
+        )
+        assert bind.status_code == 200
+
+        first_subject = client.post(
+            "/api/subjects",
+            json={
+                "character_id": character_id,
+                "name": "First Subject",
+                "description": "legacy",
+                "target_level": "beginner",
+            },
+            headers=auth_headers,
+        )
+        assert first_subject.status_code == 200
+        assert first_subject.json()["world_id"] == world_id
+
+        second_subject = client.post(
+            "/api/subjects",
+            json={
+                "character_id": character_id,
+                "name": "Second Subject",
+                "description": "legacy",
+                "target_level": "intermediate",
+            },
+            headers=auth_headers,
+        )
+        assert second_subject.status_code == 200
+        assert second_subject.json()["world_id"] == world_id
+
+        assert db_session.query(Knowledge).filter(Knowledge.world_id == world_id).count() == 1
