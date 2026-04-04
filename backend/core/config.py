@@ -1,7 +1,7 @@
 import warnings
 from functools import lru_cache
 
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 _DEFAULT_SECRET = "your-secret-key-change-in-production"
 
@@ -42,8 +42,10 @@ class Settings(BaseSettings):
     # Save directory
     save_directory: str = "./saves"
 
-    class Config:
-        env_file = ".env"
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        extra="ignore",
+    )
 
 
 @lru_cache

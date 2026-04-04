@@ -196,8 +196,8 @@ CREATE TABLE courses (
 ```sql
 CREATE TABLE sessions (
     id                      INTEGER PRIMARY KEY AUTOINCREMENT,
-    world_id                INTEGER REFERENCES worlds(id),
-    course_id               INTEGER REFERENCES courses(id),
+    world_id                INTEGER REFERENCES worlds(id) ON DELETE CASCADE,
+    course_id               INTEGER REFERENCES courses(id) ON DELETE CASCADE,
     user_id                 INTEGER REFERENCES users(id),
     sage_character_id       INTEGER REFERENCES characters(id),
     traveler_character_id   INTEGER REFERENCES characters(id),
@@ -214,6 +214,11 @@ CREATE TABLE sessions (
 - `sage_character_id` + `traveler_character_id`：明确记录本次对话的两个角色
 - `parent_checkpoint_id`：不为 NULL 时表示这是从某个检查点分叉出来的时间线
 - `relationship`：四维关系模型（详见 `relationship_theory.md`）
+
+**删除行为（当前实现）**：
+- 删除 `course` 会级联删除该课程下的 `sessions` 及其 `chat_messages`
+- 删除 `world` 会级联删除该世界下的 `sessions`（以及经 ORM 级联删除的会话子记录）
+- 产品层面应在删除前给出不可恢复提示（避免误删学习历史）
 
 **relationship JSON 结构**：
 
@@ -436,13 +441,26 @@ valid_concepts = {
 CREATE TABLE learner_profiles (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id     INTEGER REFERENCES users(id),
-    world_id    INTEGER REFERENCES worlds(id),
-    profile     JSON DEFAULT '{}',
+    world_id    INTEGER REFERENCES worlds(id) ON DELETE CASCADE,
+    profile     JSON NOT NULL DEFAULT '{}',
     updated_at  TEXT DEFAULT (datetime('now'))
 );
 ```
 
-**profile JSON**（累积记忆，3 类 — 详见 `learning_memory_theory.md`）：
+**作用域与分层（当前决策）**：
+- `learner_profiles` 保持 **world 作用域**（`user_id + world_id`），用于记录世界内教学节奏相关画像
+- 不改为全局 user 级，避免跨 world 共享造成 persona/关系阶段/课程上下文污染
+- 后续如需跨 world 稳定特征，可扩展独立的 `user_profile`（全局层，可选）
+
+**生命周期（当前实现）**：
+- 不随 checkpoint 回滚：画像是该 world 下的累积学习记忆
+- 随 world 生命周期删除：`world_id` 使用 `ON DELETE CASCADE`
+
+**profile JSON 结构定义**（累积记忆，3 类 — 详见 `learning_memory_theory.md`）：
+
+- 顶层固定键：`preferences` / `affect` / `metacognition`
+- 每个 trait 建议包含：`value`、`t_updated`、`evidence`
+- 前后端按该结构读写，新增 trait 时保持三段分组不变
 
 ```json
 {
@@ -471,7 +489,7 @@ CREATE TABLE learner_profiles (
 | `affect` | Jarvis Emotional State Tracking | 情感模式（情绪反应规律） | 累积，每个 trait 带 t_updated |
 | `metacognition` | MSKT 四维度 | 元认知能力（自我调控学习） | 累积，每个 trait 带 t_updated |
 
-**时态行为**：不随存档回滚——这些是关于学习者**作为人**的特征。但每个 trait 有 `t_updated`，分叉时间线按 `t_updated <= checkpoint_time` 取历史值（避免使用检查点之后才观察到的特征）。
+**时态行为**：`learner_profiles` 在 **world 内不随存档回滚**。每个 trait 保留 `t_updated`，分叉时间线按 `t_updated <= checkpoint_time` 取历史值（避免使用检查点之后才观察到的特征）。
 
 #### fsrs_states（间隔重复）
 

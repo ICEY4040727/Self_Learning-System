@@ -169,18 +169,25 @@ class LearningEngine:
         # 3. Learner profile
         profile_lines: list[str] = []
         if learner_profile:
-            if isinstance(learner_profile.learning_style, dict):
-                pairs = [f"{k}: {v}" for k, v in learner_profile.learning_style.items() if v]
+            profile = learner_profile.profile if isinstance(learner_profile.profile, dict) else {}
+
+            preferences = profile.get("preferences") if isinstance(profile, dict) else None
+            if isinstance(preferences, dict):
+                pairs = [f"{k}: {v}" for k, v in preferences.items() if v]
                 if pairs:
-                    profile_lines.append(f"学习风格偏好: {', '.join(pairs)}")
-            if isinstance(learner_profile.cognitive_traits, dict):
-                pairs = [f"{k}: {v}" for k, v in learner_profile.cognitive_traits.items() if v]
+                    profile_lines.append(f"学习偏好: {', '.join(pairs)}")
+
+            affect = profile.get("affect") if isinstance(profile, dict) else None
+            if isinstance(affect, dict):
+                pairs = [f"{k}: {v}" for k, v in affect.items() if v]
                 if pairs:
-                    profile_lines.append(f"认知特质: {', '.join(pairs)}")
-            if isinstance(learner_profile.emotional_traits, dict):
-                pairs = [f"{k}: {v}" for k, v in learner_profile.emotional_traits.items() if v]
+                    profile_lines.append(f"情感模式: {', '.join(pairs)}")
+
+            metacognition = profile.get("metacognition") if isinstance(profile, dict) else None
+            if isinstance(metacognition, dict):
+                pairs = [f"{k}: {v}" for k, v in metacognition.items() if v]
                 if pairs:
-                    profile_lines.append(f"情感特质: {', '.join(pairs)}")
+                    profile_lines.append(f"元认知特质: {', '.join(pairs)}")
         if profile_lines:
             parts.append("【学习者画像】\n" + "\n".join(profile_lines))
 
@@ -261,11 +268,11 @@ class LearningEngine:
             if last_user_msg and last_user_msg.emotion_analysis:
                 prev_emotion = last_user_msg.emotion_analysis
 
-            # 4.6 Get average mastery_level for this subject (for scaffold computation)
+            # 4.6 Get average mastery_level for this course (for scaffold computation)
             mastery_level = 50  # default
-            if session.subject_id:
+            if session.course_id:
                 avg = db.query(sqlfunc.avg(ProgressTracking.mastery_level)).filter(
-                    ProgressTracking.subject_id == session.subject_id,
+                    ProgressTracking.course_id == session.course_id,
                     ProgressTracking.user_id == session.user_id,
                 ).scalar()
                 if avg is not None:
