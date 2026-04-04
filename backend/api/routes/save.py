@@ -6,13 +6,13 @@ from sqlalchemy.orm import Session
 
 from backend.api.routes.auth import get_current_user
 from backend.db.database import get_db
+from backend.models import models as models_module
 from backend.models.models import (
     Checkpoint,
     ChatMessage,
     Session as SessionModel,
     User,
     World,
-    _default_relationship,
 )
 
 router = APIRouter()
@@ -71,7 +71,11 @@ async def create_checkpoint(
         else:
             message_index = 0
 
-    relationship = db_session.relationship if db_session and db_session.relationship else _default_relationship()
+    relationship = (
+        db_session.relationship
+        if db_session and db_session.relationship
+        else models_module._default_relationship()
+    )
 
     state = {
         "relationship": relationship,
