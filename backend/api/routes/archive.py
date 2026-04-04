@@ -2,6 +2,7 @@ from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile
 from pydantic import BaseModel, Field
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from backend.api.routes.auth import get_current_user
@@ -253,13 +254,19 @@ def delete_character(
 def _ensure_world_knowledge(db: Session, world_id: int) -> None:
     knowledge = db.query(Knowledge).filter(Knowledge.world_id == world_id).first()
     if knowledge is None:
-        db.add(
-            Knowledge(
-                world_id=world_id,
-                graph={},
-            )
-        )
-        db.flush()
+        try:
+            with db.begin_nested():
+                db.add(
+                    Knowledge(
+                        world_id=world_id,
+                        graph={},
+                    )
+                )
+                db.flush()
+        except IntegrityError:
+            existing = db.query(Knowledge).filter(Knowledge.world_id == world_id).first()
+            if existing is None:
+                raise
 
 
 @router.post("/worlds", response_model=WorldResponse)
