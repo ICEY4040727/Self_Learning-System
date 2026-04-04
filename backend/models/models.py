@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import UTC, datetime
 
 from sqlalchemy import (
     JSON,
@@ -19,7 +19,7 @@ from backend.db.database import Base
 
 
 def _utcnow():
-    return datetime.now(datetime.UTC)
+    return datetime.now(UTC)
 
 
 def _default_relationship():
