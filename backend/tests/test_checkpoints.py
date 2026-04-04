@@ -93,3 +93,48 @@ class TestLegacySaveCompatibility:
 
         deleted = client.delete(f"/api/save/{save_id}", headers=auth_headers)
         assert deleted.status_code == 200
+
+    def test_legacy_save_subject_filter_is_subject_scoped(self, client, auth_headers):
+        world_id = _create_world(client, auth_headers)
+        course_a = _create_course(client, auth_headers, world_id)
+        course_b = _create_course(client, auth_headers, world_id)
+
+        start_a = client.post(f"/api/subjects/{course_a}/start", headers=auth_headers)
+        assert start_a.status_code == 200
+        session_a = start_a.json()["session_id"]
+
+        start_b = client.post(f"/api/subjects/{course_b}/start", headers=auth_headers)
+        assert start_b.status_code == 200
+        session_b = start_b.json()["session_id"]
+
+        save_a = client.post(
+            "/api/save",
+            json={
+                "subject_id": course_a,
+                "session_id": session_a,
+                "save_name": "legacy_a",
+            },
+            headers=auth_headers,
+        )
+        assert save_a.status_code == 200
+
+        save_b = client.post(
+            "/api/save",
+            json={
+                "subject_id": course_b,
+                "session_id": session_b,
+                "save_name": "legacy_b",
+            },
+            headers=auth_headers,
+        )
+        assert save_b.status_code == 200
+
+        list_a = client.get(f"/api/save?subject_id={course_a}", headers=auth_headers)
+        assert list_a.status_code == 200
+        assert len(list_a.json()) == 1
+        assert list_a.json()[0]["save_name"] == "legacy_a"
+
+        list_b = client.get(f"/api/save?subject_id={course_b}", headers=auth_headers)
+        assert list_b.status_code == 200
+        assert len(list_b.json()) == 1
+        assert list_b.json()[0]["save_name"] == "legacy_b"

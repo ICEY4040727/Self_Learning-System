@@ -2,7 +2,6 @@
 
 from sqlalchemy import inspect
 
-
 EXPECTED_TABLES = {
     "users",
     "worlds",

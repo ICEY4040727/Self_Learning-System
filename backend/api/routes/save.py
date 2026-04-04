@@ -212,10 +212,32 @@ async def list_save_legacy(
     current_user: User = Depends(get_current_user),
 ):
     query = db.query(Checkpoint).filter(Checkpoint.user_id == current_user.id)
+    session_course_cache: dict[int, int | None] = {}
     if subject_id is not None:
         course = _get_owned_course(db, current_user, subject_id)
         query = query.filter(Checkpoint.world_id == course.world_id)
     checkpoints = query.order_by(Checkpoint.created_at.desc()).all()
+
+    if subject_id is not None:
+        filtered: list[Checkpoint] = []
+        for checkpoint in checkpoints:
+            state = checkpoint.state or {}
+            checkpoint_course_id = state.get("course_id")
+            if checkpoint_course_id is None and checkpoint.session_id is not None:
+                if checkpoint.session_id not in session_course_cache:
+                    session_row = db.query(SessionModel).filter(
+                        SessionModel.id == checkpoint.session_id,
+                        SessionModel.user_id == current_user.id,
+                    ).first()
+                    session_course_cache[checkpoint.session_id] = (
+                        session_row.course_id if session_row else None
+                    )
+                checkpoint_course_id = session_course_cache[checkpoint.session_id]
+
+            if checkpoint_course_id == subject_id:
+                filtered.append(checkpoint)
+        checkpoints = filtered
+
     return [
         LegacySaveSummary(
             id=cp.id,
