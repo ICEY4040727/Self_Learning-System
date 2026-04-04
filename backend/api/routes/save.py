@@ -314,11 +314,17 @@ async def get_world_timelines(
 async def get_world_knowledge_graph(
     world_id: int,
     checkpoint_time: str | None = None,
+    session_id: int | None = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     _get_owned_world(db, current_user, world_id)
-    return knowledge_service.to_d3_graph(db, world_id, checkpoint_time=checkpoint_time)
+    return knowledge_service.to_d3_graph(
+        db,
+        world_id,
+        checkpoint_time=checkpoint_time,
+        session_id=session_id,
+    )
 
 
 @router.get("/checkpoints/{checkpoint_id}")

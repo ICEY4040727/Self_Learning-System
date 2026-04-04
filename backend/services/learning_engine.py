@@ -314,6 +314,7 @@ class LearningEngine:
                 session.world_id,
                 user_message,
                 checkpoint_time=checkpoint_time,
+                session_id=session.id,
             )
             relationship = session.relationship or _default_relationship()
             relationship_stage = relationship.get("stage", "stranger")
@@ -418,6 +419,7 @@ class LearningEngine:
                 user_message,
                 llm_response,
                 emotion,
+                session_id=session.id,
             )
             await self.analyzer.update_learner_profile(
                 user_id=session.user_id,
@@ -430,8 +432,11 @@ class LearningEngine:
                 db=db,
             )
 
-            # 14. Commit DB changes
-            db.commit()
+            # 14. Persist DB changes
+            if own_db:
+                db.commit()
+            else:
+                db.flush()
 
             # 15. Return response
             return {
@@ -445,6 +450,7 @@ class LearningEngine:
             }
 
         except Exception:
+            db.rollback()
             logger.error("Message processing failed", exc_info=True)
             return {
                 "type": "error",

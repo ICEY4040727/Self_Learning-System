@@ -73,6 +73,7 @@ class KnowledgeService:
         self,
         graph: dict[str, Any],
         checkpoint_time: str | None = None,
+        session_id: int | None = None,
     ) -> dict[str, Any]:
         checkpoint_dt = _parse_iso_datetime(checkpoint_time)
         if checkpoint_dt is None:
@@ -85,9 +86,25 @@ class KnowledgeService:
                 continue
             t_valid = _parse_iso_datetime(concept.get("t_valid"))
             t_invalid = _parse_iso_datetime(concept.get("t_invalid"))
+            visible_by_checkpoint = True
             if t_valid and t_valid > checkpoint_dt:
-                continue
+                visible_by_checkpoint = False
             if t_invalid and t_invalid <= checkpoint_dt:
+                visible_by_checkpoint = False
+
+            visible_by_session = False
+            if session_id is not None:
+                for episode in concept.get("episodes") or []:
+                    if not isinstance(episode, dict):
+                        continue
+                    if episode.get("session_id") != session_id:
+                        continue
+                    episode_time = _parse_iso_datetime(episode.get("time"))
+                    if episode_time is None or episode_time >= checkpoint_dt:
+                        visible_by_session = True
+                        break
+
+            if not (visible_by_checkpoint or visible_by_session):
                 continue
 
             copied = dict(concept)
@@ -100,9 +117,11 @@ class KnowledgeService:
                     continue
                 edge_valid = _parse_iso_datetime(edge.get("t_valid"))
                 edge_invalid = _parse_iso_datetime(edge.get("t_invalid"))
-                if edge_valid and edge_valid > checkpoint_dt:
+                edge_session_id = edge.get("session_id")
+                same_session = session_id is not None and edge_session_id == session_id
+                if edge_valid and edge_valid > checkpoint_dt and not same_session:
                     continue
-                if edge_invalid and edge_invalid <= checkpoint_dt:
+                if edge_invalid and edge_invalid <= checkpoint_dt and not same_session:
                     continue
                 copied_edges[target] = dict(edge)
             copied["edges"] = copied_edges
@@ -119,16 +138,17 @@ class KnowledgeService:
         world_id: int,
         query: str,
         checkpoint_time: str | None = None,
+        session_id: int | None = None,
     ) -> str:
         graph = self.get_knowledge(db, world_id)
-        filtered = self._filter_graph_by_time(graph, checkpoint_time)
+        filtered = self._filter_graph_by_time(graph, checkpoint_time, session_id=session_id)
         concepts = filtered.get("concepts", {})
         if not concepts:
             return ""
 
         query_tokens = _extract_concepts(query.lower())
         if not query_tokens:
-            return json.dumps(filtered, ensure_ascii=False)
+            return json.dumps(self._limit_graph(filtered), ensure_ascii=False)
 
         ranked: list[tuple[int, str, dict[str, Any]]] = []
         for concept_id, concept in concepts.items():
@@ -149,8 +169,40 @@ class KnowledgeService:
             "episodes": filtered.get("episodes", []),
         }
         if not selected["concepts"]:
-            selected = filtered
+            selected = self._limit_graph(filtered)
         return json.dumps(selected, ensure_ascii=False)
+
+    def _limit_graph(self, graph: dict[str, Any], max_nodes: int = 20, max_episodes: int = 30) -> dict[str, Any]:
+        concepts = graph.get("concepts") or {}
+        if not isinstance(concepts, dict):
+            return {"concepts": {}, "episodes": []}
+
+        ranked = sorted(
+            concepts.items(),
+            key=lambda item: float(item[1].get("mastery", 0.0)) if isinstance(item[1], dict) else 0.0,
+            reverse=True,
+        )[:max_nodes]
+        selected_ids = {concept_id for concept_id, _ in ranked}
+
+        limited_concepts: dict[str, Any] = {}
+        for concept_id, concept in ranked:
+            if not isinstance(concept, dict):
+                continue
+            copied = dict(concept)
+            copied_edges = {}
+            for target, edge in (concept.get("edges") or {}).items():
+                if target in selected_ids:
+                    copied_edges[target] = edge
+            copied["edges"] = copied_edges
+            limited_concepts[concept_id] = copied
+
+        episodes = graph.get("episodes") or []
+        if isinstance(episodes, list):
+            episodes = episodes[-max_episodes:]
+        else:
+            episodes = []
+
+        return {"concepts": limited_concepts, "episodes": episodes}
 
     def update_after_chat(
         self,
@@ -159,6 +211,7 @@ class KnowledgeService:
         user_msg: str,
         teacher_reply: str,
         emotion: dict[str, Any] | None,
+        session_id: int | None = None,
     ) -> dict[str, Any]:
         row = self.ensure_world_knowledge(db, world_id)
         graph = self.get_knowledge(db, world_id)
@@ -219,17 +272,24 @@ class KnowledgeService:
                 concept.setdefault("t_valid", now)
                 concept["t_invalid"] = None
 
-            concept["episodes"].append(f"chat:{now}")
+            if session_id is not None:
+                concept["last_session_id"] = session_id
+
+            concept_episode: dict[str, Any] = {"type": "chat", "time": now}
+            if session_id is not None:
+                concept_episode["session_id"] = session_id
+            concept["episodes"].append(concept_episode)
             touched.append(concept_id)
 
-        episodes.append(
-            {
-                "time": now,
-                "type": "chat",
-                "emotion": emotion_type,
-                "concepts": touched,
-            }
-        )
+        episode_record: dict[str, Any] = {
+            "time": now,
+            "type": "chat",
+            "emotion": emotion_type,
+            "concepts": touched,
+        }
+        if session_id is not None:
+            episode_record["session_id"] = session_id
+        episodes.append(episode_record)
 
         row.graph = graph
         attributes.flag_modified(row, "graph")
@@ -241,9 +301,10 @@ class KnowledgeService:
         db: Session,
         world_id: int,
         checkpoint_time: str | None = None,
+        session_id: int | None = None,
     ) -> dict[str, Any]:
         graph = self.get_knowledge(db, world_id)
-        filtered = self._filter_graph_by_time(graph, checkpoint_time)
+        filtered = self._filter_graph_by_time(graph, checkpoint_time, session_id=session_id)
         concepts = filtered.get("concepts", {})
 
         nodes = []
