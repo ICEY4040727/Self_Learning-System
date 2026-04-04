@@ -116,6 +116,13 @@ class CourseResponse(CourseCreate):
         from_attributes = True
 
 
+class SubjectLegacyCreate(BaseModel):
+    character_id: int
+    name: str
+    description: str | None = None
+    target_level: str | None = None
+
+
 class LessonPlanCreate(BaseModel):
     course_id: int
     content: str
@@ -768,6 +775,134 @@ def delete_course(
     db.delete(course)
     db.commit()
     return {"message": "Course deleted"}
+
+
+def _resolve_or_create_world_for_character(
+    db: Session,
+    current_user: User,
+    character_id: int,
+) -> int:
+    character = db.query(Character).filter(
+        Character.id == character_id,
+        Character.user_id == current_user.id,
+    ).first()
+    if not character:
+        raise HTTPException(status_code=404, detail="Character not found")
+
+    link = db.query(WorldCharacter).join(
+        World, WorldCharacter.world_id == World.id
+    ).filter(
+        WorldCharacter.character_id == character_id,
+        World.user_id == current_user.id,
+    ).order_by(
+        WorldCharacter.is_primary.desc(),
+        WorldCharacter.id.asc(),
+    ).first()
+    if link:
+        return link.world_id
+
+    world = World(
+        user_id=current_user.id,
+        name=f"{character.name} World",
+        description=f"Auto-created world for {character.name}",
+        scenes={},
+    )
+    db.add(world)
+    db.flush()
+    db.add(
+        WorldCharacter(
+            world_id=world.id,
+            character_id=character.id,
+            role="sage",
+            is_primary=True,
+        )
+    )
+    db.commit()
+    return world.id
+
+
+# Legacy subject endpoints for frontend compatibility.
+@router.post("/subjects", response_model=CourseResponse)
+def create_subject_legacy(
+    payload: SubjectLegacyCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    world_id = _resolve_or_create_world_for_character(db, current_user, payload.character_id)
+    db_course = Course(
+        world_id=world_id,
+        name=payload.name,
+        description=payload.description,
+        target_level=payload.target_level,
+    )
+    db.add(db_course)
+    db.commit()
+    db.refresh(db_course)
+    return db_course
+
+
+@router.get("/subjects", response_model=list[CourseResponse])
+def get_subjects_legacy(
+    character_id: int | None = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    query = db.query(Course).join(
+        World, Course.world_id == World.id
+    ).filter(
+        World.user_id == current_user.id
+    )
+    if character_id is not None:
+        query = query.join(
+            WorldCharacter, WorldCharacter.world_id == Course.world_id
+        ).filter(
+            WorldCharacter.character_id == character_id
+        )
+    return query.distinct().all()
+
+
+@router.get("/subjects/{subject_id}", response_model=CourseResponse)
+def get_subject_legacy(
+    subject_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return get_course(subject_id, db, current_user)
+
+
+@router.put("/subjects/{subject_id}", response_model=CourseResponse)
+def update_subject_legacy(
+    subject_id: int,
+    payload: SubjectLegacyCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    db_course = db.query(Course).join(
+        World, Course.world_id == World.id
+    ).filter(
+        Course.id == subject_id,
+        World.user_id == current_user.id,
+    ).first()
+    if not db_course:
+        raise HTTPException(status_code=404, detail="Course not found")
+
+    world_id = _resolve_or_create_world_for_character(db, current_user, payload.character_id)
+    db_course.world_id = world_id
+    db_course.name = payload.name
+    db_course.description = payload.description
+    db_course.target_level = payload.target_level
+    db.commit()
+    db.refresh(db_course)
+    return db_course
+
+
+@router.delete("/subjects/{subject_id}")
+def delete_subject_legacy(
+    subject_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return delete_course(subject_id, db, current_user)
 
 
 # Learning Diary endpoints

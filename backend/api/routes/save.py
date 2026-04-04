@@ -10,6 +10,7 @@ from backend.models import models as models_module
 from backend.models.models import (
     ChatMessage,
     Checkpoint,
+    Course,
     User,
     World,
 )
@@ -39,6 +40,18 @@ class CheckpointResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class LegacySaveCreate(BaseModel):
+    subject_id: int
+    save_name: str = Field(..., max_length=100, pattern=r"^[a-zA-Z0-9_\-\u4e00-\u9fff]+$")
+    session_id: int | None = None
+
+
+class LegacySaveSummary(BaseModel):
+    id: int
+    save_name: str
+    created_at: datetime
 
 
 @router.post("/checkpoints", response_model=CheckpointResponse)
@@ -154,3 +167,145 @@ async def delete_checkpoint(
     db.delete(checkpoint)
     db.commit()
     return {"message": "Checkpoint deleted"}
+
+
+def _get_owned_course(
+    db: Session,
+    current_user: User,
+    subject_id: int,
+) -> Course:
+    course = db.query(Course).join(
+        World, Course.world_id == World.id
+    ).filter(
+        Course.id == subject_id,
+        World.user_id == current_user.id,
+    ).first()
+    if not course:
+        raise HTTPException(status_code=404, detail="Course not found")
+    return course
+
+
+# Legacy save endpoints for frontend compatibility.
+@router.post("/save")
+async def create_save_legacy(
+    payload: LegacySaveCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    course = _get_owned_course(db, current_user, payload.subject_id)
+    checkpoint = await create_checkpoint(
+        CheckpointCreate(
+            world_id=course.world_id,
+            session_id=payload.session_id,
+            save_name=payload.save_name,
+        ),
+        db,
+        current_user,
+    )
+    return checkpoint
+
+
+@router.get("/save", response_model=list[LegacySaveSummary])
+async def list_save_legacy(
+    subject_id: int | None = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    query = db.query(Checkpoint).filter(Checkpoint.user_id == current_user.id)
+    session_course_cache: dict[int, int | None] = {}
+    if subject_id is not None:
+        course = _get_owned_course(db, current_user, subject_id)
+        query = query.filter(Checkpoint.world_id == course.world_id)
+    checkpoints = query.order_by(Checkpoint.created_at.desc()).all()
+
+    if subject_id is not None:
+        filtered: list[Checkpoint] = []
+        for checkpoint in checkpoints:
+            state = checkpoint.state or {}
+            checkpoint_course_id = state.get("course_id")
+            if checkpoint_course_id is None and checkpoint.session_id is not None:
+                if checkpoint.session_id not in session_course_cache:
+                    session_row = db.query(SessionModel).filter(
+                        SessionModel.id == checkpoint.session_id,
+                        SessionModel.user_id == current_user.id,
+                    ).first()
+                    session_course_cache[checkpoint.session_id] = (
+                        session_row.course_id if session_row else None
+                    )
+                checkpoint_course_id = session_course_cache[checkpoint.session_id]
+
+            if checkpoint_course_id == subject_id:
+                filtered.append(checkpoint)
+        checkpoints = filtered
+
+    return [
+        LegacySaveSummary(
+            id=cp.id,
+            save_name=cp.save_name,
+            created_at=cp.created_at,
+        )
+        for cp in checkpoints
+    ]
+
+
+@router.get("/save/{save_id}")
+async def get_save_legacy(
+    save_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    checkpoint = db.query(Checkpoint).filter(
+        Checkpoint.id == save_id,
+        Checkpoint.user_id == current_user.id,
+    ).first()
+    if not checkpoint:
+        raise HTTPException(status_code=404, detail="Checkpoint not found")
+
+    state = checkpoint.state or {}
+    relationship = state.get("relationship") or models_module._default_relationship()
+    relationship_stage = relationship.get("stage", "stranger")
+    expression = state.get("expression", "default")
+
+    subject_id = state.get("course_id")
+    if subject_id is None and checkpoint.session_id is not None:
+        session_row = db.query(SessionModel).filter(
+            SessionModel.id == checkpoint.session_id,
+            SessionModel.user_id == current_user.id,
+        ).first()
+        if session_row:
+            subject_id = session_row.course_id
+
+    chat_history = []
+    if checkpoint.session_id is not None:
+        messages = db.query(ChatMessage).filter(
+            ChatMessage.session_id == checkpoint.session_id
+        ).order_by(ChatMessage.id.asc()).limit(checkpoint.message_index).all()
+        chat_history = [
+            {
+                "id": m.id,
+                "sender_type": m.sender_type,
+                "content": m.content,
+            }
+            for m in messages
+        ]
+
+    return {
+        "id": checkpoint.id,
+        "save_name": checkpoint.save_name,
+        "created_at": checkpoint.created_at,
+        "data": {
+            "relationship_stage": relationship_stage,
+            "expression": expression,
+            "chat_history": chat_history,
+            "session_meta": {"subject_id": subject_id},
+        },
+    }
+
+
+@router.delete("/save/{save_id}")
+async def delete_save_legacy(
+    save_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return await delete_checkpoint(save_id, db, current_user)

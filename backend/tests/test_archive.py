@@ -34,6 +34,28 @@ class TestCharacterCRUD:
         assert resp.status_code == 200
         assert resp.json()["name"] == "Updated"
 
+    def test_list_characters_filters_by_current_user(self, client, auth_headers):
+        own = client.post("/api/character", json={"name": "OwnerChar"}, headers=auth_headers)
+        assert own.status_code == 200
+
+        client.post("/api/auth/register", json={
+            "username": "other_user",
+            "password": "testpass123",
+        })
+        login = client.post("/api/auth/login", data={
+            "username": "other_user",
+            "password": "testpass123",
+        })
+        other_headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
+        other = client.post("/api/character", json={"name": "OtherChar"}, headers=other_headers)
+        assert other.status_code == 200
+
+        listed = client.get("/api/character", headers=auth_headers)
+        assert listed.status_code == 200
+        names = {item["name"] for item in listed.json()}
+        assert "OwnerChar" in names
+        assert "OtherChar" not in names
+
 
 class TestCourseCRUD:
     def _create_world(self, client, auth_headers):
@@ -63,3 +85,125 @@ class TestCourseCRUD:
         resp = client.get(f"/api/courses?world_id={world_id}", headers=auth_headers)
         assert resp.status_code == 200
         assert len(resp.json()) == 2
+
+
+class TestWorldCharacterCRUD:
+    def _create_world(self, client, auth_headers):
+        resp = client.post(
+            "/api/worlds",
+            json={"name": "World for Bindings", "description": "world"},
+            headers=auth_headers,
+        )
+        assert resp.status_code == 200
+        return resp.json()["id"]
+
+    def _create_character(self, client, auth_headers, name="Socrates", role_type="sage"):
+        resp = client.post(
+            "/api/character",
+            json={"name": name, "type": role_type},
+            headers=auth_headers,
+        )
+        assert resp.status_code == 200
+        return resp.json()["id"]
+
+    def test_bind_list_and_unbind_world_character(self, client, auth_headers):
+        world_id = self._create_world(client, auth_headers)
+        character_id = self._create_character(client, auth_headers)
+
+        bind_resp = client.post(
+            f"/api/worlds/{world_id}/characters",
+            json={"character_id": character_id, "role": "sage", "is_primary": True},
+            headers=auth_headers,
+        )
+        assert bind_resp.status_code == 200
+        assert bind_resp.json()["world_id"] == world_id
+        assert bind_resp.json()["character_id"] == character_id
+        assert bind_resp.json()["role"] == "sage"
+        assert bind_resp.json()["is_primary"] is True
+        assert bind_resp.json()["character_name"] == "Socrates"
+
+        list_resp = client.get(f"/api/worlds/{world_id}/characters", headers=auth_headers)
+        assert list_resp.status_code == 200
+        assert len(list_resp.json()) == 1
+        assert list_resp.json()[0]["character_id"] == character_id
+        assert list_resp.json()[0]["role"] == "sage"
+
+        delete_resp = client.delete(
+            f"/api/worlds/{world_id}/characters/{character_id}",
+            headers=auth_headers,
+        )
+        assert delete_resp.status_code == 200
+
+        list_after_delete = client.get(f"/api/worlds/{world_id}/characters", headers=auth_headers)
+        assert list_after_delete.status_code == 200
+        assert list_after_delete.json() == []
+
+    def test_bind_world_character_rejects_duplicate(self, client, auth_headers):
+        world_id = self._create_world(client, auth_headers)
+        character_id = self._create_character(client, auth_headers)
+
+        first = client.post(
+            f"/api/worlds/{world_id}/characters",
+            json={"character_id": character_id, "role": "sage", "is_primary": False},
+            headers=auth_headers,
+        )
+        assert first.status_code == 200
+
+        second = client.post(
+            f"/api/worlds/{world_id}/characters",
+            json={"character_id": character_id, "role": "sage", "is_primary": False},
+            headers=auth_headers,
+        )
+        assert second.status_code == 409
+
+
+class TestLegacySubjectsCompatibility:
+    def _create_character(self, client, auth_headers, name="LegacyTeacher"):
+        resp = client.post(
+            "/api/character",
+            json={"name": name, "type": "sage"},
+            headers=auth_headers,
+        )
+        assert resp.status_code == 200
+        return resp.json()["id"]
+
+    def test_legacy_subjects_crud_works(self, client, auth_headers):
+        character_id = self._create_character(client, auth_headers)
+
+        create_resp = client.post(
+            "/api/subjects",
+            json={
+                "character_id": character_id,
+                "name": "Legacy Subject",
+                "description": "compat",
+                "target_level": "beginner",
+            },
+            headers=auth_headers,
+        )
+        assert create_resp.status_code == 200
+        subject_id = create_resp.json()["id"]
+
+        list_resp = client.get(f"/api/subjects?character_id={character_id}", headers=auth_headers)
+        assert list_resp.status_code == 200
+        assert len(list_resp.json()) == 1
+        assert list_resp.json()[0]["name"] == "Legacy Subject"
+
+        detail_resp = client.get(f"/api/subjects/{subject_id}", headers=auth_headers)
+        assert detail_resp.status_code == 200
+        assert detail_resp.json()["id"] == subject_id
+
+        update_resp = client.put(
+            f"/api/subjects/{subject_id}",
+            json={
+                "character_id": character_id,
+                "name": "Legacy Subject Updated",
+                "description": "updated",
+                "target_level": "intermediate",
+            },
+            headers=auth_headers,
+        )
+        assert update_resp.status_code == 200
+        assert update_resp.json()["name"] == "Legacy Subject Updated"
+
+        delete_resp = client.delete(f"/api/subjects/{subject_id}", headers=auth_headers)
+        assert delete_resp.status_code == 200
