@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
@@ -8,15 +8,19 @@ from backend.api.routes.auth import get_current_user
 from backend.db.database import get_db
 from backend.models import models as models_module
 from backend.models.models import (
+    Character,
     ChatMessage,
     Checkpoint,
     Course,
+    LearnerProfile,
+    TeacherPersona,
     User,
     World,
 )
 from backend.models.models import (
     Session as SessionModel,
 )
+from backend.services.knowledge import knowledge_service
 
 router = APIRouter()
 
@@ -52,6 +56,10 @@ class LegacySaveSummary(BaseModel):
     id: int
     save_name: str
     created_at: datetime
+
+
+class BranchRequest(BaseModel):
+    branch_name: str | None = None
 
 
 @router.post("/checkpoints", response_model=CheckpointResponse)
@@ -124,6 +132,193 @@ async def list_checkpoints(
     if world_id is not None:
         query = query.filter(Checkpoint.world_id == world_id)
     return query.order_by(Checkpoint.created_at.desc()).all()
+
+
+def _get_owned_world(db: Session, current_user: User, world_id: int) -> World:
+    world = db.query(World).filter(
+        World.id == world_id,
+        World.user_id == current_user.id,
+    ).first()
+    if not world:
+        raise HTTPException(status_code=404, detail="World not found")
+    return world
+
+
+@router.get("/worlds/{world_id}/checkpoints", response_model=list[CheckpointResponse])
+async def list_world_checkpoints(
+    world_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _get_owned_world(db, current_user, world_id)
+    return await list_checkpoints(world_id, db, current_user)
+
+
+@router.post("/checkpoints/{checkpoint_id}/branch")
+async def branch_from_checkpoint(
+    checkpoint_id: int,
+    payload: BranchRequest | None = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    checkpoint = db.query(Checkpoint).filter(
+        Checkpoint.id == checkpoint_id,
+        Checkpoint.user_id == current_user.id,
+    ).first()
+    if not checkpoint:
+        raise HTTPException(status_code=404, detail="Checkpoint not found")
+
+    _get_owned_world(db, current_user, checkpoint.world_id)
+    state = checkpoint.state or {}
+
+    source_session = None
+    if checkpoint.session_id is not None:
+        source_session = db.query(SessionModel).filter(
+            SessionModel.id == checkpoint.session_id,
+            SessionModel.user_id == current_user.id,
+        ).first()
+
+    course_id = state.get("course_id")
+    if course_id is None and source_session is not None:
+        course_id = source_session.course_id
+    if course_id is None:
+        raise HTTPException(status_code=400, detail="Checkpoint missing course context")
+
+    course = _get_owned_course(db, current_user, int(course_id))
+    if course.world_id != checkpoint.world_id:
+        raise HTTPException(status_code=400, detail="Checkpoint world/course mismatch")
+
+    sage_character_id = state.get("sage_character_id")
+    traveler_character_id = state.get("traveler_character_id")
+    relationship = state.get("relationship")
+    if not isinstance(relationship, dict):
+        relationship = (
+            source_session.relationship
+            if source_session and isinstance(source_session.relationship, dict)
+            else models_module._default_relationship()
+        )
+
+    teacher_persona_id = None
+    if sage_character_id is not None:
+        character = db.query(Character).filter(
+            Character.id == int(sage_character_id),
+            Character.user_id == current_user.id,
+        ).first()
+        if character:
+            persona = db.query(TeacherPersona).filter(
+                TeacherPersona.character_id == character.id,
+                TeacherPersona.is_active == True,
+            ).order_by(TeacherPersona.id.asc()).first()
+            if persona:
+                teacher_persona_id = persona.id
+
+    learner_profile = db.query(LearnerProfile).filter(
+        LearnerProfile.user_id == current_user.id,
+        LearnerProfile.world_id == checkpoint.world_id,
+    ).order_by(LearnerProfile.id.desc()).first()
+
+    branch_name = (
+        payload.branch_name
+        if payload and payload.branch_name
+        else f"checkpoint-{checkpoint_id}-{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}"
+    )
+
+    new_session = SessionModel(
+        course_id=course.id,
+        user_id=current_user.id,
+        world_id=checkpoint.world_id,
+        sage_character_id=int(sage_character_id) if sage_character_id is not None else None,
+        traveler_character_id=int(traveler_character_id) if traveler_character_id is not None else None,
+        teacher_persona_id=teacher_persona_id,
+        learner_profile_id=learner_profile.id if learner_profile else None,
+        relationship=relationship,
+        parent_checkpoint_id=checkpoint.id,
+        branch_name=branch_name,
+    )
+    db.add(new_session)
+    db.flush()
+
+    if source_session is not None:
+        messages = db.query(ChatMessage).filter(
+            ChatMessage.session_id == source_session.id
+        ).order_by(ChatMessage.id.asc()).limit(checkpoint.message_index).all()
+        for msg in messages:
+            db.add(
+                ChatMessage(
+                    session_id=new_session.id,
+                    sender_type=msg.sender_type,
+                    sender_id=msg.sender_id,
+                    content=msg.content,
+                    timestamp=msg.timestamp,
+                    emotion_analysis=msg.emotion_analysis,
+                    used_memory_ids=msg.used_memory_ids,
+                )
+            )
+
+    db.commit()
+    db.refresh(new_session)
+    return {
+        "session_id": new_session.id,
+        "course_id": new_session.course_id,
+        "world_id": new_session.world_id,
+        "parent_checkpoint_id": new_session.parent_checkpoint_id,
+        "branch_name": new_session.branch_name,
+    }
+
+
+@router.get("/worlds/{world_id}/timelines")
+async def get_world_timelines(
+    world_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _get_owned_world(db, current_user, world_id)
+
+    sessions = db.query(SessionModel).filter(
+        SessionModel.user_id == current_user.id,
+        SessionModel.world_id == world_id,
+    ).order_by(SessionModel.started_at.asc()).all()
+    checkpoints = db.query(Checkpoint).filter(
+        Checkpoint.user_id == current_user.id,
+        Checkpoint.world_id == world_id,
+    ).order_by(Checkpoint.created_at.asc()).all()
+
+    return {
+        "world_id": world_id,
+        "sessions": [
+            {
+                "id": s.id,
+                "course_id": s.course_id,
+                "parent_checkpoint_id": s.parent_checkpoint_id,
+                "branch_name": s.branch_name,
+                "started_at": s.started_at,
+                "ended_at": s.ended_at,
+                "relationship_stage": (s.relationship or {}).get("stage", "stranger"),
+            }
+            for s in sessions
+        ],
+        "checkpoints": [
+            {
+                "id": cp.id,
+                "session_id": cp.session_id,
+                "save_name": cp.save_name,
+                "message_index": cp.message_index,
+                "created_at": cp.created_at,
+            }
+            for cp in checkpoints
+        ],
+    }
+
+
+@router.get("/worlds/{world_id}/knowledge-graph")
+async def get_world_knowledge_graph(
+    world_id: int,
+    checkpoint_time: str | None = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _get_owned_world(db, current_user, world_id)
+    return knowledge_service.to_d3_graph(db, world_id, checkpoint_time=checkpoint_time)
 
 
 @router.get("/checkpoints/{checkpoint_id}")

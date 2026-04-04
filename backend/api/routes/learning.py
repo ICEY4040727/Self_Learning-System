@@ -35,6 +35,8 @@ class ChatResponse(BaseModel):
     choices: list[str] | None = None
     emotion: dict | None = None
     relationship_stage: str | None = None
+    relationship: dict | None = None
+    relationship_events: list[dict] | None = None
     expression_hint: str | None = None  # "happy", "thinking", "concerned", "default"
 
 
@@ -93,21 +95,31 @@ async def start_learning(
 
     if existing:
         teacher_persona = None
-        character = None
+        sage_character = None
+        traveler_character = None
         if existing.teacher_persona_id:
             teacher_persona = db.query(TeacherPersona).filter(
                 TeacherPersona.id == existing.teacher_persona_id
             ).first()
             if teacher_persona:
-                character = db.query(Character).filter(Character.id == teacher_persona.character_id).first()
-        stage = existing.relationship_stage
+                sage_character = db.query(Character).filter(Character.id == teacher_persona.character_id).first()
+        if existing.sage_character_id and not sage_character:
+            sage_character = db.query(Character).filter(Character.id == existing.sage_character_id).first()
+        if existing.traveler_character_id:
+            traveler_character = db.query(Character).filter(Character.id == existing.traveler_character_id).first()
+        relationship = existing.relationship or _default_relationship()
+        stage = relationship.get("stage", "stranger")
         return {
             "session_id": existing.id,
             "teacher_persona": teacher_persona.name if teacher_persona else None,
             "course": course.name,
             "relationship_stage": stage,
+            "relationship": relationship,
             "greeting": _get_greeting(stage, teacher_persona.name if teacher_persona else None),
-            "character_sprites": character.sprites if character else None,
+            "scenes": course.world.scenes if course.world and course.world.scenes else {},
+            "sage_sprites": sage_character.sprites if sage_character else None,
+            "traveler_sprites": traveler_character.sprites if traveler_character else None,
+            "character_sprites": sage_character.sprites if sage_character else None,
         }
 
     sage_link = db.query(WorldCharacter).filter(
@@ -151,18 +163,25 @@ async def start_learning(
     db.commit()
     db.refresh(db_session)
 
-    # Get character for sprites
-    character = None
-    if teacher_persona:
-        character = db.query(Character).filter(Character.id == teacher_persona.character_id).first()
+    # Get characters for sprites
+    sage_character = None
+    traveler_character = None
+    if sage_character_id is not None:
+        sage_character = db.query(Character).filter(Character.id == sage_character_id).first()
+    if traveler_character_id is not None:
+        traveler_character = db.query(Character).filter(Character.id == traveler_character_id).first()
 
     return {
         "session_id": db_session.id,
         "teacher_persona": teacher_persona.name if teacher_persona else None,
         "course": course.name,
         "relationship_stage": "stranger",
+        "relationship": db_session.relationship,
         "greeting": _get_greeting("stranger", teacher_persona.name if teacher_persona else None),
-        "character_sprites": character.sprites if character else None,
+        "scenes": course.world.scenes if course.world and course.world.scenes else {},
+        "sage_sprites": sage_character.sprites if sage_character else None,
+        "traveler_sprites": traveler_character.sprites if traveler_character else None,
+        "character_sprites": sage_character.sprites if sage_character else None,
     }
 
 
@@ -217,7 +236,8 @@ async def send_message(
         session_id=db_session.id,
         user_message=chat_request.message,
         user_api_key=user_api_key,
-        provider=provider
+        provider=provider,
+        db=db,
     )
 
     # Save user message to database
@@ -248,6 +268,8 @@ async def send_message(
         reply=result.get("reply", ""),
         emotion=result.get("emotion"),
         relationship_stage=result.get("relationship_stage"),
+        relationship=result.get("relationship"),
+        relationship_events=result.get("relationship_events"),
         expression_hint=expression,
     )
 

@@ -3,23 +3,28 @@
 import json
 import logging
 import re
+from types import SimpleNamespace
 
-from sqlalchemy import func as sqlfunc
+from sqlalchemy.orm import Session
 
 from backend.db.database import SessionLocal
 from backend.models.models import (
+    Character,
     ChatMessage,
+    Checkpoint,
     LearnerProfile,
-    ProgressTracking,
     RelationshipStageRecord,
     TeacherPersona,
+    _default_relationship,
 )
 from backend.models.models import (
     Session as SessionModel,
 )
 from backend.services.dynamic_analyzer import DynamicAnalyzer
+from backend.services.knowledge import knowledge_service
 from backend.services.llm.adapter import get_llm_adapter
 from backend.services.memory import memory_service
+from backend.services.relationship import relationship_service
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +37,8 @@ class LearningEngine:
     def __init__(self):
         self.memory = memory_service
         self.analyzer = DynamicAnalyzer()
+        self.knowledge = knowledge_service
+        self.relationship = relationship_service
 
     # ------------------------------------------------------------------
     # Relationship stage prompts
@@ -103,6 +110,7 @@ class LearningEngine:
         self,
         teacher_persona: TeacherPersona,
         relationship_stage: str,
+        relationship_instructions: str = "",
         learner_profile: LearnerProfile | None = None,
         retrieved_memories: list[dict] = None,
         prev_emotion: dict | None = None,
@@ -116,6 +124,7 @@ class LearningEngine:
         """
         static = self._build_static_layer(teacher_persona)
         dynamic = self._build_dynamic_layer(
+            relationship_instructions,
             relationship_stage, learner_profile, retrieved_memories,
             prev_emotion, mastery_level, knowledge_context,
         )
@@ -146,6 +155,7 @@ class LearningEngine:
 
     def _build_dynamic_layer(
         self,
+        relationship_instructions: str,
         relationship_stage: str,
         learner_profile: LearnerProfile | None,
         retrieved_memories: list[dict] | None,
@@ -159,6 +169,8 @@ class LearningEngine:
         # 1. Relationship stage
         stage_text = self.STAGE_PROMPTS.get(relationship_stage, self.STAGE_PROMPTS["stranger"])
         parts.append(f"【当前关系阶段：{relationship_stage}】\n{stage_text}")
+        if relationship_instructions:
+            parts.append(f"【关系维度指令】\n{relationship_instructions}")
 
         # 2. Adaptive scaffold (Fuzzy Logic ZPD)
         emotion_type = prev_emotion.get("emotion_type", "neutral") if prev_emotion else "neutral"
@@ -222,10 +234,14 @@ class LearningEngine:
         session_id: int,
         user_message: str,
         user_api_key: str = None,
-        provider: str = "claude"
+        provider: str = "claude",
+        db: Session | None = None,
     ) -> dict:
         """Process user message and generate teacher response"""
-        db = SessionLocal()
+        own_db = False
+        if db is None:
+            db = SessionLocal()
+            own_db = True
 
         try:
             # 1. Get session context
@@ -241,7 +257,17 @@ class LearningEngine:
                 ).first()
 
             if not teacher_persona:
-                return {"type": "error", "reply": "未配置教师人格"}
+                fallback_name = "老师"
+                if session.sage_character_id:
+                    sage_character = db.query(Character).filter(
+                        Character.id == session.sage_character_id
+                    ).first()
+                    if sage_character and sage_character.name:
+                        fallback_name = sage_character.name
+                teacher_persona = SimpleNamespace(
+                    name=f"{fallback_name}导师",
+                    system_prompt_template=None,
+                )
 
             # 3. Get learner profile
             learner_profile = None
@@ -268,23 +294,38 @@ class LearningEngine:
             if last_user_msg and last_user_msg.emotion_analysis:
                 prev_emotion = last_user_msg.emotion_analysis
 
-            # 4.6 Get average mastery_level for this course (for scaffold computation)
-            mastery_level = 50  # default
-            if session.course_id:
-                avg = db.query(sqlfunc.avg(ProgressTracking.mastery_level)).filter(
-                    ProgressTracking.course_id == session.course_id,
-                    ProgressTracking.user_id == session.user_id,
-                ).scalar()
-                if avg is not None:
-                    mastery_level = int(avg)
+            checkpoint_time = None
+            if session.parent_checkpoint_id:
+                checkpoint = db.query(Checkpoint).filter(
+                    Checkpoint.id == session.parent_checkpoint_id
+                ).first()
+                checkpoint_time = checkpoint.created_at.isoformat() if checkpoint else None
 
-            # 4.7 Knowledge graph context (stub — Phase 1 will implement)
-            knowledge_context = ""
+            knowledge_graph = self.knowledge.get_knowledge(db, session.world_id)
+            concept_mastery = [
+                float(item.get("mastery", 0.0))
+                for item in (knowledge_graph.get("concepts") or {}).values()
+                if isinstance(item, dict) and isinstance(item.get("mastery"), (int, float))
+            ]
+            mastery_level = int(sum(concept_mastery) / len(concept_mastery) * 100) if concept_mastery else 50
+
+            knowledge_context = self.knowledge.get_relevant_context(
+                db,
+                session.world_id,
+                user_message,
+                checkpoint_time=checkpoint_time,
+            )
+            relationship = session.relationship or _default_relationship()
+            relationship_stage = relationship.get("stage", "stranger")
+            relationship_instructions = self.relationship.get_instructions(
+                relationship.get("dimensions", {})
+            )
 
             # 5. Build dynamic system prompt (dual-layer architecture + ZPD scaffold)
             system_prompt = self.build_system_prompt(
                 teacher_persona,
-                session.relationship_stage or "stranger",
+                relationship_stage,
+                relationship_instructions,
                 learner_profile,
                 retrieved_memories,
                 prev_emotion,
@@ -335,17 +376,26 @@ class LearningEngine:
             # 9. Analyze emotion (LLM-based when API key available, local fallback)
             emotion = await self.analyzer.analyze_emotion(user_message, user_api_key, provider)
 
-            # 10. Update relationship stage
-            new_stage = await self.analyzer.update_relationship_stage(session_id, emotion, db)
-            if new_stage != session.relationship_stage:
-                session.relationship_stage = new_stage
+            # 10. Update relationship dimensions/stage
+            old_relationship = dict(session.relationship or _default_relationship())
+            updated_relationship = self.relationship.update_dimensions(
+                session,
+                user_message,
+                emotion,
+                episode_type="chat",
+            )
+            session.relationship = updated_relationship
+            new_stage = updated_relationship.get("stage", "stranger")
+            old_stage = old_relationship.get("stage", "stranger")
+            if new_stage != old_stage:
                 # Record stage change
                 stage_record = RelationshipStageRecord(
                     session_id=session_id,
                     stage=new_stage,
-                    reason=f"情感分析: {emotion['emotion_type']}, 消息数: {len(chat_history)}"
+                    reason=f"关系维度更新触发阶段变化: {old_stage} -> {new_stage}"
                 )
                 db.add(stage_record)
+            relationship_events = self.relationship.check_events(old_relationship, updated_relationship)
 
             # 11. Store user message in memory
             user_memory_id = self.memory.add_memory(
@@ -361,7 +411,24 @@ class LearningEngine:
                 {"type": "teacher"}
             )
 
-            # 13. Knowledge graph update (stub — Phase 1 will implement)
+            # 13. Update knowledge graph and learner profile
+            self.knowledge.update_after_chat(
+                db,
+                session.world_id,
+                user_message,
+                llm_response,
+                emotion,
+            )
+            await self.analyzer.update_learner_profile(
+                user_id=session.user_id,
+                world_id=session.world_id,
+                interaction={
+                    "message": user_message,
+                    "emotion_type": emotion.get("emotion_type"),
+                    "confidence": emotion.get("confidence"),
+                },
+                db=db,
+            )
 
             # 14. Commit DB changes
             db.commit()
@@ -371,7 +438,9 @@ class LearningEngine:
                 "type": "text",
                 "reply": llm_response,
                 "emotion": emotion,
-                "relationship_stage": session.relationship_stage,
+                "relationship_stage": new_stage,
+                "relationship": updated_relationship,
+                "relationship_events": relationship_events,
                 "used_memory_ids": [user_memory_id, teacher_memory_id]
             }
 
@@ -382,7 +451,8 @@ class LearningEngine:
                 "reply": "处理消息时出错，请重试"
             }
         finally:
-            db.close()
+            if own_db:
+                db.close()
 
 
 # Global instance

@@ -118,6 +118,12 @@ class CourseResponse(CourseCreate):
         from_attributes = True
 
 
+class CourseInWorldCreate(BaseModel):
+    name: str
+    description: str | None = None
+    target_level: str | None = None
+
+
 class SubjectLegacyCreate(BaseModel):
     character_id: int
     name: str
@@ -701,6 +707,34 @@ def update_learner_profile(
 
 
 # Course endpoints
+@router.post("/worlds/{world_id}/courses", response_model=CourseResponse)
+def create_world_course(
+    world_id: int,
+    course: CourseInWorldCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return create_course(
+        CourseCreate(
+            world_id=world_id,
+            name=course.name,
+            description=course.description,
+            target_level=course.target_level,
+        ),
+        db,
+        current_user,
+    )
+
+
+@router.get("/worlds/{world_id}/courses", response_model=list[CourseResponse])
+def get_world_courses(
+    world_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return get_courses(world_id, db, current_user)
+
+
 @router.post("/courses", response_model=CourseResponse)
 def create_course(
     course: CourseCreate,

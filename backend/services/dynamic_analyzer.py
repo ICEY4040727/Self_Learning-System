@@ -287,5 +287,57 @@ class DynamicAnalyzer:
                 db.close()
 
     async def update_learner_profile(self, user_id: int, world_id: int, interaction: dict, db=None):
-        """Update learner profile based on interaction data"""
-        pass
+        """Update learner profile based on interaction data."""
+        from backend.db.database import SessionLocal
+        from backend.models.models import LearnerProfile
+
+        own_db = False
+        if not db:
+            db = SessionLocal()
+            own_db = True
+
+        try:
+            profile_row = db.query(LearnerProfile).filter(
+                LearnerProfile.user_id == user_id,
+                LearnerProfile.world_id == world_id,
+            ).first()
+            if not profile_row:
+                profile_row = LearnerProfile(
+                    user_id=user_id,
+                    world_id=world_id,
+                    profile={"preferences": {}, "affect": {}, "metacognition": {}},
+                )
+                db.add(profile_row)
+                db.flush()
+
+            profile = profile_row.profile if isinstance(profile_row.profile, dict) else {}
+            preferences = dict(profile.get("preferences") or {})
+            affect = dict(profile.get("affect") or {})
+            metacognition = dict(profile.get("metacognition") or {})
+
+            emotion_type = (interaction or {}).get("emotion_type")
+            if emotion_type:
+                affect["last_emotion"] = emotion_type
+                affect[f"count_{emotion_type}"] = int(affect.get(f"count_{emotion_type}", 0)) + 1
+
+            user_message = str((interaction or {}).get("message", "")).strip()
+            if "例子" in user_message or "example" in user_message.lower():
+                preferences["example_first"] = True
+            if "步骤" in user_message or "step" in user_message.lower():
+                preferences["step_by_step"] = True
+
+            confidence = (interaction or {}).get("confidence")
+            if isinstance(confidence, (int, float)):
+                metacognition["self_confidence"] = round(float(confidence), 3)
+
+            profile_row.profile = {
+                "preferences": preferences,
+                "affect": affect,
+                "metacognition": metacognition,
+            }
+            db.flush()
+            return profile_row.profile
+        finally:
+            if own_db:
+                db.commit()
+                db.close()

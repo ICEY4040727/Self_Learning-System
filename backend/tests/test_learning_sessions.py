@@ -54,7 +54,17 @@ class TestCourseSessionRelationship:
         assert listed.json()[0]["relationship_stage"] == "mentor"
 
     def test_start_learning_returns_bound_sage_persona(self, client, auth_headers):
-        world_id = _create_world(client, auth_headers)
+        world_resp = client.post(
+            "/api/worlds",
+            json={
+                "name": "Session World with Scene",
+                "description": "world",
+                "scenes": {"default": "/scenes/academy.png"},
+            },
+            headers=auth_headers,
+        )
+        assert world_resp.status_code == 200
+        world_id = world_resp.json()["id"]
         course_id = _create_course(client, auth_headers, world_id)
 
         character_resp = client.post(
@@ -88,11 +98,34 @@ class TestCourseSessionRelationship:
         )
         assert bind_resp.status_code == 200
 
+        traveler_resp = client.post(
+            "/api/character",
+            json={
+                "name": "Traveler",
+                "type": "traveler",
+                "sprites": {"default": "/sprites/traveler-default.png"},
+            },
+            headers=auth_headers,
+        )
+        assert traveler_resp.status_code == 200
+        traveler_id = traveler_resp.json()["id"]
+
+        bind_traveler_resp = client.post(
+            f"/api/worlds/{world_id}/characters",
+            json={"character_id": traveler_id, "role": "traveler", "is_primary": True},
+            headers=auth_headers,
+        )
+        assert bind_traveler_resp.status_code == 200
+
         start_resp = client.post(f"/api/courses/{course_id}/start", headers=auth_headers)
         assert start_resp.status_code == 200
         payload = start_resp.json()
         assert payload["teacher_persona"] == "Socratic Mentor"
         assert payload["relationship_stage"] == "stranger"
+        assert payload["relationship"]["dimensions"]["trust"] == 0.0
+        assert payload["scenes"] == {"default": "/scenes/academy.png"}
+        assert payload["sage_sprites"] == {"default": "/sprites/socrates-default.png"}
+        assert payload["traveler_sprites"] == {"default": "/sprites/traveler-default.png"}
         assert payload["character_sprites"] == {"default": "/sprites/socrates-default.png"}
 
     def test_legacy_subject_chat_endpoint_is_available(self, client, auth_headers):
@@ -109,3 +142,25 @@ class TestCourseSessionRelationship:
         )
         assert chat_resp.status_code == 200
         assert "reply" in chat_resp.json()
+
+    def test_chat_updates_world_knowledge_graph(self, client, auth_headers):
+        world_id = _create_world(client, auth_headers)
+        course_id = _create_course(client, auth_headers, world_id)
+
+        start_resp = client.post(f"/api/courses/{course_id}/start", headers=auth_headers)
+        assert start_resp.status_code == 200
+
+        chat_resp = client.post(
+            f"/api/courses/{course_id}/chat",
+            json={"message": "今天我想学习递归和终止条件"},
+            headers=auth_headers,
+        )
+        assert chat_resp.status_code == 200
+
+        graph_resp = client.get(f"/api/worlds/{world_id}/knowledge-graph", headers=auth_headers)
+        assert graph_resp.status_code == 200
+        payload = graph_resp.json()
+        assert "nodes" in payload
+        assert "edges" in payload
+        assert isinstance(payload["nodes"], list)
+        assert len(payload["nodes"]) >= 1
