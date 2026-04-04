@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from backend.api.routes.auth import get_current_user
 from backend.db.database import get_db
-from backend.models.models import Checkpoint, ChatMessage, User, World
+from backend.models.models import Checkpoint, ChatMessage, User, World, _default_relationship
 from backend.models.models import Session as SessionModel
 
 router = APIRouter()
@@ -31,19 +31,6 @@ class CheckpointResponse(BaseModel):
 
     class Config:
         from_attributes = True
-
-
-def _default_relationship() -> dict:
-    return {
-        "dimensions": {
-            "trust": 0.0,
-            "familiarity": 0.0,
-            "respect": 0.0,
-            "comfort": 0.0,
-        },
-        "stage": "stranger",
-        "history": [],
-    }
 
 
 @router.post("/checkpoints", response_model=CheckpointResponse)

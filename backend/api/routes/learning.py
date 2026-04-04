@@ -16,6 +16,7 @@ from backend.models.models import (
     User,
     World,
     WorldCharacter,
+    _default_relationship,
 )
 from backend.models.models import Session as SessionModel
 from backend.services.learning_engine import learning_engine
@@ -63,27 +64,6 @@ def _get_greeting(stage: str, persona_name: str | None) -> str:
     return template.format(name=persona_name or "老师")
 
 
-def _relationship_stage(relationship: dict | None) -> str:
-    if isinstance(relationship, dict):
-        stage = relationship.get("stage")
-        if isinstance(stage, str) and stage:
-            return stage
-    return "stranger"
-
-
-def _default_relationship() -> dict:
-    return {
-        "dimensions": {
-            "trust": 0.0,
-            "familiarity": 0.0,
-            "respect": 0.0,
-            "comfort": 0.0,
-        },
-        "stage": "stranger",
-        "history": [],
-    }
-
-
 class ToolConfirmRequest(BaseModel):
     tool: str
     query: str
@@ -120,7 +100,7 @@ async def start_learning(
             ).first()
             if teacher_persona:
                 character = db.query(Character).filter(Character.id == teacher_persona.character_id).first()
-        stage = _relationship_stage(existing.relationship)
+        stage = existing.relationship_stage
         return {
             "session_id": existing.id,
             "teacher_persona": teacher_persona.name if teacher_persona else None,
@@ -180,6 +160,7 @@ async def start_learning(
         "session_id": db_session.id,
         "teacher_persona": teacher_persona.name if teacher_persona else None,
         "course": course.name,
+        "relationship_stage": "stranger",
         "greeting": _get_greeting("stranger", teacher_persona.name if teacher_persona else None),
         "character_sprites": character.sprites if character else None,
     }
@@ -346,7 +327,7 @@ async def list_sessions(
             "id": s.id,
             "started_at": s.started_at,
             "ended_at": s.ended_at,
-            "relationship_stage": _relationship_stage(s.relationship),
+            "relationship_stage": s.relationship_stage,
             "course_name": s.course.name if s.course else None,
         }
         for s in sessions

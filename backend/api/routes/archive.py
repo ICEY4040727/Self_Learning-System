@@ -16,6 +16,7 @@ from backend.models.models import (
     TeacherPersona,
     User,
     World,
+    WorldCharacter,
 )
 from backend.services import spaced_repetition
 
@@ -49,6 +50,24 @@ class WorldCreate(BaseModel):
 class WorldResponse(WorldCreate):
     id: int
     user_id: int
+
+    class Config:
+        from_attributes = True
+
+
+class WorldCharacterCreate(BaseModel):
+    character_id: int
+    role: str = Field(..., pattern=r"^(sage|traveler)$")
+    is_primary: bool = False
+
+
+class WorldCharacterResponse(BaseModel):
+    id: int
+    world_id: int
+    character_id: int
+    role: str
+    is_primary: bool
+    character_name: str | None = None
 
     class Config:
         from_attributes = True
@@ -163,7 +182,6 @@ def get_characters(
     current_user: User = Depends(get_current_user)
 ):
     return db.query(Character).filter(
-        Character.user_id == current_user.id,
         Character.user_id == current_user.id
     ).all()
 
@@ -307,6 +325,112 @@ def delete_world(
     db.delete(world)
     db.commit()
     return {"message": "World deleted"}
+
+
+# WorldCharacter endpoints
+@router.post("/worlds/{world_id}/characters", response_model=WorldCharacterResponse)
+def create_world_character(
+    world_id: int,
+    wc: WorldCharacterCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    world = db.query(World).filter(
+        World.id == world_id,
+        World.user_id == current_user.id,
+    ).first()
+    if not world:
+        raise HTTPException(status_code=404, detail="World not found")
+
+    character = db.query(Character).filter(
+        Character.id == wc.character_id,
+        Character.user_id == current_user.id,
+    ).first()
+    if not character:
+        raise HTTPException(status_code=404, detail="Character not found")
+
+    existing = db.query(WorldCharacter).filter(
+        WorldCharacter.world_id == world_id,
+        WorldCharacter.character_id == wc.character_id,
+    ).first()
+    if existing:
+        raise HTTPException(status_code=409, detail="Character already bound to this world")
+
+    db_wc = WorldCharacter(
+        world_id=world_id,
+        character_id=wc.character_id,
+        role=wc.role,
+        is_primary=wc.is_primary,
+    )
+    db.add(db_wc)
+    db.commit()
+    db.refresh(db_wc)
+    return WorldCharacterResponse(
+        id=db_wc.id,
+        world_id=db_wc.world_id,
+        character_id=db_wc.character_id,
+        role=db_wc.role,
+        is_primary=db_wc.is_primary,
+        character_name=character.name,
+    )
+
+
+@router.get("/worlds/{world_id}/characters", response_model=list[WorldCharacterResponse])
+def get_world_characters(
+    world_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    world = db.query(World).filter(
+        World.id == world_id,
+        World.user_id == current_user.id,
+    ).first()
+    if not world:
+        raise HTTPException(status_code=404, detail="World not found")
+
+    links = (
+        db.query(WorldCharacter)
+        .filter(WorldCharacter.world_id == world_id)
+        .all()
+    )
+    result = []
+    for link in links:
+        char = db.query(Character).filter(Character.id == link.character_id).first()
+        result.append(WorldCharacterResponse(
+            id=link.id,
+            world_id=link.world_id,
+            character_id=link.character_id,
+            role=link.role,
+            is_primary=link.is_primary,
+            character_name=char.name if char else None,
+        ))
+    return result
+
+
+@router.delete("/worlds/{world_id}/characters/{character_id}")
+def delete_world_character(
+    world_id: int,
+    character_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    world = db.query(World).filter(
+        World.id == world_id,
+        World.user_id == current_user.id,
+    ).first()
+    if not world:
+        raise HTTPException(status_code=404, detail="World not found")
+
+    link = db.query(WorldCharacter).filter(
+        WorldCharacter.world_id == world_id,
+        WorldCharacter.character_id == character_id,
+    ).first()
+    if not link:
+        raise HTTPException(status_code=404, detail="WorldCharacter binding not found")
+
+    db.delete(link)
+    db.commit()
+    return {"message": "Character unbound from world"}
 
 
 # Character sprite upload

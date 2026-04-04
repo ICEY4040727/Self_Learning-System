@@ -12,7 +12,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
 )
-from sqlalchemy.orm import relationship as orm_relationship
+from sqlalchemy.orm import attributes, relationship as orm_relationship
 
 from backend.db.database import Base
 
@@ -138,7 +138,7 @@ class LearnerProfile(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    world_id = Column(Integer, ForeignKey("worlds.id"), nullable=False)
+    world_id = Column(Integer, ForeignKey("worlds.id", ondelete="CASCADE"), nullable=False)
     profile = Column(JSON, nullable=False, default=dict)
     created_at = Column(DateTime, default=_utcnow)
     updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow)
@@ -225,9 +225,9 @@ class Session(Base):
     __tablename__ = "sessions"
 
     id = Column(Integer, primary_key=True, index=True)
-    course_id = Column(Integer, ForeignKey("courses.id"), nullable=False)
+    course_id = Column(Integer, ForeignKey("courses.id", ondelete="CASCADE"), nullable=False)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    world_id = Column(Integer, ForeignKey("worlds.id"), nullable=False)
+    world_id = Column(Integer, ForeignKey("worlds.id", ondelete="CASCADE"), nullable=False)
     sage_character_id = Column(Integer, ForeignKey("characters.id"), nullable=True)
     traveler_character_id = Column(Integer, ForeignKey("characters.id"), nullable=True)
     started_at = Column(DateTime, default=_utcnow)
@@ -258,6 +258,7 @@ class Session(Base):
         rel = dict(self.relationship or _default_relationship())
         rel["stage"] = stage or "stranger"
         self.relationship = rel
+        attributes.flag_modified(self, "relationship")
 
 
 class ChatMessage(Base):
@@ -292,7 +293,7 @@ class Checkpoint(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    world_id = Column(Integer, ForeignKey("worlds.id"), nullable=False)
+    world_id = Column(Integer, ForeignKey("worlds.id", ondelete="CASCADE"), nullable=False)
     session_id = Column(Integer, ForeignKey("sessions.id"), nullable=True)
     save_name = Column(String(100), nullable=False)
     message_index = Column(Integer, nullable=False, default=0)
