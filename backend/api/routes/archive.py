@@ -10,6 +10,7 @@ from backend.models.models import (
     Character,
     Course,
     FSRSState,
+    Knowledge,
     LearnerProfile,
     LearningDiary,
     ProgressTracking,
@@ -262,6 +263,13 @@ def create_world(
         scenes=world.scenes or {},
     )
     db.add(db_world)
+    db.flush()
+    db.add(
+        Knowledge(
+            world_id=db_world.id,
+            graph={},
+        )
+    )
     db.commit()
     db.refresh(db_world)
     return db_world
@@ -815,6 +823,12 @@ def _resolve_or_create_world_for_character(
             character_id=character.id,
             role="sage",
             is_primary=True,
+        )
+    )
+    db.add(
+        Knowledge(
+            world_id=world.id,
+            graph={},
         )
     )
     db.commit()

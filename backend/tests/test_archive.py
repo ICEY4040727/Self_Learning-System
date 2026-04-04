@@ -1,5 +1,7 @@
 """Tests for archive CRUD endpoints (character, world, course)."""
 
+from backend.models.models import Knowledge
+
 
 class TestCharacterCRUD:
     def test_create_character(self, client, auth_headers):
@@ -207,3 +209,44 @@ class TestLegacySubjectsCompatibility:
 
         delete_resp = client.delete(f"/api/subjects/{subject_id}", headers=auth_headers)
         assert delete_resp.status_code == 200
+
+
+class TestWorldKnowledgeInitialization:
+    def test_create_world_initializes_knowledge_row(self, client, auth_headers, db_session):
+        create = client.post(
+            "/api/worlds",
+            json={"name": "Knowledge World", "description": "test"},
+            headers=auth_headers,
+        )
+        assert create.status_code == 200
+        world_id = create.json()["id"]
+
+        knowledge = db_session.query(Knowledge).filter(Knowledge.world_id == world_id).first()
+        assert knowledge is not None
+        assert knowledge.graph == {}
+
+    def test_legacy_subject_auto_world_initializes_knowledge(self, client, auth_headers, db_session):
+        character = client.post(
+            "/api/character",
+            json={"name": "LegacyAutoWorld", "type": "sage"},
+            headers=auth_headers,
+        )
+        assert character.status_code == 200
+        character_id = character.json()["id"]
+
+        create_subject = client.post(
+            "/api/subjects",
+            json={
+                "character_id": character_id,
+                "name": "Needs Auto World",
+                "description": "compat",
+                "target_level": "beginner",
+            },
+            headers=auth_headers,
+        )
+        assert create_subject.status_code == 200
+        world_id = create_subject.json()["world_id"]
+
+        knowledge = db_session.query(Knowledge).filter(Knowledge.world_id == world_id).first()
+        assert knowledge is not None
+        assert knowledge.graph == {}
