@@ -6,8 +6,14 @@ from sqlalchemy.orm import Session
 
 from backend.api.routes.auth import get_current_user
 from backend.db.database import get_db
-from backend.models.models import Checkpoint, ChatMessage, User, World, _default_relationship
-from backend.models.models import Session as SessionModel
+from backend.models.models import (
+    Checkpoint,
+    ChatMessage,
+    Session as SessionModel,
+    User,
+    World,
+    _default_relationship,
+)
 
 router = APIRouter()
 
