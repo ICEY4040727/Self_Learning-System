@@ -1,5 +1,10 @@
 """Tests for archive CRUD endpoints (character, world, course)."""
 
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import sessionmaker
+
+from backend.models.models import Knowledge
+
 
 class TestCharacterCRUD:
     def test_create_character(self, client, auth_headers):
@@ -207,3 +212,215 @@ class TestLegacySubjectsCompatibility:
 
         delete_resp = client.delete(f"/api/subjects/{subject_id}", headers=auth_headers)
         assert delete_resp.status_code == 200
+
+
+class TestWorldKnowledgeInitialization:
+    def test_create_world_initializes_knowledge_row(self, client, auth_headers, db_session):
+        create = client.post(
+            "/api/worlds",
+            json={"name": "Knowledge World", "description": "test"},
+            headers=auth_headers,
+        )
+        assert create.status_code == 200
+        world_id = create.json()["id"]
+
+        knowledge = db_session.query(Knowledge).filter(Knowledge.world_id == world_id).first()
+        assert knowledge is not None
+        assert knowledge.graph == {}
+
+    def test_legacy_subject_auto_world_initializes_knowledge(self, client, auth_headers, db_session):
+        character = client.post(
+            "/api/character",
+            json={"name": "LegacyAutoWorld", "type": "sage"},
+            headers=auth_headers,
+        )
+        assert character.status_code == 200
+        character_id = character.json()["id"]
+
+        create_subject = client.post(
+            "/api/subjects",
+            json={
+                "character_id": character_id,
+                "name": "Needs Auto World",
+                "description": "compat",
+                "target_level": "beginner",
+            },
+            headers=auth_headers,
+        )
+        assert create_subject.status_code == 200
+        world_id = create_subject.json()["world_id"]
+
+        knowledge = db_session.query(Knowledge).filter(Knowledge.world_id == world_id).first()
+        assert knowledge is not None
+        assert knowledge.graph == {}
+
+    def test_existing_world_link_backfills_missing_knowledge(self, client, auth_headers, db_session):
+        character = client.post(
+            "/api/character",
+            json={"name": "KnowledgeBackfill", "type": "sage"},
+            headers=auth_headers,
+        )
+        assert character.status_code == 200
+        character_id = character.json()["id"]
+
+        world = client.post(
+            "/api/worlds",
+            json={"name": "Backfill World", "description": "test"},
+            headers=auth_headers,
+        )
+        assert world.status_code == 200
+        world_id = world.json()["id"]
+
+        bind = client.post(
+            f"/api/worlds/{world_id}/characters",
+            json={"character_id": character_id, "role": "sage", "is_primary": True},
+            headers=auth_headers,
+        )
+        assert bind.status_code == 200
+
+        db_session.query(Knowledge).filter(Knowledge.world_id == world_id).delete()
+        db_session.commit()
+        assert db_session.query(Knowledge).filter(Knowledge.world_id == world_id).count() == 0
+
+        create_subject = client.post(
+            "/api/subjects",
+            json={
+                "character_id": character_id,
+                "name": "Backfill Trigger",
+                "description": "legacy resolver path",
+                "target_level": "beginner",
+            },
+            headers=auth_headers,
+        )
+        assert create_subject.status_code == 200
+        assert create_subject.json()["world_id"] == world_id
+
+        knowledge_rows = db_session.query(Knowledge).filter(Knowledge.world_id == world_id).all()
+        assert len(knowledge_rows) == 1
+        assert knowledge_rows[0].graph == {}
+
+    def test_resolver_path_is_idempotent_for_knowledge(self, client, auth_headers, db_session):
+        character = client.post(
+            "/api/character",
+            json={"name": "KnowledgeIdempotent", "type": "sage"},
+            headers=auth_headers,
+        )
+        assert character.status_code == 200
+        character_id = character.json()["id"]
+
+        world = client.post(
+            "/api/worlds",
+            json={"name": "Idempotent World", "description": "test"},
+            headers=auth_headers,
+        )
+        assert world.status_code == 200
+        world_id = world.json()["id"]
+
+        bind = client.post(
+            f"/api/worlds/{world_id}/characters",
+            json={"character_id": character_id, "role": "sage", "is_primary": True},
+            headers=auth_headers,
+        )
+        assert bind.status_code == 200
+
+        first_subject = client.post(
+            "/api/subjects",
+            json={
+                "character_id": character_id,
+                "name": "First Subject",
+                "description": "legacy",
+                "target_level": "beginner",
+            },
+            headers=auth_headers,
+        )
+        assert first_subject.status_code == 200
+        assert first_subject.json()["world_id"] == world_id
+
+        second_subject = client.post(
+            "/api/subjects",
+            json={
+                "character_id": character_id,
+                "name": "Second Subject",
+                "description": "legacy",
+                "target_level": "intermediate",
+            },
+            headers=auth_headers,
+        )
+        assert second_subject.status_code == 200
+        assert second_subject.json()["world_id"] == world_id
+
+        assert db_session.query(Knowledge).filter(Knowledge.world_id == world_id).count() == 1
+
+    def test_knowledge_unique_conflict_does_not_fail_subject_create(
+        self,
+        client,
+        auth_headers,
+        db_session,
+        monkeypatch,
+    ):
+        character = client.post(
+            "/api/character",
+            json={"name": "KnowledgeConcurrent", "type": "sage"},
+            headers=auth_headers,
+        )
+        assert character.status_code == 200
+        character_id = character.json()["id"]
+
+        world = client.post(
+            "/api/worlds",
+            json={"name": "Concurrent World", "description": "test"},
+            headers=auth_headers,
+        )
+        assert world.status_code == 200
+        world_id = world.json()["id"]
+
+        bind = client.post(
+            f"/api/worlds/{world_id}/characters",
+            json={"character_id": character_id, "role": "sage", "is_primary": True},
+            headers=auth_headers,
+        )
+        assert bind.status_code == 200
+
+        db_session.query(Knowledge).filter(Knowledge.world_id == world_id).delete()
+        db_session.commit()
+        assert db_session.query(Knowledge).filter(Knowledge.world_id == world_id).count() == 0
+
+        original_flush = db_session.flush
+        conflict_state = {"raised": False}
+
+        def flush_with_conflict(*args, **kwargs):
+            pending_knowledge = any(
+                isinstance(obj, Knowledge) and obj.world_id == world_id
+                for obj in db_session.new
+            )
+            if pending_knowledge and not conflict_state["raised"]:
+                other_session = sessionmaker(
+                    autocommit=False,
+                    autoflush=False,
+                    bind=db_session.bind,
+                )()
+                try:
+                    other_session.add(Knowledge(world_id=world_id, graph={}))
+                    other_session.commit()
+                finally:
+                    other_session.close()
+                conflict_state["raised"] = True
+                raise IntegrityError("INSERT INTO knowledge", {}, Exception("duplicate key"))
+            return original_flush(*args, **kwargs)
+
+        monkeypatch.setattr(db_session, "flush", flush_with_conflict)
+
+        create_subject = client.post(
+            "/api/subjects",
+            json={
+                "character_id": character_id,
+                "name": "Concurrent Safe Subject",
+                "description": "legacy resolver path",
+                "target_level": "beginner",
+            },
+            headers=auth_headers,
+        )
+        assert create_subject.status_code == 200
+        assert create_subject.json()["world_id"] == world_id
+        assert conflict_state["raised"] is True
+        assert db_session.query(Knowledge).filter(Knowledge.world_id == world_id).count() == 1

@@ -2,6 +2,7 @@ from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile
 from pydantic import BaseModel, Field
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from backend.api.routes.auth import get_current_user
@@ -10,6 +11,7 @@ from backend.models.models import (
     Character,
     Course,
     FSRSState,
+    Knowledge,
     LearnerProfile,
     LearningDiary,
     ProgressTracking,
@@ -249,6 +251,24 @@ def delete_character(
 
 
 # World endpoints
+def _ensure_world_knowledge(db: Session, world_id: int) -> None:
+    knowledge = db.query(Knowledge).filter(Knowledge.world_id == world_id).first()
+    if knowledge is None:
+        try:
+            with db.begin_nested():
+                db.add(
+                    Knowledge(
+                        world_id=world_id,
+                        graph={},
+                    )
+                )
+                db.flush()
+        except IntegrityError:
+            existing = db.query(Knowledge).filter(Knowledge.world_id == world_id).first()
+            if existing is None:
+                raise
+
+
 @router.post("/worlds", response_model=WorldResponse)
 def create_world(
     world: WorldCreate,
@@ -262,6 +282,8 @@ def create_world(
         scenes=world.scenes or {},
     )
     db.add(db_world)
+    db.flush()
+    _ensure_world_knowledge(db, db_world.id)
     db.commit()
     db.refresh(db_world)
     return db_world
@@ -799,6 +821,7 @@ def _resolve_or_create_world_for_character(
         WorldCharacter.id.asc(),
     ).first()
     if link:
+        _ensure_world_knowledge(db, link.world_id)
         return link.world_id
 
     world = World(
@@ -817,6 +840,7 @@ def _resolve_or_create_world_for_character(
             is_primary=True,
         )
     )
+    _ensure_world_knowledge(db, world.id)
     db.commit()
     return world.id
 
