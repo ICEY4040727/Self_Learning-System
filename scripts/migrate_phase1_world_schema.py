@@ -852,6 +852,10 @@ def _sqlite_supports_drop_column(conn: sqlite3.Connection) -> bool:
     return tuple(parts) >= (3, 35, 0)
 
 
+def _drop_tenant_column(conn: sqlite3.Connection, table_name: str) -> None:
+    conn.execute(f'ALTER TABLE "{table_name}" DROP COLUMN tenant_id')
+
+
 def _rebuild_table_without_column(conn: sqlite3.Connection, table_name: str, column_name: str) -> None:
     column_rows = conn.execute(f'PRAGMA table_info("{table_name}")').fetchall()
     keep_columns = [row for row in column_rows if row[1] != column_name]
@@ -960,7 +964,7 @@ def _drop_tenant_id_columns(conn: sqlite3.Connection) -> dict[str, list[str]]:
 
         if supports_drop_column:
             try:
-                conn.execute(f'ALTER TABLE "{table_name}" DROP COLUMN tenant_id')
+                _drop_tenant_column(conn, table_name)
                 cleaned_tables.append(table_name)
                 continue
             except sqlite3.OperationalError:

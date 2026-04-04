@@ -346,3 +346,26 @@ class TestPhase1Migration:
         assert second["status"] == "success"
         assert second["post_reconciliation"]["anomaly_samples"]["legacy_tables_present"] == []
         assert second["post_reconciliation"]["anomaly_samples"]["tenant_columns_present"] == []
+
+    def test_migration_falls_back_when_drop_column_operational_error(self, tmp_path, monkeypatch):
+        module = _load_migration_module()
+
+        db_path = tmp_path / "legacy_drop_error.db"
+        report_path = tmp_path / "migration_report_drop_error.json"
+        save_file = tmp_path / "legacy_save_drop_error.json"
+
+        _init_legacy_schema(db_path, save_file)
+
+        monkeypatch.setattr(module, "_sqlite_supports_drop_column", lambda _conn: True)
+
+        def raise_drop_error(_conn, _table_name):
+            raise sqlite3.OperationalError("simulated DROP COLUMN failure")
+
+        monkeypatch.setattr(module, "_drop_tenant_column", raise_drop_error)
+
+        report = module.migrate_phase1(str(db_path), str(report_path))
+        assert report["status"] == "success"
+        cleanup = report["backfill_results"]["item_11_tenant_cleanup"]
+        assert cleanup["tenant_cleanup_fallback_tables"] != []
+        assert report["post_reconciliation"]["anomaly_samples"]["legacy_tables_present"] == []
+        assert report["post_reconciliation"]["anomaly_samples"]["tenant_columns_present"] == []
