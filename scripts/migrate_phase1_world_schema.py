@@ -5,13 +5,13 @@ import json
 import os
 import shutil
 import sqlite3
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 
 def _utc_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def _connect(db_path: str) -> sqlite3.Connection:
@@ -275,7 +275,7 @@ def _rebuild_courses(conn: sqlite3.Connection, char_world_map: dict[int, int]) -
                     row["name"],
                     row.get("description"),
                     row.get("target_level"),
-                    row.get("created_at") or datetime.now(timezone.utc).isoformat(),
+                    row.get("created_at") or datetime.now(UTC).isoformat(),
                 ),
             )
             inserted += 1
@@ -570,8 +570,8 @@ def _rebuild_learner_profiles(conn: sqlite3.Connection, course_world_map: dict[i
                 row["user_id"],
                 world_id,
                 json.dumps(profile_json, ensure_ascii=False),
-                row.get("created_at") or datetime.now(timezone.utc).isoformat(),
-                row.get("updated_at") or datetime.now(timezone.utc).isoformat(),
+                row.get("created_at") or datetime.now(UTC).isoformat(),
+                row.get("updated_at") or datetime.now(UTC).isoformat(),
             ),
         )
         migrated += 1
@@ -722,7 +722,7 @@ def _rebuild_sessions(conn: sqlite3.Connection, course_world_map: dict[int, int]
                 world_id,
                 sage_character_id,
                 traveler_character_id,
-                row.get("started_at") or datetime.now(timezone.utc).isoformat(),
+                row.get("started_at") or datetime.now(UTC).isoformat(),
                 row.get("ended_at"),
                 row.get("system_prompt"),
                 json.dumps(relationship_json, ensure_ascii=False),
@@ -829,7 +829,7 @@ def _migrate_saves_to_checkpoints(conn: sqlite3.Connection, course_world_map: di
                 row["save_name"],
                 message_index,
                 json.dumps(state_payload, ensure_ascii=False),
-                row.get("created_at") or datetime.now(timezone.utc).isoformat(),
+                row.get("created_at") or datetime.now(UTC).isoformat(),
             ),
         )
         migrated += 1
@@ -844,9 +844,32 @@ def _migrate_saves_to_checkpoints(conn: sqlite3.Connection, course_world_map: di
     }
 
 
-def _drop_obsolete_tables(conn: sqlite3.Connection) -> None:
+def _drop_tenant_id_columns(conn: sqlite3.Connection) -> list[str]:
+    table_rows = conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
+    ).fetchall()
+    cleaned_tables: list[str] = []
+
+    for row in table_rows:
+        table_name = str(row[0])
+        if _column_exists(conn, table_name, "tenant_id"):
+            conn.execute(f'ALTER TABLE "{table_name}" DROP COLUMN tenant_id')
+            cleaned_tables.append(table_name)
+
+    return cleaned_tables
+
+
+def _drop_obsolete_tables(conn: sqlite3.Connection) -> dict[str, Any]:
+    dropped_tables: list[str] = []
     if _table_exists(conn, "tenants"):
         conn.execute("DROP TABLE tenants")
+        dropped_tables.append("tenants")
+
+    cleaned_tenant_columns = _drop_tenant_id_columns(conn)
+    return {
+        "dropped_tables": dropped_tables,
+        "dropped_tenant_columns": cleaned_tenant_columns,
+    }
 
 
 def _collect_reconciliation(conn: sqlite3.Connection) -> dict[str, Any]:
@@ -880,6 +903,20 @@ def _collect_reconciliation(conn: sqlite3.Connection) -> dict[str, Any]:
         "learner_profiles.profile": _null_count(conn, "learner_profiles", "profile"),
     }
 
+    tenant_columns = []
+    table_rows = conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
+    ).fetchall()
+    for row in table_rows:
+        table_name = str(row[0])
+        if _column_exists(conn, table_name, "tenant_id"):
+            tenant_columns.append(table_name)
+
+    legacy_tables = [
+        name for name in ("subjects", "saves", "tenants")
+        if _table_exists(conn, name)
+    ]
+
     anomalies = {
         "courses_missing_world": _fetch_rows(
             conn,
@@ -905,6 +942,8 @@ def _collect_reconciliation(conn: sqlite3.Connection) -> dict[str, Any]:
         )
         if _table_exists(conn, "worlds") and _table_exists(conn, "knowledge")
         else [],
+        "legacy_tables_present": legacy_tables,
+        "tenant_columns_present": tenant_columns,
     }
 
     return {
@@ -957,7 +996,7 @@ def migrate_phase1(db_path: str, report_path: str | None = None) -> dict[str, An
 
         # Ensure one knowledge row per world after all inserts.
         conn.execute("INSERT OR IGNORE INTO knowledge(world_id, graph) SELECT id, '{}' FROM worlds")
-        _drop_obsolete_tables(conn)
+        obsolete_result = _drop_obsolete_tables(conn)
 
         conn.commit()
 
@@ -988,6 +1027,7 @@ def migrate_phase1(db_path: str, report_path: str | None = None) -> dict[str, An
             },
             "item_15_session_world_sage_backfill": sessions_result,
             "item_16_saves_to_checkpoints": checkpoint_result,
+            "item_11_tenant_cleanup": obsolete_result,
             "progress_to_fsrs_states": progress_result,
             "learner_profile_json_merge": learner_result,
         }
