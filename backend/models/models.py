@@ -229,12 +229,14 @@ class Session(Base):
     course_id = Column(Integer, ForeignKey("courses.id", ondelete="CASCADE"), nullable=False)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     world_id = Column(Integer, ForeignKey("worlds.id", ondelete="CASCADE"), nullable=False)
+    # Optional until a world binds explicit sage/traveler entries.
     sage_character_id = Column(Integer, ForeignKey("characters.id"), nullable=True)
     traveler_character_id = Column(Integer, ForeignKey("characters.id"), nullable=True)
     started_at = Column(DateTime, default=_utcnow)
     ended_at = Column(DateTime, nullable=True)
     system_prompt = Column(Text, nullable=True)
     relationship = Column(JSON, nullable=False, default=_default_relationship)
+    # Optional links: sessions may start without active persona/profile or branch parent.
     teacher_persona_id = Column(Integer, ForeignKey("teacher_personas.id"), nullable=True)
     learner_profile_id = Column(Integer, ForeignKey("learner_profiles.id"), nullable=True)
     parent_checkpoint_id = Column(Integer, ForeignKey("checkpoints.id"), nullable=True)

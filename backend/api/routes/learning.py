@@ -166,6 +166,15 @@ async def start_learning(
     }
 
 
+@router.post("/subjects/{subject_id}/start")
+async def start_learning_legacy(
+    subject_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return await start_learning(subject_id, db, current_user)
+
+
 # Send chat message
 @router.post("/courses/{course_id}/chat", response_model=ChatResponse)
 async def send_message(
@@ -241,6 +250,16 @@ async def send_message(
         relationship_stage=result.get("relationship_stage"),
         expression_hint=expression,
     )
+
+
+@router.post("/subjects/{subject_id}/chat", response_model=ChatResponse)
+async def send_message_legacy(
+    subject_id: int,
+    chat_request: ChatRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return await send_message(subject_id, chat_request, db, current_user)
 
 
 # Confirm tool call
