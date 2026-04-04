@@ -91,6 +91,22 @@ class TestCourseCRUD:
         assert resp.status_code == 200
         assert len(resp.json()) == 2
 
+    def test_world_scoped_course_endpoints(self, client, auth_headers):
+        world_id = self._create_world(client, auth_headers)
+        create = client.post(
+            f"/api/worlds/{world_id}/courses",
+            json={"name": "World Scoped Course", "description": "desc", "target_level": "intro"},
+            headers=auth_headers,
+        )
+        assert create.status_code == 200
+        course_id = create.json()["id"]
+        assert create.json()["world_id"] == world_id
+
+        listed = client.get(f"/api/worlds/{world_id}/courses", headers=auth_headers)
+        assert listed.status_code == 200
+        assert len(listed.json()) == 1
+        assert listed.json()[0]["id"] == course_id
+
 
 class TestWorldCharacterCRUD:
     def _create_world(self, client, auth_headers):
