@@ -1,18 +1,19 @@
 from datetime import datetime
 
 from sqlalchemy import (
+    JSON,
     Boolean,
     Column,
     DateTime,
     Float,
     ForeignKey,
     Integer,
-    JSON,
     String,
     Text,
     UniqueConstraint,
 )
-from sqlalchemy.orm import attributes, relationship as orm_relationship
+from sqlalchemy.orm import attributes
+from sqlalchemy.orm import relationship as orm_relationship
 
 from backend.db.database import Base
 

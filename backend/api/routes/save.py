@@ -8,11 +8,13 @@ from backend.api.routes.auth import get_current_user
 from backend.db.database import get_db
 from backend.models import models as models_module
 from backend.models.models import (
-    Checkpoint,
     ChatMessage,
-    Session as SessionModel,
+    Checkpoint,
     User,
     World,
+)
+from backend.models.models import (
+    Session as SessionModel,
 )
 
 router = APIRouter()
