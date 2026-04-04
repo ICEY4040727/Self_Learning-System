@@ -311,3 +311,38 @@ class TestPhase1Migration:
             assert fsrs_count == 1
         finally:
             conn.close()
+
+    def test_migration_falls_back_when_drop_column_unsupported(self, tmp_path, monkeypatch):
+        module = _load_migration_module()
+
+        db_path = tmp_path / "legacy_no_drop.db"
+        report_path = tmp_path / "migration_report_no_drop.json"
+        save_file = tmp_path / "legacy_save_no_drop.json"
+
+        _init_legacy_schema(db_path, save_file)
+        monkeypatch.setattr(module, "_sqlite_supports_drop_column", lambda _conn: False)
+
+        report = module.migrate_phase1(str(db_path), str(report_path))
+        assert report["status"] == "success"
+        cleanup = report["backfill_results"]["item_11_tenant_cleanup"]
+        assert cleanup["tenant_cleanup_fallback_tables"] != []
+        assert "users" in cleanup["dropped_tenant_columns"]
+        assert report["post_reconciliation"]["anomaly_samples"]["tenant_columns_present"] == []
+
+    def test_migration_reentry_is_idempotent(self, tmp_path):
+        module = _load_migration_module()
+
+        db_path = tmp_path / "legacy_reentry.db"
+        report_path_first = tmp_path / "migration_report_first.json"
+        report_path_second = tmp_path / "migration_report_second.json"
+        save_file = tmp_path / "legacy_save_reentry.json"
+
+        _init_legacy_schema(db_path, save_file)
+
+        first = module.migrate_phase1(str(db_path), str(report_path_first))
+        second = module.migrate_phase1(str(db_path), str(report_path_second))
+
+        assert first["status"] == "success"
+        assert second["status"] == "success"
+        assert second["post_reconciliation"]["anomaly_samples"]["legacy_tables_present"] == []
+        assert second["post_reconciliation"]["anomaly_samples"]["tenant_columns_present"] == []
