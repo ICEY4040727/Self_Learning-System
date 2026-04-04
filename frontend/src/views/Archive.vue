@@ -29,10 +29,10 @@
       <section class="section">
         <div class="section-header">
           <h2>学习进度</h2>
-          <select v-model="selectedSubjectFilter" @change="fetchProgress">
-            <option value="">全部科目</option>
-            <option v-for="subj in subjects" :key="subj.id" :value="subj.id">
-              {{ subj.name }}
+          <select v-model="selectedCourseFilter" @change="fetchProgress">
+            <option value="">全部课程</option>
+            <option v-for="course in courses" :key="course.id" :value="course.id">
+              {{ course.name }}
             </option>
           </select>
         </div>
@@ -56,7 +56,7 @@
 
       <!-- 情感轨迹 -->
       <section class="section">
-        <EmotionTrajectory />
+        <EmotionTrajectory :course-id="selectedCourseFilter ? Number(selectedCourseFilter) : undefined" />
       </section>
 
       <!-- 存档管理 -->
@@ -85,10 +85,10 @@
         <div class="dialog">
           <h3>写学习日记</h3>
           <div class="form-group">
-            <label>选择科目</label>
-            <select v-model="diaryForm.subject_id">
-              <option v-for="subj in subjects" :key="subj.id" :value="subj.id">
-                {{ subj.name }}
+            <label>选择课程</label>
+            <select v-model="diaryForm.course_id">
+              <option v-for="course in courses" :key="course.id" :value="course.id">
+                {{ course.name }}
               </option>
             </select>
           </div>
@@ -123,7 +123,7 @@ const authStore = useAuthStore()
 
 interface Diary {
   id: number
-  subject_id: number
+  course_id: number
   date: string
   content: string
   reflection?: string
@@ -142,7 +142,7 @@ interface Save {
   created_at: string
 }
 
-interface Subject {
+interface Course {
   id: number
   name: string
 }
@@ -150,12 +150,12 @@ interface Subject {
 const diaries = ref<Diary[]>([])
 const progressList = ref<Progress[]>([])
 const saves = ref<Save[]>([])
-const subjects = ref<Subject[]>([])
-const selectedSubjectFilter = ref('')
+const courses = ref<Course[]>([])
+const selectedCourseFilter = ref('')
 
 const showDiaryDialog = ref(false)
 const diaryForm = ref({
-  subject_id: null as number | null,
+  course_id: null as number | null,
   content: '',
   reflection: ''
 })
@@ -182,7 +182,7 @@ const fetchDiaries = async () => {
 
 const fetchProgress = async () => {
   try {
-    const params = selectedSubjectFilter.value ? `?subject_id=${selectedSubjectFilter.value}` : ''
+    const params = selectedCourseFilter.value ? `?course_id=${selectedCourseFilter.value}` : ''
     const response = await axios.get(`/api/progress${params}`, {
       headers: { Authorization: `Bearer ${authStore.token}` }
     })
@@ -203,19 +203,19 @@ const fetchSaves = async () => {
   }
 }
 
-const fetchSubjects = async () => {
+const fetchCourses = async () => {
   try {
-    const response = await axios.get('/api/subjects', {
+    const response = await axios.get('/api/courses', {
       headers: { Authorization: `Bearer ${authStore.token}` }
     })
-    subjects.value = response.data
+    courses.value = response.data
   } catch (error) {
     console.error(parseApiError(error))
   }
 }
 
 const createDiary = async () => {
-  if (!diaryForm.value.subject_id || !diaryForm.value.content) return
+  if (!diaryForm.value.course_id || !diaryForm.value.content) return
   try {
     await axios.post('/api/learning_diary', {
       ...diaryForm.value,
@@ -224,7 +224,7 @@ const createDiary = async () => {
       headers: { Authorization: `Bearer ${authStore.token}` }
     })
     showDiaryDialog.value = false
-    diaryForm.value = { subject_id: null, content: '', reflection: '' }
+    diaryForm.value = { course_id: null, content: '', reflection: '' }
     fetchDiaries()
   } catch (error) {
     console.error(parseApiError(error))
@@ -270,7 +270,7 @@ onMounted(() => {
   fetchDiaries()
   fetchProgress()
   fetchSaves()
-  fetchSubjects()
+  fetchCourses()
 })
 </script>
 

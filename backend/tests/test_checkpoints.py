@@ -127,7 +127,7 @@ class TestLegacySaveCompatibility:
         world_id = _create_world(client, auth_headers)
         course_id = _create_course(client, auth_headers, world_id)
 
-        start = client.post(f"/api/subjects/{course_id}/start", headers=auth_headers)
+        start = client.post(f"/api/courses/{course_id}/start", headers=auth_headers)
         assert start.status_code == 200
         session_id = start.json()["session_id"]
 
@@ -161,11 +161,11 @@ class TestLegacySaveCompatibility:
         course_a = _create_course(client, auth_headers, world_id)
         course_b = _create_course(client, auth_headers, world_id)
 
-        start_a = client.post(f"/api/subjects/{course_a}/start", headers=auth_headers)
+        start_a = client.post(f"/api/courses/{course_a}/start", headers=auth_headers)
         assert start_a.status_code == 200
         session_a = start_a.json()["session_id"]
 
-        start_b = client.post(f"/api/subjects/{course_b}/start", headers=auth_headers)
+        start_b = client.post(f"/api/courses/{course_b}/start", headers=auth_headers)
         assert start_b.status_code == 200
         session_b = start_b.json()["session_id"]
 

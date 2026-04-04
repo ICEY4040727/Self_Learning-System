@@ -35,6 +35,7 @@ export function parseApiError(error: any): string {
       'Incorrect username or password': '用户名或密码错误',
       'Could not validate credentials': '登录已过期，请重新登录',
       'Subject not found': '科目不存在',
+      'Course not found': '课程不存在',
       'Character not found': '角色不存在',
       'Teacher persona not found': '教师人格不存在',
       'Session not found': '会话不存在',

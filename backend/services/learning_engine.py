@@ -23,7 +23,6 @@ from backend.models.models import (
 from backend.services.dynamic_analyzer import DynamicAnalyzer
 from backend.services.knowledge import knowledge_service
 from backend.services.llm.adapter import get_llm_adapter
-from backend.services.memory import memory_service
 from backend.services.relationship import relationship_service
 
 logger = logging.getLogger(__name__)
@@ -35,7 +34,6 @@ class LearningEngine:
     ROLE_MAP = {"user": "user", "teacher": "assistant"}
 
     def __init__(self):
-        self.memory = memory_service
         self.analyzer = DynamicAnalyzer()
         self.knowledge = knowledge_service
         self.relationship = relationship_service
@@ -276,12 +274,7 @@ class LearningEngine:
                     LearnerProfile.id == session.learner_profile_id
                 ).first()
 
-            # 4. Retrieve relevant memories
-            retrieved_memories = self.memory.retrieve(
-                str(session_id),
-                user_message,
-                top_k=3
-            )
+            retrieved_memories: list[dict] = []
 
             # 4.5 Get previous emotion from last user message (for dynamic prompt layer)
             prev_emotion = None
@@ -398,21 +391,7 @@ class LearningEngine:
                 db.add(stage_record)
             relationship_events = self.relationship.check_events(old_relationship, updated_relationship)
 
-            # 11. Store user message in memory
-            user_memory_id = self.memory.add_memory(
-                str(session_id),
-                f"学习者: {user_message}",
-                {"type": "user", "emotion": emotion["emotion_type"]}
-            )
-
-            # 12. Store teacher response in memory
-            teacher_memory_id = self.memory.add_memory(
-                str(session_id),
-                f"教师: {llm_response}",
-                {"type": "teacher"}
-            )
-
-            # 13. Update knowledge graph and learner profile
+            # 11. Update knowledge graph and learner profile
             self.knowledge.update_after_chat(
                 db,
                 session.world_id,
@@ -432,13 +411,13 @@ class LearningEngine:
                 db=db,
             )
 
-            # 14. Persist DB changes
+            # 12. Persist DB changes
             if own_db:
                 db.commit()
             else:
                 db.flush()
 
-            # 15. Return response
+            # 13. Return response
             return {
                 "type": "text",
                 "reply": llm_response,
@@ -446,7 +425,7 @@ class LearningEngine:
                 "relationship_stage": new_stage,
                 "relationship": updated_relationship,
                 "relationship_events": relationship_events,
-                "used_memory_ids": [user_memory_id, teacher_memory_id]
+                "used_memory_ids": []
             }
 
         except Exception:
