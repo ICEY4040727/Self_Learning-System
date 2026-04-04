@@ -5,13 +5,13 @@ import json
 import os
 import shutil
 import sqlite3
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 
 def _utc_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def _connect(db_path: str) -> sqlite3.Connection:
@@ -275,7 +275,7 @@ def _rebuild_courses(conn: sqlite3.Connection, char_world_map: dict[int, int]) -
                     row["name"],
                     row.get("description"),
                     row.get("target_level"),
-                    row.get("created_at") or datetime.now(timezone.utc).isoformat(),
+                    row.get("created_at") or datetime.now(UTC).isoformat(),
                 ),
             )
             inserted += 1
@@ -570,8 +570,8 @@ def _rebuild_learner_profiles(conn: sqlite3.Connection, course_world_map: dict[i
                 row["user_id"],
                 world_id,
                 json.dumps(profile_json, ensure_ascii=False),
-                row.get("created_at") or datetime.now(timezone.utc).isoformat(),
-                row.get("updated_at") or datetime.now(timezone.utc).isoformat(),
+                row.get("created_at") or datetime.now(UTC).isoformat(),
+                row.get("updated_at") or datetime.now(UTC).isoformat(),
             ),
         )
         migrated += 1
@@ -722,7 +722,7 @@ def _rebuild_sessions(conn: sqlite3.Connection, course_world_map: dict[int, int]
                 world_id,
                 sage_character_id,
                 traveler_character_id,
-                row.get("started_at") or datetime.now(timezone.utc).isoformat(),
+                row.get("started_at") or datetime.now(UTC).isoformat(),
                 row.get("ended_at"),
                 row.get("system_prompt"),
                 json.dumps(relationship_json, ensure_ascii=False),
@@ -829,7 +829,7 @@ def _migrate_saves_to_checkpoints(conn: sqlite3.Connection, course_world_map: di
                 row["save_name"],
                 message_index,
                 json.dumps(state_payload, ensure_ascii=False),
-                row.get("created_at") or datetime.now(timezone.utc).isoformat(),
+                row.get("created_at") or datetime.now(UTC).isoformat(),
             ),
         )
         migrated += 1
@@ -844,9 +844,154 @@ def _migrate_saves_to_checkpoints(conn: sqlite3.Connection, course_world_map: di
     }
 
 
-def _drop_obsolete_tables(conn: sqlite3.Connection) -> None:
+def _sqlite_supports_drop_column(conn: sqlite3.Connection) -> bool:
+    version_raw = conn.execute("SELECT sqlite_version()").fetchone()[0]
+    parts = [int(p) for p in str(version_raw).split(".")[:3]]
+    while len(parts) < 3:
+        parts.append(0)
+    return tuple(parts) >= (3, 35, 0)
+
+
+def _drop_tenant_column(conn: sqlite3.Connection, table_name: str) -> None:
+    conn.execute(f'ALTER TABLE "{table_name}" DROP COLUMN tenant_id')
+
+
+def _rebuild_table_without_column(conn: sqlite3.Connection, table_name: str, column_name: str) -> None:
+    column_rows = conn.execute(f'PRAGMA table_info("{table_name}")').fetchall()
+    keep_columns = [row for row in column_rows if row[1] != column_name]
+    if len(keep_columns) == len(column_rows):
+        return
+    if not keep_columns:
+        raise RuntimeError(f"Cannot drop the only column from table {table_name}")
+
+    pk_columns = sorted([(int(row[5]), str(row[1])) for row in keep_columns if int(row[5]) > 0], key=lambda x: x[0])
+    single_pk = len(pk_columns) == 1
+
+    column_defs = []
+    for row in keep_columns:
+        name = str(row[1])
+        col_type = str(row[2]) if row[2] else ""
+        not_null = int(row[3]) == 1
+        default_value = row[4]
+        pk_order = int(row[5])
+
+        parts = [f'"{name}"']
+        if col_type:
+            parts.append(col_type)
+        if not_null:
+            parts.append("NOT NULL")
+        if default_value is not None:
+            parts.append(f"DEFAULT {default_value}")
+        if single_pk and pk_order > 0:
+            parts.append("PRIMARY KEY")
+        column_defs.append(" ".join(parts))
+
+    table_constraints = []
+    if len(pk_columns) > 1:
+        cols_sql = ", ".join([f'"{name}"' for _, name in pk_columns])
+        table_constraints.append(f"PRIMARY KEY ({cols_sql})")
+
+    index_rows = conn.execute(f'PRAGMA index_list("{table_name}")').fetchall()
+    for index_row in index_rows:
+        is_unique = int(index_row[2]) == 1
+        if not is_unique:
+            continue
+        index_name = str(index_row[1])
+        index_cols = conn.execute(f'PRAGMA index_info("{index_name}")').fetchall()
+        names = [str(col[2]) for col in sorted(index_cols, key=lambda c: int(c[0])) if col[2] is not None]
+        if not names or column_name in names:
+            continue
+        cols_sql = ", ".join([f'"{name}"' for name in names])
+        unique_constraint = f"UNIQUE ({cols_sql})"
+        if unique_constraint not in table_constraints:
+            table_constraints.append(unique_constraint)
+
+    fk_rows = conn.execute(f'PRAGMA foreign_key_list("{table_name}")').fetchall()
+    fk_grouped: dict[int, list[Any]] = {}
+    for fk in fk_rows:
+        fk_grouped.setdefault(int(fk[0]), []).append(fk)
+
+    for grouped_rows in fk_grouped.values():
+        grouped_rows = sorted(grouped_rows, key=lambda r: int(r[1]))
+        from_cols = [str(r[3]) for r in grouped_rows]
+        if column_name in from_cols:
+            continue
+        to_cols = [str(r[4]) for r in grouped_rows]
+        ref_table = str(grouped_rows[0][2])
+        on_update = str(grouped_rows[0][5])
+        on_delete = str(grouped_rows[0][6])
+        match = str(grouped_rows[0][7])
+        from_cols_sql = ", ".join([f'"{c}"' for c in from_cols])
+        to_cols_sql = ", ".join([f'"{c}"' for c in to_cols])
+        fk_sql = (
+            f'FOREIGN KEY ({from_cols_sql}) '
+            f'REFERENCES "{ref_table}" ({to_cols_sql})'
+        )
+        if on_update and on_update.upper() != "NO ACTION":
+            fk_sql += f" ON UPDATE {on_update}"
+        if on_delete and on_delete.upper() != "NO ACTION":
+            fk_sql += f" ON DELETE {on_delete}"
+        if match and match.upper() != "NONE":
+            fk_sql += f" MATCH {match}"
+        table_constraints.append(fk_sql)
+
+    create_parts = column_defs + table_constraints
+    temp_table = f"{table_name}__tenant_cleanup_tmp"
+    conn.execute(f'DROP TABLE IF EXISTS "{temp_table}"')
+    conn.execute(f'CREATE TABLE "{temp_table}" ({", ".join(create_parts)})')
+
+    keep_names_sql = ", ".join([f'"{str(row[1])}"' for row in keep_columns])
+    conn.execute(
+        f'INSERT INTO "{temp_table}" ({keep_names_sql}) '
+        f'SELECT {keep_names_sql} FROM "{table_name}"'
+    )
+    conn.execute(f'DROP TABLE "{table_name}"')
+    conn.execute(f'ALTER TABLE "{temp_table}" RENAME TO "{table_name}"')
+
+
+def _drop_tenant_id_columns(conn: sqlite3.Connection) -> dict[str, list[str]]:
+    table_rows = conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
+    ).fetchall()
+    cleaned_tables: list[str] = []
+    fallback_rebuild_tables: list[str] = []
+    supports_drop_column = _sqlite_supports_drop_column(conn)
+
+    for row in table_rows:
+        table_name = str(row[0])
+        if not _column_exists(conn, table_name, "tenant_id"):
+            continue
+
+        if supports_drop_column:
+            try:
+                _drop_tenant_column(conn, table_name)
+                cleaned_tables.append(table_name)
+                continue
+            except sqlite3.OperationalError:
+                pass
+
+        _rebuild_table_without_column(conn, table_name, "tenant_id")
+        cleaned_tables.append(table_name)
+        fallback_rebuild_tables.append(table_name)
+
+    return {
+        "dropped_tenant_columns": cleaned_tables,
+        "tenant_cleanup_fallback_tables": fallback_rebuild_tables,
+    }
+
+
+def _drop_obsolete_tables(conn: sqlite3.Connection) -> dict[str, Any]:
+    dropped_tables: list[str] = []
     if _table_exists(conn, "tenants"):
         conn.execute("DROP TABLE tenants")
+        dropped_tables.append("tenants")
+
+    tenant_cleanup = _drop_tenant_id_columns(conn)
+    return {
+        "dropped_tables": dropped_tables,
+        "dropped_tenant_columns": tenant_cleanup["dropped_tenant_columns"],
+        "tenant_cleanup_fallback_tables": tenant_cleanup["tenant_cleanup_fallback_tables"],
+    }
 
 
 def _collect_reconciliation(conn: sqlite3.Connection) -> dict[str, Any]:
@@ -880,6 +1025,20 @@ def _collect_reconciliation(conn: sqlite3.Connection) -> dict[str, Any]:
         "learner_profiles.profile": _null_count(conn, "learner_profiles", "profile"),
     }
 
+    tenant_columns = []
+    table_rows = conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
+    ).fetchall()
+    for row in table_rows:
+        table_name = str(row[0])
+        if _column_exists(conn, table_name, "tenant_id"):
+            tenant_columns.append(table_name)
+
+    legacy_tables = [
+        name for name in ("subjects", "saves", "tenants")
+        if _table_exists(conn, name)
+    ]
+
     anomalies = {
         "courses_missing_world": _fetch_rows(
             conn,
@@ -905,6 +1064,8 @@ def _collect_reconciliation(conn: sqlite3.Connection) -> dict[str, Any]:
         )
         if _table_exists(conn, "worlds") and _table_exists(conn, "knowledge")
         else [],
+        "legacy_tables_present": legacy_tables,
+        "tenant_columns_present": tenant_columns,
     }
 
     return {
@@ -957,7 +1118,7 @@ def migrate_phase1(db_path: str, report_path: str | None = None) -> dict[str, An
 
         # Ensure one knowledge row per world after all inserts.
         conn.execute("INSERT OR IGNORE INTO knowledge(world_id, graph) SELECT id, '{}' FROM worlds")
-        _drop_obsolete_tables(conn)
+        obsolete_result = _drop_obsolete_tables(conn)
 
         conn.commit()
 
@@ -988,6 +1149,7 @@ def migrate_phase1(db_path: str, report_path: str | None = None) -> dict[str, An
             },
             "item_15_session_world_sage_backfill": sessions_result,
             "item_16_saves_to_checkpoints": checkpoint_result,
+            "item_11_tenant_cleanup": obsolete_result,
             "progress_to_fsrs_states": progress_result,
             "learner_profile_json_merge": learner_result,
         }

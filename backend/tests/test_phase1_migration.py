@@ -22,8 +22,14 @@ def _init_legacy_schema(db_path: Path, save_file: Path) -> None:
     try:
         conn.executescript(
             """
+            CREATE TABLE tenants (
+                id INTEGER PRIMARY KEY,
+                name TEXT NOT NULL
+            );
+
             CREATE TABLE users (
                 id INTEGER PRIMARY KEY,
+                tenant_id INTEGER,
                 username TEXT UNIQUE NOT NULL,
                 password_hash TEXT NOT NULL,
                 role TEXT,
@@ -34,6 +40,7 @@ def _init_legacy_schema(db_path: Path, save_file: Path) -> None:
 
             CREATE TABLE characters (
                 id INTEGER PRIMARY KEY,
+                tenant_id INTEGER,
                 user_id INTEGER,
                 name TEXT NOT NULL,
                 avatar TEXT,
@@ -46,6 +53,7 @@ def _init_legacy_schema(db_path: Path, save_file: Path) -> None:
 
             CREATE TABLE teacher_personas (
                 id INTEGER PRIMARY KEY,
+                tenant_id INTEGER,
                 character_id INTEGER,
                 name TEXT NOT NULL,
                 version TEXT,
@@ -58,6 +66,7 @@ def _init_legacy_schema(db_path: Path, save_file: Path) -> None:
 
             CREATE TABLE subjects (
                 id INTEGER PRIMARY KEY,
+                tenant_id INTEGER,
                 character_id INTEGER,
                 name TEXT NOT NULL,
                 description TEXT,
@@ -68,6 +77,7 @@ def _init_legacy_schema(db_path: Path, save_file: Path) -> None:
 
             CREATE TABLE learner_profiles (
                 id INTEGER PRIMARY KEY,
+                tenant_id INTEGER,
                 user_id INTEGER,
                 subject_id INTEGER,
                 learning_style JSON,
@@ -80,6 +90,7 @@ def _init_legacy_schema(db_path: Path, save_file: Path) -> None:
 
             CREATE TABLE progress_trackings (
                 id INTEGER PRIMARY KEY,
+                tenant_id INTEGER,
                 subject_id INTEGER,
                 user_id INTEGER,
                 topic TEXT,
@@ -91,6 +102,7 @@ def _init_legacy_schema(db_path: Path, save_file: Path) -> None:
 
             CREATE TABLE sessions (
                 id INTEGER PRIMARY KEY,
+                tenant_id INTEGER,
                 subject_id INTEGER,
                 user_id INTEGER,
                 started_at TEXT,
@@ -103,6 +115,7 @@ def _init_legacy_schema(db_path: Path, save_file: Path) -> None:
 
             CREATE TABLE chat_messages (
                 id INTEGER PRIMARY KEY,
+                tenant_id INTEGER,
                 session_id INTEGER,
                 sender_type TEXT,
                 sender_id INTEGER,
@@ -114,6 +127,7 @@ def _init_legacy_schema(db_path: Path, save_file: Path) -> None:
 
             CREATE TABLE saves (
                 id INTEGER PRIMARY KEY,
+                tenant_id INTEGER,
                 user_id INTEGER,
                 subject_id INTEGER,
                 session_id INTEGER,
@@ -125,55 +139,56 @@ def _init_legacy_schema(db_path: Path, save_file: Path) -> None:
             """
         )
 
+        conn.execute("INSERT INTO tenants(id, name) VALUES (1, 'default')")
         conn.execute(
-            "INSERT INTO users(id, username, password_hash, role, created_at) VALUES (1, 'u1', 'hash', 'student', datetime('now'))"
+            "INSERT INTO users(id, tenant_id, username, password_hash, role, created_at) VALUES (1, 1, 'u1', 'hash', 'student', datetime('now'))"
         )
         conn.execute(
             """
-            INSERT INTO characters(id, user_id, name, background, sprites, created_at)
-            VALUES (10, 1, 'Socrates', 'philosopher', '{}', datetime('now'))
-            """
-        )
-        conn.execute(
-            """
-            INSERT INTO characters(id, user_id, name, background, sprites, created_at)
-            VALUES (11, 1, 'Traveler', 'student self', '{}', datetime('now'))
+            INSERT INTO characters(id, tenant_id, user_id, name, background, sprites, created_at)
+            VALUES (10, 1, 1, 'Socrates', 'philosopher', '{}', datetime('now'))
             """
         )
         conn.execute(
             """
-            INSERT INTO teacher_personas(id, character_id, name, version, traits, system_prompt_template, is_active, created_at, updated_at)
-            VALUES (30, 10, 'Default Persona', '1.0', '[]', 'prompt', 1, datetime('now'), datetime('now'))
+            INSERT INTO characters(id, tenant_id, user_id, name, background, sprites, created_at)
+            VALUES (11, 1, 1, 'Traveler', 'student self', '{}', datetime('now'))
             """
         )
         conn.execute(
             """
-            INSERT INTO subjects(id, character_id, name, description, target_level, scene_background, created_at)
-            VALUES (20, 10, 'Logic', 'Intro logic', 'beginner', NULL, datetime('now'))
+            INSERT INTO teacher_personas(id, tenant_id, character_id, name, version, traits, system_prompt_template, is_active, created_at, updated_at)
+            VALUES (30, 1, 10, 'Default Persona', '1.0', '[]', 'prompt', 1, datetime('now'), datetime('now'))
             """
         )
         conn.execute(
             """
-            INSERT INTO learner_profiles(id, user_id, subject_id, learning_style, cognitive_traits, emotional_traits, knowledge_graph, created_at, updated_at)
-            VALUES (60, 1, 20, '{"visual": true}', '{"planning": "mid"}', '{"stress": "low"}', '{}', datetime('now'), datetime('now'))
+            INSERT INTO subjects(id, tenant_id, character_id, name, description, target_level, scene_background, created_at)
+            VALUES (20, 1, 10, 'Logic', 'Intro logic', 'beginner', NULL, datetime('now'))
             """
         )
         conn.execute(
             """
-            INSERT INTO sessions(id, subject_id, user_id, started_at, ended_at, system_prompt, relationship_stage, teacher_persona_id, learner_profile_id)
-            VALUES (40, 20, 1, datetime('now'), NULL, 'sys', 'friend', 30, 60)
+            INSERT INTO learner_profiles(id, tenant_id, user_id, subject_id, learning_style, cognitive_traits, emotional_traits, knowledge_graph, created_at, updated_at)
+            VALUES (60, 1, 1, 20, '{"visual": true}', '{"planning": "mid"}', '{"stress": "low"}', '{}', datetime('now'), datetime('now'))
             """
         )
         conn.execute(
             """
-            INSERT INTO chat_messages(id, session_id, sender_type, sender_id, content, timestamp)
-            VALUES (1, 40, 'user', 1, 'hello', datetime('now'))
+            INSERT INTO sessions(id, tenant_id, subject_id, user_id, started_at, ended_at, system_prompt, relationship_stage, teacher_persona_id, learner_profile_id)
+            VALUES (40, 1, 20, 1, datetime('now'), NULL, 'sys', 'friend', 30, 60)
             """
         )
         conn.execute(
             """
-            INSERT INTO chat_messages(id, session_id, sender_type, sender_id, content, timestamp)
-            VALUES (2, 40, 'teacher', NULL, 'hi', datetime('now'))
+            INSERT INTO chat_messages(id, tenant_id, session_id, sender_type, sender_id, content, timestamp)
+            VALUES (1, 1, 40, 'user', 1, 'hello', datetime('now'))
+            """
+        )
+        conn.execute(
+            """
+            INSERT INTO chat_messages(id, tenant_id, session_id, sender_type, sender_id, content, timestamp)
+            VALUES (2, 1, 40, 'teacher', NULL, 'hi', datetime('now'))
             """
         )
 
@@ -188,8 +203,8 @@ def _init_legacy_schema(db_path: Path, save_file: Path) -> None:
         )
         conn.execute(
             """
-            INSERT INTO progress_trackings(id, subject_id, user_id, topic, mastery_level, last_review, next_review, fsrs_state)
-            VALUES (70, 20, 1, 'recursion', 42, datetime('now'), datetime('now'), ?)
+            INSERT INTO progress_trackings(id, tenant_id, subject_id, user_id, topic, mastery_level, last_review, next_review, fsrs_state)
+            VALUES (70, 1, 20, 1, 'recursion', 42, datetime('now'), datetime('now'), ?)
             """,
             (fsrs_json,),
         )
@@ -205,8 +220,8 @@ def _init_legacy_schema(db_path: Path, save_file: Path) -> None:
 
         conn.execute(
             """
-            INSERT INTO saves(id, user_id, subject_id, session_id, save_name, file_path, memory_ids, created_at)
-            VALUES (50, 1, 20, 40, 'save1', ?, '[]', datetime('now'))
+            INSERT INTO saves(id, tenant_id, user_id, subject_id, session_id, save_name, file_path, memory_ids, created_at)
+            VALUES (50, 1, 1, 20, 40, 'save1', ?, '[]', datetime('now'))
             """,
             (str(save_file),),
         )
@@ -249,6 +264,7 @@ class TestPhase1Migration:
         assert item16["legacy_saves"] == 1
         assert item16["migrated_checkpoints"] == 1
         assert item16["fill_rate_world_id"] == 1.0
+        assert report["backfill_results"]["item_11_tenant_cleanup"]["dropped_tables"] == ["tenants"]
 
         assert Path(report["backup_path"]).exists()
         assert report_path.exists()
@@ -262,6 +278,30 @@ class TestPhase1Migration:
             ).fetchone()[0]
             assert saves_exists == 0
 
+            subjects_exists = cur.execute(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='subjects'"
+            ).fetchone()[0]
+            assert subjects_exists == 0
+
+            tenants_exists = cur.execute(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='tenants'"
+            ).fetchone()[0]
+            assert tenants_exists == 0
+
+            for table in [
+                "users",
+                "characters",
+                "teacher_personas",
+                "courses",
+                "learner_profiles",
+                "progress_trackings",
+                "sessions",
+                "chat_messages",
+                "checkpoints",
+            ]:
+                columns = [row[1] for row in cur.execute(f"PRAGMA table_info({table})").fetchall()]
+                assert "tenant_id" not in columns
+
             # relationship should be JSON and preserve stage semantics
             relationship_raw = cur.execute("SELECT relationship FROM sessions WHERE id = 40").fetchone()[0]
             relationship = json.loads(relationship_raw)
@@ -271,3 +311,61 @@ class TestPhase1Migration:
             assert fsrs_count == 1
         finally:
             conn.close()
+
+    def test_migration_falls_back_when_drop_column_unsupported(self, tmp_path, monkeypatch):
+        module = _load_migration_module()
+
+        db_path = tmp_path / "legacy_no_drop.db"
+        report_path = tmp_path / "migration_report_no_drop.json"
+        save_file = tmp_path / "legacy_save_no_drop.json"
+
+        _init_legacy_schema(db_path, save_file)
+        monkeypatch.setattr(module, "_sqlite_supports_drop_column", lambda _conn: False)
+
+        report = module.migrate_phase1(str(db_path), str(report_path))
+        assert report["status"] == "success"
+        cleanup = report["backfill_results"]["item_11_tenant_cleanup"]
+        assert cleanup["tenant_cleanup_fallback_tables"] != []
+        assert "users" in cleanup["dropped_tenant_columns"]
+        assert report["post_reconciliation"]["anomaly_samples"]["tenant_columns_present"] == []
+
+    def test_migration_reentry_is_idempotent(self, tmp_path):
+        module = _load_migration_module()
+
+        db_path = tmp_path / "legacy_reentry.db"
+        report_path_first = tmp_path / "migration_report_first.json"
+        report_path_second = tmp_path / "migration_report_second.json"
+        save_file = tmp_path / "legacy_save_reentry.json"
+
+        _init_legacy_schema(db_path, save_file)
+
+        first = module.migrate_phase1(str(db_path), str(report_path_first))
+        second = module.migrate_phase1(str(db_path), str(report_path_second))
+
+        assert first["status"] == "success"
+        assert second["status"] == "success"
+        assert second["post_reconciliation"]["anomaly_samples"]["legacy_tables_present"] == []
+        assert second["post_reconciliation"]["anomaly_samples"]["tenant_columns_present"] == []
+
+    def test_migration_falls_back_when_drop_column_operational_error(self, tmp_path, monkeypatch):
+        module = _load_migration_module()
+
+        db_path = tmp_path / "legacy_drop_error.db"
+        report_path = tmp_path / "migration_report_drop_error.json"
+        save_file = tmp_path / "legacy_save_drop_error.json"
+
+        _init_legacy_schema(db_path, save_file)
+
+        monkeypatch.setattr(module, "_sqlite_supports_drop_column", lambda _conn: True)
+
+        def raise_drop_error(_conn, _table_name):
+            raise sqlite3.OperationalError("simulated DROP COLUMN failure")
+
+        monkeypatch.setattr(module, "_drop_tenant_column", raise_drop_error)
+
+        report = module.migrate_phase1(str(db_path), str(report_path))
+        assert report["status"] == "success"
+        cleanup = report["backfill_results"]["item_11_tenant_cleanup"]
+        assert cleanup["tenant_cleanup_fallback_tables"] != []
+        assert report["post_reconciliation"]["anomaly_samples"]["legacy_tables_present"] == []
+        assert report["post_reconciliation"]["anomaly_samples"]["tenant_columns_present"] == []
