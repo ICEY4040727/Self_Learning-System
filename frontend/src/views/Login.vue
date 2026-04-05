@@ -29,16 +29,16 @@
           :key="m"
           class="mode-tab"
           :class="{ active: mode === m }"
-          @click="handleModeSwitch(m)"
+          @click="mode = m; error = ''"
         >
           {{ m === 'login' ? '登 入' : '注 册' }}
         </button>
       </div>
 
       <!-- Form -->
-      <form @submit.prevent="handleSubmit" class="form-stack">
+      <TransitionGroup name="field-list" tag="form" @submit.prevent="handleSubmit" class="form-stack">
         <!-- Username -->
-        <div class="field-group" :class="{ 'slide-up': isSliding }">
+        <div key="username" class="field-group">
           <label class="field-label">用 户 名</label>
           <input
             v-model="username"
@@ -51,7 +51,7 @@
         </div>
 
         <!-- Password -->
-        <div class="field-group" :class="{ 'slide-up': isSliding }">
+        <div key="password" class="field-group">
           <label class="field-label">密 码</label>
           <div class="pw-wrapper">
             <input
@@ -72,33 +72,29 @@
           </div>
         </div>
 
-        <!-- Confirm password (register only) - with separate transition -->
-        <Transition name="confirm-fade">
-          <div v-if="mode === 'register'" class="field-group">
-            <label class="field-label">确 认 密 码</label>
-            <input
-              v-model="confirmPw"
-              :type="showPw ? 'text' : 'password'"
-              class="galgame-input"
-              placeholder="再次输入密码"
-              autocomplete="new-password"
-            />
-          </div>
-        </Transition>
+        <!-- Confirm password (register only) -->
+        <div key="confirmPw" v-if="mode === 'register'" class="field-group">
+          <label class="field-label">确 认 密 码</label>
+          <input
+            v-model="confirmPw"
+            :type="showPw ? 'text' : 'password'"
+            class="galgame-input"
+            placeholder="再次输入密码"
+            autocomplete="new-password"
+          />
+        </div>
 
         <!-- Error message -->
-        <Transition name="error-fade">
-          <div v-if="error" class="error-box font-ui">{{ error }}</div>
-        </Transition>
+        <div key="error" v-if="error" class="error-box font-ui">{{ error }}</div>
 
         <!-- Submit -->
-        <button type="submit" class="submit-btn" :disabled="loading">
+        <button key="submit" type="submit" class="submit-btn" :disabled="loading">
           <span v-if="loading" class="loading-dots">
             <span v-for="i in 3" :key="i" :style="{ animationDelay: `${(i-1) * 0.2}s` }">·</span>
           </span>
           <span v-else>{{ mode === 'login' ? '进 入 学 堂' : '创 建 账 号' }}</span>
         </button>
-      </form>
+      </TransitionGroup>
 
       <!-- Demo hint -->
       <div class="demo-hint font-ui">演示模式：输入任意用户名密码即可进入</div>
@@ -118,7 +114,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { Eye, EyeOff } from 'lucide-vue-next'
 import axios from 'axios'
@@ -139,23 +135,6 @@ const confirmPw = ref('')
 const showPw = ref(false)
 const error = ref('')
 const loading = ref(false)
-const isSliding = ref(false)
-
-const handleModeSwitch = (newMode: 'login' | 'register') => {
-  if (mode.value === newMode) return
-  
-  // When switching from register to login, trigger slide animation
-  if (mode.value === 'register' && newMode === 'login') {
-    isSliding.value = true
-    // Remove the class after animation completes
-    setTimeout(() => {
-      isSliding.value = false
-    }, 400)
-  }
-  
-  mode.value = newMode
-  error.value = ''
-}
 
 const handleSubmit = async () => {
   error.value = ''
@@ -358,20 +337,6 @@ const handleSubmit = async () => {
   margin-bottom: 0;
 }
 
-/* Manual slide up animation for register -> login */
-.field-group.slide-up {
-  animation: slideUp 0.4s ease-out forwards;
-}
-
-@keyframes slideUp {
-  from {
-    transform: translateY(0);
-  }
-  to {
-    transform: translateY(-52px);
-  }
-}
-
 .field-label {
   color: rgba(255,255,255,0.60);
   font-size: 12px;
@@ -500,7 +465,6 @@ const handleSubmit = async () => {
   text-shadow: 0 0 16px rgba(255,215,0,0.25);
 }
 
-/* Error message fade */
 .error-fade-enter-from,
 .error-fade-leave-to {
   opacity: 0;
@@ -512,18 +476,38 @@ const handleSubmit = async () => {
   transition: opacity 0.2s ease, transform 0.2s ease;
 }
 
-/* Confirm password fade - only fade, no movement */
-.confirm-fade-enter-from,
-.confirm-fade-leave-to {
+/* Confirm password field slide transition */
+.field-slide-enter-from,
+.field-slide-leave-to {
   opacity: 0;
   transform: translateY(-8px);
 }
 
-.confirm-fade-enter-active {
+.field-slide-enter-active,
+.field-slide-leave-active {
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+/* TransitionGroup animations for all form fields */
+.field-list-move {
+  transition: transform 0.5s ease;
+}
+
+.field-list-enter-from {
+  opacity: 0;
+  transform: translateY(12px);
+}
+
+.field-list-leave-to {
+  opacity: 0;
+  transform: translateY(12px);
+}
+
+.field-list-enter-active {
   transition: opacity 0.25s ease, transform 0.25s ease;
 }
 
-.confirm-fade-leave-active {
-  transition: opacity 0.15s ease, transform 0.15s ease;
+.field-list-leave-active {
+  transition: opacity 0.25s ease, transform 0.25s ease;
 }
 </style>
