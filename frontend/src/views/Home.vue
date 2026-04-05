@@ -326,7 +326,7 @@ const logout = () => { authStore.logout(); router.push('/login') }
 
 const MENU_ITEMS = [
   { label: '开 始 学 习', action: () => { phase.value = 'worlds' } },
-  { label: '角 色 管 理', action: () => { phase.value = 'character' } },
+  { label: '角 色 管 理', action: async () => { await fetchCharacters(); phase.value = 'character' } },
   { label: '档 案 管 理', action: () => router.push('/archive') },
   { label: '系 统 设 置', action: () => router.push('/settings') },
   { label: '退 出 登 录', action: logout },
@@ -400,11 +400,45 @@ const fetchWorlds = async () => {
   loading.value = true
   try {
     const res = await axios.get('/api/worlds', { headers: headers() })
-    worlds.value = res.data
+    worlds.value = res.data.map((world: any) => ({
+      ...world,
+      sages: world.sages || [],
+      stageLabel: world.stageLabel || '初识',
+    }))
   } catch (error) {
     showError(error)
   } finally {
     loading.value = false
+  }
+}
+
+const fetchCharacters = async () => {
+  try {
+    const res = await axios.get('/api/characters', { headers: headers() })
+    const characters = res.data
+    sageCharacters.value = characters.filter((c: any) => c.type === 'sage').map((c: any) => ({
+      id: c.id,
+      name: c.name,
+      title: c.personality || '',
+      symbol: c.avatar || '☉',
+      color: c.sprites?.color || '#f59e0b',
+      accentColor: c.sprites?.accentColor || '#fbbf24',
+      description: c.personality || '',
+      type: 'sage' as const,
+    }))
+    travelerCharacters.value = characters.filter((c: any) => c.type === 'traveler').map((c: any) => ({
+      id: c.id,
+      name: c.name,
+      title: c.personality || '',
+      symbol: c.avatar || '✦',
+      color: c.sprites?.color || '#3b82f6',
+      accentColor: c.sprites?.accentColor || '#60a5fa',
+      description: c.personality || '',
+      type: 'traveler' as const,
+    }))
+  } catch (error) {
+    // Use mock data if API fails
+    console.warn('Failed to fetch characters, using mock data')
   }
 }
 
