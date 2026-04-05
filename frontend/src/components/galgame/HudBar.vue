@@ -1,19 +1,19 @@
 <template>
-  <div class="hud-bar">
+  <div class="hud-bar galgame-hud">
     <div class="hud-left">
-      <button class="hud-btn" @click="$emit('save')">💾 存档</button>
-      <button class="hud-btn" @click="$emit('load')">📂 读档</button>
-      <button class="hud-btn" @click="$emit('skip')">⏩ 跳过</button>
+      <button class="hud-btn galgame-btn" @click="$emit('save')">💾 存档</button>
+      <button class="hud-btn galgame-btn" @click="$emit('load')">📂 读档</button>
+      <button class="hud-btn galgame-btn" @click="$emit('skip')">⏩ 跳过</button>
       <button
-        class="hud-btn"
+        class="hud-btn galgame-btn"
         :class="{ 'hud-btn-active': isAuto }"
         @click="$emit('toggle-auto')"
       >▶ 自动</button>
-      <button class="hud-btn" @click="$emit('backlog')">📖 回忆</button>
-      <button class="hud-btn" @click="$emit('knowledge-graph')">📊 图谱</button>
-      <button class="hud-btn" @click="$emit('toggle-ui')">🙈 隐藏UI</button>
-      <button class="hud-btn" @click="$emit('settings')">⚙ 设置</button>
-      <button class="hud-btn" @click="$emit('exit')">🏠 主页</button>
+      <button class="hud-btn galgame-btn" @click="$emit('backlog')">📖 回忆</button>
+      <button class="hud-btn galgame-btn" @click="$emit('knowledge-graph')">📊 图谱</button>
+      <button class="hud-btn galgame-btn" @click="$emit('toggle-ui')">🙈 隐藏UI</button>
+      <button class="hud-btn galgame-btn" @click="$emit('settings')">⚙ 设置</button>
+      <button class="hud-btn galgame-btn" @click="$emit('exit')">🏠 主页</button>
     </div>
     <div class="hud-right">
       <slot name="status">
@@ -68,8 +68,6 @@ const mastery = computed(() => props.mastery ?? 0)
   left: 0;
   right: 0;
   height: 40px;
-  background: rgba(0, 0, 0, 0.75);
-  border-top: 1px solid var(--border-subtle);
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -85,12 +83,10 @@ const mastery = computed(() => props.mastery ?? 0)
 }
 
 .hud-btn {
-  background: transparent;
-  border: none;
   color: var(--text-secondary);
   font-size: 12px;
-  padding: 4px 10px;
-  cursor: pointer;
+  padding: 3px 9px;
+  border-radius: var(--radius-hud-btn);
   transition: color var(--transition-fast);
   white-space: nowrap;
 }

@@ -1,11 +1,13 @@
-/* === Galgame Theme System === */
-/* Fonts loaded via <link> in index.html for non-blocking rendering */
+/* === Galgame style foundation === */
+/* Fonts are loaded via <link> in index.html for non-blocking rendering. */
 
 :root {
   /* Background */
   --bg-primary: #0a0a1e;
   --bg-secondary: #1a1a2e;
   --bg-panel: rgba(0, 0, 0, 0.85);
+  --panel-bg-soft: rgba(12, 14, 30, 0.72);
+  --panel-bg-strong: rgba(8, 10, 20, 0.84);
 
   /* Text */
   --text-primary: #ffffff;
@@ -26,6 +28,23 @@
   --border-subtle: #4a4a8a;
   --border-accent: #ffd700;
 
+  /* Radius baseline (from UI迁移书) */
+  --radius-none: 0;
+  --radius-hud-btn: 5px;
+  --radius-world-card: 12px;
+  --radius-modal: 16px;
+
+  /* Blur baseline (from UI迁移书) */
+  --blur-dialog: 20px;
+  --blur-panel: 22px;
+  --blur-hud: 12px;
+  --blur-login-panel: 22px;
+
+  /* Shadow */
+  --shadow-soft: 0 6px 20px rgba(0, 0, 0, 0.28);
+  --shadow-panel: 0 10px 36px rgba(0, 0, 0, 0.35);
+  --shadow-gold: 0 0 18px rgba(255, 215, 0, 0.32);
+
   /* Fonts */
   --font-dialogue: 'Noto Serif SC', 'Noto Serif CJK SC', serif;
   --font-ui: 'Noto Sans SC', 'Noto Sans CJK SC', sans-serif;
@@ -36,10 +55,13 @@
   --transition-normal: 0.3s ease;
   --transition-slow: 0.5s ease;
   --transition-page: 0.4s ease;
+  --transition-transform: transform var(--transition-normal);
 }
 
 /* Global reset */
-*, *::before, *::after {
+*,
+*::before,
+*::after {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
@@ -51,33 +73,225 @@ body {
   color: var(--text-primary);
 }
 
-/* Global animations */
-@keyframes blink {
-  0%, 50% { opacity: 1; }
-  51%, 100% { opacity: 0; }
+.galgame-panel,
+.galgame-dialog-box,
+.galgame-hud {
+  /* Keep blur layers transform-driven to avoid backdrop-filter flicker. */
+  transform: translateZ(0);
+  will-change: transform;
+  transition: transform var(--transition-normal), border-color var(--transition-fast), box-shadow var(--transition-fast);
 }
 
-@keyframes slideUp {
-  from { transform: translateY(20px); opacity: 0; }
-  to { transform: translateY(0); opacity: 1; }
+.galgame-panel {
+  background: var(--panel-bg-strong);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-none);
+  box-shadow: var(--shadow-panel);
+  backdrop-filter: blur(var(--blur-panel));
+  -webkit-backdrop-filter: blur(var(--blur-panel));
+}
+
+.galgame-dialog-box {
+  padding: 20px 24px;
+  border: 1px solid var(--border-accent);
+  border-radius: var(--radius-none);
+  background: var(--panel-bg-soft);
+  box-shadow: 0 -4px 30px rgba(0, 0, 0, 0.5);
+  animation: panelIn var(--transition-normal);
+  backdrop-filter: blur(var(--blur-dialog)) saturate(1.5);
+  -webkit-backdrop-filter: blur(var(--blur-dialog)) saturate(1.5);
+}
+
+.galgame-name-tag {
+  background: linear-gradient(135deg, var(--accent-gold), var(--accent-orange));
+  color: var(--bg-primary);
+  border-radius: var(--radius-none);
+  border: 1px solid rgba(0, 0, 0, 0.22);
+  clip-path: polygon(8% 0, 100% 0, 92% 100%, 0 100%);
+  font-family: var(--font-ui);
+  font-weight: 700;
+  font-size: 14px;
+  transform: skewX(-8deg);
+}
+
+.galgame-hud {
+  background: rgba(0, 0, 0, 0.75);
+  border-top: 1px solid var(--border-subtle);
+  backdrop-filter: blur(var(--blur-hud));
+  -webkit-backdrop-filter: blur(var(--blur-hud));
+}
+
+.galgame-btn {
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-none);
+  color: var(--text-primary);
+  background: rgba(26, 26, 46, 0.88);
+  cursor: pointer;
+  transition: border-color var(--transition-fast), color var(--transition-fast), transform var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.galgame-btn:hover:not(:disabled) {
+  border-color: var(--accent-gold);
+  color: var(--accent-gold);
+  transform: translateY(-1px);
+}
+
+.galgame-btn-primary {
+  border-color: #4a8a4a;
+  background: #2f6f2f;
+  color: #fff;
+}
+
+.galgame-btn-primary:hover:not(:disabled) {
+  border-color: #6fcf97;
+  color: #fff;
+  box-shadow: 0 0 12px rgba(111, 207, 151, 0.32);
+}
+
+.galgame-input {
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-none);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-primary);
+  font-family: var(--font-dialogue);
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.galgame-input:focus {
+  border-color: var(--accent-gold);
+  box-shadow: var(--shadow-gold);
+  outline: none;
+}
+
+.galgame-menu-item {
+  padding: 10px 12px;
+  text-align: left;
+  font-size: 14px;
+}
+
+.galgame-world-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-world-card);
+  color: var(--text-primary);
+  background: rgba(24, 24, 38, 0.9);
+  cursor: pointer;
+  transition: transform var(--transition-fast), border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.galgame-world-card:hover {
+  border-color: var(--accent-gold);
+  box-shadow: var(--shadow-soft);
+  transform: translateY(-1px);
+}
+
+.galgame-choice-item {
+  animation: choiceStagger var(--transition-normal) both;
+}
+
+/* Global animations */
+@keyframes blink {
+  0%,
+  50% {
+    opacity: 1;
+  }
+  51%,
+  100% {
+    opacity: 0;
+  }
 }
 
 @keyframes slideInRight {
-  from { transform: translateX(100%); }
-  to { transform: translateX(0); }
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
 }
 
 @keyframes fadeSlideIn {
-  from { opacity: 0; transform: translateX(-30px); }
-  to { opacity: 1; transform: translateX(0); }
+  from {
+    opacity: 0;
+    transform: translateX(-30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
 }
 
 @keyframes flash {
-  0% { background-color: var(--accent-gold); }
-  100% { background-color: transparent; }
+  0% {
+    background-color: var(--accent-gold);
+  }
+  100% {
+    background-color: transparent;
+  }
 }
 
 @keyframes breathe {
-  0%, 100% { opacity: 0.6; }
-  50% { opacity: 1; }
+  0%,
+  100% {
+    opacity: 0.6;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes breatheGlow {
+  0%,
+  100% {
+    box-shadow: 0 0 0 rgba(255, 215, 0, 0);
+  }
+  50% {
+    box-shadow: 0 0 18px rgba(255, 215, 0, 0.3);
+  }
+}
+
+@keyframes floatParticle {
+  0% {
+    transform: translateY(0) scale(1);
+  }
+  50% {
+    transform: translateY(-8px) scale(1.03);
+  }
+  100% {
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes dotFlash {
+  0%,
+  80%,
+  100% {
+    opacity: 0.2;
+  }
+  40% {
+    opacity: 1;
+  }
+}
+
+@keyframes panelIn {
+  from {
+    transform: translateY(16px);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+@keyframes choiceStagger {
+  from {
+    transform: translateX(12px);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
 }

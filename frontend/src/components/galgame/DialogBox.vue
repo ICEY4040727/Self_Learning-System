@@ -1,7 +1,7 @@
 <template>
-  <div class="dialog-box" @click="handleClick">
+  <div class="dialog-box galgame-dialog-box" @click="handleClick">
     <!-- Name tag -->
-    <div class="name-tag" :class="{ 'name-tag-user': mode === 'USER_INPUT' }">
+    <div class="name-tag galgame-name-tag" :class="{ 'name-tag-user': mode === 'USER_INPUT' }">
       {{ mode === 'USER_INPUT' ? '我' : characterName }}
     </div>
 
@@ -21,13 +21,13 @@
       <textarea
         ref="inputRef"
         v-model="inputValue"
-        class="dialog-input"
+        class="dialog-input galgame-input"
         placeholder="输入你的想法..."
         rows="2"
         @keydown.enter.exact.prevent="handleSend"
         @click.stop
       ></textarea>
-      <button class="send-btn" @click.stop="handleSend" :disabled="!inputValue.trim()">→</button>
+      <button class="send-btn galgame-btn" @click.stop="handleSend" :disabled="!inputValue.trim()">→</button>
     </div>
 
     <!-- Mode: CHOICES -->
@@ -39,7 +39,7 @@
         <button
           v-for="(choice, i) in choices"
           :key="i"
-          class="choice-item"
+          class="choice-item galgame-choice-item"
           :style="{ animationDelay: `${i * 0.1}s` }"
           @click.stop="$emit('select-choice', choice)"
         >
@@ -105,18 +105,10 @@ const handleSend = () => {
 
 <style scoped>
 .dialog-box {
-  background: rgba(0, 0, 0, 0.6);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid var(--border-accent);
-  border-radius: 12px;
-  padding: 20px 24px;
   min-height: 160px;
   max-height: 240px;
   position: relative;
   cursor: pointer;
-  box-shadow: 0 -4px 30px rgba(0, 0, 0, 0.5);
-  animation: slideUp var(--transition-normal);
   overflow-y: auto;
 }
 
@@ -125,13 +117,7 @@ const handleSend = () => {
   position: absolute;
   top: -14px;
   left: 20px;
-  background: linear-gradient(135deg, var(--accent-gold), var(--accent-orange));
-  color: var(--bg-primary);
   padding: 3px 16px;
-  font-family: var(--font-ui);
-  font-weight: bold;
-  font-size: 14px;
-  transform: skewX(-8deg);
 }
 
 .name-tag-user {
@@ -177,21 +163,10 @@ const handleSend = () => {
 
 .dialog-input {
   flex: 1;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid var(--border-subtle);
-  border-radius: 4px;
-  color: var(--text-primary);
-  font-family: var(--font-dialogue);
   font-size: 16px;
   line-height: 1.8;
   padding: 10px 14px;
   resize: none;
-  outline: none;
-  transition: border-color var(--transition-fast);
-}
-
-.dialog-input:focus {
-  border-color: var(--accent-gold);
 }
 
 .dialog-input::placeholder {
@@ -203,16 +178,15 @@ const handleSend = () => {
   height: 44px;
   background: var(--accent-gold);
   color: var(--bg-primary);
-  border: none;
-  border-radius: 50%;
+  border-color: rgba(0, 0, 0, 0.15);
+  border-radius: 0;
   font-size: 20px;
   font-weight: bold;
-  cursor: pointer;
-  transition: all var(--transition-fast);
   flex-shrink: 0;
 }
 
 .send-btn:hover:not(:disabled) {
+  color: var(--bg-primary);
   transform: scale(1.1);
   box-shadow: 0 0 12px rgba(255, 215, 0, 0.4);
 }
@@ -231,22 +205,10 @@ const handleSend = () => {
 }
 
 .choice-item {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid var(--border-subtle);
-  border-radius: 4px;
-  color: var(--text-primary);
   font-family: var(--font-ui);
   font-size: 15px;
   padding: 10px 16px;
   text-align: left;
-  cursor: pointer;
-  transition: all var(--transition-fast);
-  animation: slideInChoice var(--transition-normal) both;
-}
-
-@keyframes slideInChoice {
-  from { transform: translateX(20px); opacity: 0; }
-  to { transform: translateX(0); opacity: 1; }
 }
 
 .choice-item:hover {
