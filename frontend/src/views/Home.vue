@@ -295,6 +295,7 @@ import axios from 'axios'
 import { useAuthStore } from '@/stores/auth'
 import { parseApiError } from '@/utils/error'
 import ParticleBackground from '@/components/ParticleBackground.vue'
+import CharSection from '@/components/CharSection.vue'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -462,10 +463,6 @@ const startNewJourney = () => {
 }
 
 onMounted(async () => { await fetchWorlds() })
-</script>
-
-<script lang="ts">
-// CharSection component placeholder
 </script>
 
 <style scoped>
