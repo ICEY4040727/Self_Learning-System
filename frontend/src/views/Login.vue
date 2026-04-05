@@ -1,7 +1,7 @@
 <template>
   <div class="login-page">
     <!-- Scene background -->
-    <div class="scene-bg" :style="{ backgroundImage: `url(${BG_URL})` }"></div>
+    <div class="scene-bg" :style="{ backgroundImage: `url(${loginBg})` }"></div>
     
     <!-- Combined overlay layer -->
     <div class="scene-overlay"></div>
@@ -115,6 +115,7 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
+import loginBg from '@/assets/login-bg.jpg'
 import { useRouter } from 'vue-router'
 import { Eye, EyeOff } from 'lucide-vue-next'
 import axios from 'axios'
@@ -125,8 +126,6 @@ const router = useRouter()
 const authStore = useAuthStore()
 
 const version = '1.0.0'
-
-const BG_URL = 'https://images.unsplash.com/photo-1663318971958-8e9e1cead755?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxhbmNpZW50JTIwZ3JlZWslMjBhY2FkZW15JTIwbmlnaHQlMjBhdG1vc3BoZXJpYyUyMGRhcmslMjBsaWJyYXJ5fGVufDF8fHx8MTc3NTMyNjM1MHww&ixlib=rb-4.1.0&q=80&w=1080'
 
 const mode = ref<'login' | 'register'>('login')
 const username = ref('')
