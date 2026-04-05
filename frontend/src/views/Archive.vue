@@ -1,117 +1,155 @@
 <template>
   <div class="archive-page">
-    <header class="header">
-      <button class="back-btn" @click="router.push('/home')">← 返回</button>
-      <h1>档案管理</h1>
+    <div class="archive-bg-image"></div>
+    <div class="archive-bg-overlay"></div>
+
+    <header class="archive-header">
+      <button class="galgame-btn galgame-menu-item back-btn" @click="router.push('/home')">← 返回</button>
+      <h1>档 案 管 理</h1>
+      <span class="header-spacer"></span>
     </header>
 
-    <main class="main">
-      <!-- 学习日记 -->
-      <section class="section">
-        <div class="section-header">
-          <h2>学习日记</h2>
-          <button class="add-btn" @click="showDiaryDialog = true">+ 写日记</button>
-        </div>
-
-        <div class="diary-list">
-          <div v-for="diary in diaries" :key="diary.id" class="diary-card">
-            <div class="diary-date">{{ formatDate(diary.date) }}</div>
-            <p class="diary-content">{{ diary.content }}</p>
-            <p v-if="diary.reflection" class="diary-reflection">
-              反思: {{ diary.reflection }}
-            </p>
-          </div>
-          <p v-if="diaries.length === 0" class="empty-text">暂无学习日记</p>
-        </div>
-      </section>
-
-      <!-- 进度追踪 -->
-      <section class="section">
-        <div class="section-header">
-          <h2>学习进度</h2>
-          <select v-model="selectedCourseFilter" @change="fetchProgress">
+    <main class="archive-content galgame-scrollbar">
+      <section class="toolbar-row">
+        <div class="course-filter">
+          <span>课程筛选</span>
+          <select v-model="selectedCourseFilter" class="galgame-input" @change="fetchProgress">
             <option value="">全部课程</option>
-            <option v-for="course in courses" :key="course.id" :value="course.id">
+            <option v-for="course in courses" :key="course.id" :value="String(course.id)">
               {{ course.name }}
             </option>
           </select>
         </div>
-
-        <div class="progress-list">
-          <div v-for="prog in progressList" :key="prog.id" class="progress-card">
-            <div class="progress-header">
-              <h3>{{ prog.topic }}</h3>
-              <span class="mastery">{{ prog.mastery_level }}/100</span>
-            </div>
-            <div class="progress-bar">
-              <div class="progress-fill" :style="{ width: prog.mastery_level + '%' }"></div>
-            </div>
-            <p class="next-review">
-              下次复习: {{ prog.next_review ? formatDate(prog.next_review) : '未安排' }}
-            </p>
-          </div>
-          <p v-if="progressList.length === 0" class="empty-text">暂无进度记录</p>
-        </div>
+        <button class="galgame-btn galgame-btn-primary diary-trigger" @click="openDiaryDialog">写日记</button>
       </section>
 
-      <!-- 情感轨迹 -->
-      <section class="section">
-        <EmotionTrajectory :course-id="selectedCourseFilter ? Number(selectedCourseFilter) : undefined" />
+      <p v-if="errorMessage" class="error-banner">{{ errorMessage }}</p>
+
+      <section class="archive-panel emotion-panel galgame-panel">
+        <div class="panel-header">
+          <h2>情感轨迹</h2>
+          <span>{{ selectedCourseName || '全部课程' }}</span>
+        </div>
+        <EmotionTrajectory :course-id="selectedCourseId" />
       </section>
 
-      <!-- 存档管理 -->
-      <section class="section">
-        <div class="section-header">
-          <h2>游戏存档</h2>
+      <div class="archive-grid">
+        <section class="archive-panel galgame-panel">
+          <div class="panel-header">
+            <h2>学习进度</h2>
+            <span>{{ progressList.length }} 条</span>
+          </div>
+
+          <div class="card-list">
+            <article v-for="prog in progressList" :key="prog.id" class="record-card">
+              <div class="record-head">
+                <strong>{{ prog.topic }}</strong>
+                <span class="record-mastery">{{ prog.mastery_level }}%</span>
+              </div>
+              <div class="progress-bar">
+                <div class="progress-fill" :style="{ width: `${prog.mastery_level}%` }"></div>
+              </div>
+              <p class="record-meta">下次复习：{{ prog.next_review ? formatDateTime(prog.next_review) : '未安排' }}</p>
+            </article>
+
+            <p v-if="progressList.length === 0" class="empty-text">暂无进度记录</p>
+          </div>
+        </section>
+
+        <section class="archive-panel galgame-panel">
+          <div class="panel-header">
+            <h2>存档与分叉</h2>
+            <span>{{ saves.length }} 条</span>
+          </div>
+
+          <div class="card-list">
+            <article v-for="save in saves" :key="save.id" class="record-card save-card">
+              <div class="record-head">
+                <strong>{{ save.save_name }}</strong>
+                <span>#{{ save.id }}</span>
+              </div>
+              <p class="record-meta">{{ formatDateTime(save.created_at) }}</p>
+              <div class="save-actions">
+                <button
+                  class="galgame-btn galgame-menu-item"
+                  :disabled="saveActionId === save.id"
+                  @click="loadSave(save.id)"
+                >
+                  {{ saveActionId === save.id ? '分叉中...' : '读档分叉' }}
+                </button>
+                <button
+                  class="galgame-btn galgame-menu-item danger"
+                  :disabled="saveActionId === save.id"
+                  @click="deleteSave(save.id)"
+                >
+                  删除
+                </button>
+              </div>
+            </article>
+
+            <p v-if="saves.length === 0" class="empty-text">暂无存档</p>
+          </div>
+        </section>
+      </div>
+
+      <section class="archive-panel galgame-panel">
+        <div class="panel-header">
+          <h2>学习日记</h2>
+          <span>{{ diaries.length }} 篇</span>
         </div>
 
-        <div class="save-list">
-          <div v-for="save in saves" :key="save.id" class="save-card">
-            <div class="save-info">
-              <h3>{{ save.save_name }}</h3>
-              <p>{{ formatDate(save.created_at) }}</p>
+        <div class="card-list">
+          <article v-for="diary in sortedDiaries" :key="diary.id" class="record-card">
+            <div class="record-head">
+              <strong>{{ courseNameMap.get(diary.course_id) || `课程 #${diary.course_id}` }}</strong>
+              <span>{{ formatDateTime(diary.date) }}</span>
             </div>
-            <div class="save-actions">
-              <button @click="loadSave(save.id)">读档</button>
-              <button class="delete" @click="deleteSave(save.id)">删除</button>
-            </div>
-          </div>
-          <p v-if="saves.length === 0" class="empty-text">暂无存档</p>
+            <p class="diary-content">{{ diary.content }}</p>
+            <p v-if="diary.reflection" class="record-meta reflection">反思：{{ diary.reflection }}</p>
+          </article>
+
+          <p v-if="diaries.length === 0" class="empty-text">暂无学习日记</p>
         </div>
       </section>
+    </main>
 
-      <!-- 写日记对话框 -->
-      <div v-if="showDiaryDialog" class="dialog-overlay" @click.self="showDiaryDialog = false">
-        <div class="dialog">
-          <h3>写学习日记</h3>
-          <div class="form-group">
-            <label>选择课程</label>
-            <select v-model="diaryForm.course_id">
-              <option v-for="course in courses" :key="course.id" :value="course.id">
-                {{ course.name }}
-              </option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label>今日学习内容</label>
-            <textarea v-model="diaryForm.content" rows="4" placeholder="今天学了什么？"></textarea>
-          </div>
-          <div class="form-group">
-            <label>反思总结</label>
-            <textarea v-model="diaryForm.reflection" rows="3" placeholder="有什么收获或困惑？"></textarea>
-          </div>
-          <div class="dialog-actions">
-            <button @click="showDiaryDialog = false">取消</button>
-            <button class="primary" @click="createDiary">保存</button>
-          </div>
+    <div v-if="showDiaryDialog" class="dialog-overlay" @click.self="showDiaryDialog = false">
+      <div class="dialog-panel galgame-panel">
+        <h3>写学习日记</h3>
+        <label class="field">
+          <span>选择课程</span>
+          <select v-model="diaryForm.course_id" class="galgame-input">
+            <option v-for="course in courses" :key="course.id" :value="course.id">
+              {{ course.name }}
+            </option>
+          </select>
+        </label>
+        <label class="field">
+          <span>今日学习内容</span>
+          <textarea v-model="diaryForm.content" class="galgame-input" rows="4" placeholder="今天学了什么？"></textarea>
+        </label>
+        <label class="field">
+          <span>反思总结</span>
+          <textarea
+            v-model="diaryForm.reflection"
+            class="galgame-input"
+            rows="3"
+            placeholder="有什么收获或困惑？"
+          ></textarea>
+        </label>
+        <div class="dialog-actions">
+          <button class="galgame-btn galgame-menu-item" @click="showDiaryDialog = false">取消</button>
+          <button class="galgame-btn galgame-btn-primary" :disabled="diarySubmitting" @click="createDiary">
+            {{ diarySubmitting ? '保存中...' : '保存日记' }}
+          </button>
         </div>
       </div>
-    </main>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import axios from 'axios'
 import { useAuthStore } from '@/stores/auth'
@@ -148,6 +186,12 @@ interface Course {
   name: string
 }
 
+interface BranchResponse {
+  course_id?: number
+  world_id?: number
+  session_id?: number
+}
+
 const diaries = ref<Diary[]>([])
 const progressList = ref<Progress[]>([])
 const saves = ref<Save[]>([])
@@ -155,377 +199,470 @@ const courses = ref<Course[]>([])
 const selectedCourseFilter = ref('')
 
 const showDiaryDialog = ref(false)
+const diarySubmitting = ref(false)
+const saveActionId = ref<number | null>(null)
+const errorMessage = ref('')
+
 const diaryForm = ref({
   course_id: null as number | null,
   content: '',
-  reflection: ''
+  reflection: '',
 })
 
-const formatDate = (dateStr: string) => {
+const selectedCourseId = computed(() => {
+  const parsed = Number(selectedCourseFilter.value)
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined
+})
+
+const courseNameMap = computed(() => new Map(courses.value.map((course) => [course.id, course.name])))
+
+const selectedCourseName = computed(() =>
+  selectedCourseId.value ? courseNameMap.value.get(selectedCourseId.value) : undefined,
+)
+
+const sortedDiaries = computed(() =>
+  [...diaries.value].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
+)
+
+const headers = () => ({ Authorization: `Bearer ${authStore.token}` })
+
+const formatDateTime = (dateStr: string) => {
   const date = new Date(dateStr)
-  return date.toLocaleDateString('zh-CN', {
+  if (Number.isNaN(date.getTime())) return dateStr
+  return date.toLocaleString('zh-CN', {
     year: 'numeric',
-    month: 'long',
-    day: 'numeric'
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
   })
+}
+
+const toPositiveInt = (value: unknown): number | undefined => {
+  const parsed = Number(value)
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined
+}
+
+const showError = (error: unknown) => {
+  errorMessage.value = parseApiError(error)
+  setTimeout(() => {
+    errorMessage.value = ''
+  }, 4000)
 }
 
 const fetchDiaries = async () => {
   try {
-    const response = await axios.get('/api/learning_diary', {
-      headers: { Authorization: `Bearer ${authStore.token}` }
-    })
-    diaries.value = response.data
+    const response = await axios.get('/api/learning_diary', { headers: headers() })
+    diaries.value = Array.isArray(response.data) ? response.data : []
   } catch (error) {
-    console.error(parseApiError(error))
+    showError(error)
   }
 }
 
 const fetchProgress = async () => {
   try {
-    const params = selectedCourseFilter.value ? `?course_id=${selectedCourseFilter.value}` : ''
-    const response = await axios.get(`/api/progress${params}`, {
-      headers: { Authorization: `Bearer ${authStore.token}` }
+    const response = await axios.get('/api/progress', {
+      params: { course_id: selectedCourseId.value },
+      headers: headers(),
     })
-    progressList.value = response.data
+    progressList.value = Array.isArray(response.data) ? response.data : []
   } catch (error) {
-    console.error(parseApiError(error))
+    showError(error)
   }
 }
 
 const fetchSaves = async () => {
   try {
-    const response = await axios.get('/api/save', {
-      headers: { Authorization: `Bearer ${authStore.token}` }
-    })
-    saves.value = response.data
+    const response = await axios.get('/api/save', { headers: headers() })
+    saves.value = Array.isArray(response.data) ? response.data : []
   } catch (error) {
-    console.error(parseApiError(error))
+    showError(error)
   }
 }
 
 const fetchCourses = async () => {
   try {
-    const response = await axios.get('/api/courses', {
-      headers: { Authorization: `Bearer ${authStore.token}` }
-    })
-    courses.value = response.data
+    const response = await axios.get('/api/courses', { headers: headers() })
+    courses.value = Array.isArray(response.data) ? response.data : []
+    if (!diaryForm.value.course_id && courses.value.length > 0) {
+      diaryForm.value.course_id = courses.value[0].id
+    }
   } catch (error) {
-    console.error(parseApiError(error))
+    showError(error)
   }
 }
 
+const openDiaryDialog = () => {
+  if (courses.value.length === 0) {
+    showError(new Error('暂无课程，无法创建日记'))
+    return
+  }
+  if (!diaryForm.value.course_id) {
+    diaryForm.value.course_id = courses.value[0].id
+  }
+  showDiaryDialog.value = true
+}
+
 const createDiary = async () => {
-  if (!diaryForm.value.course_id || !diaryForm.value.content) return
+  if (!diaryForm.value.course_id || !diaryForm.value.content.trim()) {
+    showError(new Error('请填写课程与学习内容'))
+    return
+  }
+
+  diarySubmitting.value = true
   try {
-    await axios.post('/api/learning_diary', {
-      ...diaryForm.value,
-      date: new Date().toISOString()
-    }, {
-      headers: { Authorization: `Bearer ${authStore.token}` }
-    })
+    await axios.post(
+      '/api/learning_diary',
+      {
+        course_id: diaryForm.value.course_id,
+        content: diaryForm.value.content.trim(),
+        reflection: diaryForm.value.reflection.trim() || undefined,
+        date: new Date().toISOString(),
+      },
+      { headers: headers() },
+    )
     showDiaryDialog.value = false
-    diaryForm.value = { course_id: null, content: '', reflection: '' }
-    fetchDiaries()
+    diaryForm.value = {
+      course_id: diaryForm.value.course_id,
+      content: '',
+      reflection: '',
+    }
+    await fetchDiaries()
   } catch (error) {
-    console.error(parseApiError(error))
+    showError(error)
+  } finally {
+    diarySubmitting.value = false
   }
 }
 
 const loadSave = async (saveId: number) => {
+  saveActionId.value = saveId
   try {
-    const response = await axios.post(`/api/checkpoints/${saveId}/branch`, {}, {
-      headers: { Authorization: `Bearer ${authStore.token}` }
-    })
+    const response = await axios.post<BranchResponse>(`/api/checkpoints/${saveId}/branch`, {}, { headers: headers() })
     const data = response.data
-    const courseId = data.course_id
-    if (!courseId) {
-      alert('分叉结果缺少课程信息')
-      return
-    }
+    const courseId = toPositiveInt(data.course_id)
+    if (!courseId) throw new Error('分叉结果缺少课程信息')
     router.push(buildLearningRoute(courseId, {
-      worldId: data.world_id,
-      sessionId: data.session_id,
+      worldId: toPositiveInt(data.world_id),
+      sessionId: toPositiveInt(data.session_id),
     }))
   } catch (error) {
-    alert(parseApiError(error))
+    showError(error)
+  } finally {
+    saveActionId.value = null
   }
 }
 
 const deleteSave = async (saveId: number) => {
-  if (!confirm('确定要删除这个存档吗？')) return
+  const confirmed = window.confirm('确定要删除这个存档吗？')
+  if (!confirmed) return
+
+  saveActionId.value = saveId
   try {
-    await axios.delete(`/api/save/${saveId}`, {
-      headers: { Authorization: `Bearer ${authStore.token}` }
-    })
-    fetchSaves()
+    await axios.delete(`/api/save/${saveId}`, { headers: headers() })
+    await fetchSaves()
   } catch (error) {
-    console.error(parseApiError(error))
+    showError(error)
+  } finally {
+    saveActionId.value = null
   }
 }
 
-onMounted(() => {
-  fetchDiaries()
-  fetchProgress()
-  fetchSaves()
-  fetchCourses()
+onMounted(async () => {
+  await Promise.all([fetchCourses(), fetchDiaries(), fetchProgress(), fetchSaves()])
 })
 </script>
 
 <style scoped>
 .archive-page {
+  position: relative;
   min-height: 100vh;
-  padding: 20px;
-  background: linear-gradient(180deg, #1a1a2e 0%, #16213e 100%);
+  overflow: hidden;
+  background: var(--bg-primary);
 }
 
-.header {
+.archive-bg-image {
+  position: absolute;
+  inset: 0;
+  opacity: 0.08;
+  background-image: url('https://images.unsplash.com/photo-1675371708731-50d9c04eb530?w=1920&q=80');
+  background-size: cover;
+  background-position: center;
+}
+
+.archive-bg-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to bottom, rgba(10, 10, 30, 0.95) 0%, rgba(10, 10, 30, 0.98) 100%);
+}
+
+.archive-header {
+  position: relative;
+  z-index: 2;
   display: flex;
   align-items: center;
-  gap: 20px;
-  margin-bottom: 30px;
+  justify-content: space-between;
+  padding: 16px 24px;
+  border-bottom: 1px solid rgba(255, 215, 0, 0.1);
 }
 
-.header h1 {
-  color: #ffd700;
+.archive-header h1 {
+  color: var(--accent-gold);
+  letter-spacing: 4px;
+  font-size: 18px;
+}
+
+.header-spacer {
+  width: 80px;
 }
 
 .back-btn {
-  padding: 8px 16px;
-  background: #2a2a4a;
-  border: 1px solid #4a4a8a;
-  color: #fff;
-  border-radius: 6px;
-  cursor: pointer;
+  font-size: 13px;
+  padding: 6px 14px;
 }
 
-.back-btn:hover {
-  background: #3a3a5a;
-  border-color: #ffd700;
+.archive-content {
+  position: relative;
+  z-index: 2;
+  height: calc(100vh - 68px);
+  overflow-y: auto;
+  padding: 20px 24px 24px;
 }
 
-.section {
-  margin-bottom: 30px;
-  background: rgba(0, 0, 0, 0.5);
-  border: 1px solid #4a4a8a;
-  border-radius: 12px;
-  padding: 20px;
-}
-
-.section-header {
+.toolbar-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 20px;
+  gap: 16px;
+  margin-bottom: 14px;
 }
 
-.section h2 {
-  color: #ffd700;
+.course-filter {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
-.section select {
-  padding: 8px 12px;
-  background: #2a2a4a;
-  border: 1px solid #4a4a8a;
-  border-radius: 6px;
-  color: #fff;
+.course-filter span {
+  color: rgba(255, 255, 255, 0.45);
+  font-size: 13px;
 }
 
-.add-btn {
-  padding: 8px 16px;
-  background: #4a8a4a;
-  border: none;
-  border-radius: 6px;
-  color: #fff;
-  cursor: pointer;
+.course-filter select {
+  min-width: 220px;
+  padding: 8px 10px;
 }
 
-.add-btn:hover {
-  background: #5a9a5a;
+.diary-trigger {
+  padding: 8px 14px;
 }
 
-.diary-list, .progress-list, .save-list {
+.error-banner {
+  margin-bottom: 12px;
+  padding: 8px 10px;
+  border: 1px solid rgba(223, 74, 74, 0.5);
+  background: rgba(223, 74, 74, 0.15);
+  color: #ffb3b3;
+  font-size: 13px;
+}
+
+.archive-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.archive-panel {
+  margin-bottom: 14px;
+  padding: 16px 18px;
+}
+
+.panel-header {
+  margin-bottom: 10px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.panel-header h2 {
+  color: var(--accent-gold);
+  font-size: 15px;
+  letter-spacing: 1px;
+}
+
+.panel-header span {
+  color: rgba(255, 255, 255, 0.35);
+  font-size: 12px;
+}
+
+.emotion-panel {
+  padding-bottom: 14px;
+}
+
+.card-list {
   display: flex;
   flex-direction: column;
-  gap: 15px;
+  gap: 10px;
 }
 
-.diary-card, .progress-card, .save-card {
-  background: rgba(0, 0, 0, 0.3);
-  border: 1px solid #4a4a8a;
-  border-radius: 8px;
-  padding: 15px;
+.record-card {
+  border: 1px solid rgba(74, 74, 138, 0.7);
+  background: rgba(0, 0, 0, 0.28);
+  border-radius: var(--radius-world-card);
+  padding: 10px 12px;
 }
 
-.diary-date {
-  color: #ffd700;
-  font-size: 14px;
-  margin-bottom: 8px;
-}
-
-.diary-content {
-  color: #fff;
-  line-height: 1.6;
-}
-
-.diary-reflection {
-  color: #888;
-  font-size: 14px;
-  margin-top: 10px;
-  padding-top: 10px;
-  border-top: 1px solid #4a4a8a;
-}
-
-.progress-header {
+.record-head {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 10px;
+  gap: 10px;
 }
 
-.progress-header h3 {
-  color: #fff;
+.record-head strong {
+  color: var(--text-primary);
+  font-size: 14px;
 }
 
-.mastery {
-  color: #4a8a4a;
-  font-weight: bold;
+.record-head span {
+  color: rgba(255, 255, 255, 0.42);
+  font-size: 12px;
+}
+
+.record-mastery {
+  color: #6fcf97 !important;
+  font-weight: 600;
+}
+
+.record-meta {
+  margin-top: 6px;
+  color: rgba(255, 255, 255, 0.48);
+  font-size: 12px;
 }
 
 .progress-bar {
-  height: 8px;
-  background: #2a2a4a;
-  border-radius: 4px;
+  margin-top: 8px;
+  height: 6px;
+  border-radius: 999px;
   overflow: hidden;
-  margin-bottom: 10px;
+  background: rgba(255, 255, 255, 0.1);
 }
 
 .progress-fill {
   height: 100%;
-  background: linear-gradient(90deg, #4a8a4a, #5a9a5a);
-  transition: width 0.3s;
-}
-
-.next-review {
-  color: #888;
-  font-size: 12px;
-}
-
-.save-info h3 {
-  color: #fff;
-  margin-bottom: 5px;
-}
-
-.save-info p {
-  color: #888;
-  font-size: 14px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #ffd700, #6fcf97);
 }
 
 .save-actions {
-  display: flex;
-  gap: 10px;
   margin-top: 10px;
+  display: flex;
+  gap: 8px;
 }
 
 .save-actions button {
-  padding: 6px 12px;
-  background: #2a2a4a;
-  border: 1px solid #4a4a8a;
-  border-radius: 4px;
-  color: #fff;
-  cursor: pointer;
+  font-size: 12px;
+  padding: 6px 10px;
 }
 
-.save-actions button:hover {
-  background: #3a3a5a;
+.danger {
+  border-color: rgba(223, 74, 74, 0.6);
+  color: #ff9a9a;
 }
 
-.save-actions button.delete {
-  border-color: #8a4a4a;
+.danger:hover:not(:disabled) {
+  border-color: rgba(223, 74, 74, 1);
+  color: #ffc1c1;
 }
 
-.save-actions button.delete:hover {
-  background: #8a4a4a;
+.diary-content {
+  margin-top: 8px;
+  color: rgba(240, 240, 255, 0.78);
+  white-space: pre-wrap;
+  line-height: 1.7;
+  font-size: 14px;
+}
+
+.reflection {
+  border-top: 1px solid rgba(74, 74, 138, 0.6);
+  padding-top: 6px;
 }
 
 .empty-text {
-  color: #888;
   text-align: center;
-  padding: 20px;
+  color: rgba(255, 255, 255, 0.45);
+  padding: 18px 0;
+  font-size: 13px;
 }
 
 .dialog-overlay {
   position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.8);
+  inset: 0;
+  z-index: 20;
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  background: rgba(0, 0, 0, 0.72);
 }
 
-.dialog {
-  background: #2a2a4a;
-  border: 1px solid #4a4a8a;
-  border-radius: 12px;
-  padding: 30px;
-  width: 90%;
-  max-width: 500px;
+.dialog-panel {
+  width: min(92vw, 560px);
+  padding: 18px;
+  border-radius: var(--radius-modal);
 }
 
-.dialog h3 {
-  color: #ffd700;
-  margin-bottom: 20px;
+.dialog-panel h3 {
+  color: var(--accent-gold);
+  font-size: 16px;
+  margin-bottom: 14px;
 }
 
-.form-group {
-  margin-bottom: 15px;
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 10px;
 }
 
-.form-group label {
-  display: block;
-  color: #fff;
-  margin-bottom: 8px;
+.field span {
+  color: rgba(255, 255, 255, 0.65);
+  font-size: 13px;
 }
 
-.form-group select, .form-group textarea {
+.field select,
+.field textarea {
   width: 100%;
-  padding: 10px;
-  background: #1a1a2e;
-  border: 1px solid #4a4a8a;
-  border-radius: 6px;
-  color: #fff;
+  padding: 9px 10px;
 }
 
-.form-group textarea {
+.field textarea {
   resize: vertical;
 }
 
 .dialog-actions {
+  margin-top: 12px;
   display: flex;
   justify-content: flex-end;
-  gap: 10px;
-  margin-top: 20px;
+  gap: 8px;
 }
 
-.dialog-actions button {
-  padding: 10px 20px;
-  border-radius: 6px;
-  cursor: pointer;
-  background: #2a2a4a;
-  border: 1px solid #4a4a8a;
-  color: #fff;
-}
+@media (max-width: 980px) {
+  .archive-grid {
+    grid-template-columns: 1fr;
+  }
 
-.dialog-actions button.primary {
-  background: #4a8a4a;
-  border: none;
-}
+  .toolbar-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
 
-.dialog-actions button.primary:hover {
-  background: #5a9a5a;
+  .course-filter {
+    width: 100%;
+  }
+
+  .course-filter select {
+    flex: 1;
+    min-width: 0;
+  }
 }
 </style>
