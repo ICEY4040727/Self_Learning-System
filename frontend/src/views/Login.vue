@@ -506,13 +506,13 @@ const handleSubmit = async () => {
 }
 
 .field-list-leave-active {
-  transition: opacity 0.25s ease, transform 0.25s ease;
+  transition: opacity 0.25s ease;
 }
 
 /* Fast fade for confirm password field - no movement */
 .confirm-fast-enter-active,
 .confirm-fast-leave-active {
-  transition: opacity 0.08s ease;
+  transition: opacity 0.05s ease;
 }
 
 .confirm-fast-enter-from,
