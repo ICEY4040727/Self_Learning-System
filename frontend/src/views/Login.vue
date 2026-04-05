@@ -500,6 +500,7 @@ const handleSubmit = async () => {
 
 .field-list-leave-to {
   opacity: 0;
+  transform: translateY(-12px);
 }
 
 .field-list-enter-active {
@@ -507,6 +508,6 @@ const handleSubmit = async () => {
 }
 
 .field-list-leave-active {
-  transition: opacity 0.10s ease;
+  transition: opacity 0.25s ease, transform 0.25s ease;
 }
 </style>
