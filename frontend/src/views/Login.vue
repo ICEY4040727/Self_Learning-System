@@ -512,7 +512,7 @@ const handleSubmit = async () => {
 /* Fast fade for confirm password field - no movement */
 .confirm-fast-enter-active,
 .confirm-fast-leave-active {
-  transition: opacity 0.15s ease;
+  transition: opacity 0.08s ease;
 }
 
 .confirm-fast-enter-from,
