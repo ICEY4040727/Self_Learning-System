@@ -1,0 +1,19 @@
+
+Running 10 tests using 5 workers
+
+[1A[2K[1/10] e2e/phase4-ui.spec.mjs:106:1 › knowledge graph renders and node click reveals detail
+[1A[2K[2/10] e2e/login-regression.spec.mjs:16:1 › login page visual baseline
+[1A[2K[3/10] e2e/settings-migration.spec.mjs:24:1 › settings page only persists backend fields via /api/settings
+[1A[2K[4/10] e2e/archive-migration.spec.mjs:165:1 › archive page renders migrated layout and charts
+[1A[2K[5/10] e2e/character-migration.spec.mjs:200:1 › character page creates world and binding when creating course without world
+[1A[2K[6/10] e2e/character-migration.spec.mjs:226:1 › character page saves course world_id edit and refreshes listing
+[1A[2K[7/10] e2e/settings-migration.spec.mjs:69:1 › local preference toggles persist via localStorage without backend PUT
+[1A[2K[8/10] e2e/phase4-ui.spec.mjs:127:3 › mobile viewport adaptation › learning page applies mobile layout for dual-role scene
+[1A[2K[9/10] e2e/archive-migration.spec.mjs:178:1 › archive diary modal and save branch flow work
+[1A[2K[10/10] e2e/character-migration.spec.mjs:258:1 › character page aggregates multi-world courses and updates after delete
+[1A[2K  10 passed (13.6s)
+
+Running 1 test using 1 worker
+
+[1A[2K[1/1] e2e/home-regression.spec.mjs:16:1 › home page menu and world-first entry
+[1A[2K  1 passed (5.5s)

@@ -4,8 +4,10 @@ import { fileURLToPath } from 'node:url'
 import { expect, test } from '@playwright/test'
 
 const TEST_DIR = path.dirname(fileURLToPath(import.meta.url))
-const EVIDENCE_DIR = path.resolve(TEST_DIR, '../../docs/evidence/issue-146')
-const BASE_URL = process.env.E2E_BASE_URL || 'http://127.0.0.1:5173'
+const EVIDENCE_DIR = process.env.E2E_EVIDENCE_DIR
+  ? path.resolve(TEST_DIR, process.env.E2E_EVIDENCE_DIR)
+  : path.resolve(TEST_DIR, '../../docs/evidence/issue-146')
+const BASE_URL = process.env.E2E_BASE_URL ?? 'http://127.0.0.1:5173'
 
 if (!fs.existsSync(EVIDENCE_DIR)) {
   fs.mkdirSync(EVIDENCE_DIR, { recursive: true })
