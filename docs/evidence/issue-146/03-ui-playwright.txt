@@ -1,0 +1,7 @@
+
+Running 2 tests using 1 worker
+
+  ✓  1 e2e/archive-migration.spec.mjs:162:1 › archive page renders migrated layout and charts (6.0s)
+  ✓  2 e2e/archive-migration.spec.mjs:175:1 › archive diary modal and save branch flow work (6.0s)
+
+  2 passed (12.4s)
