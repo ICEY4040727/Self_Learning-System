@@ -73,16 +73,18 @@
         </div>
 
         <!-- Confirm password (register only) -->
-        <div v-if="mode === 'register'" class="field-group">
-          <label class="field-label">确 认 密 码</label>
-          <input
-            v-model="confirmPw"
-            :type="showPw ? 'text' : 'password'"
-            class="galgame-input"
-            placeholder="再次输入密码"
-            autocomplete="new-password"
-          />
-        </div>
+        <Transition name="field-slide">
+          <div v-if="mode === 'register'" class="field-group">
+            <label class="field-label">确 认 密 码</label>
+            <input
+              v-model="confirmPw"
+              :type="showPw ? 'text' : 'password'"
+              class="galgame-input"
+              placeholder="再次输入密码"
+              autocomplete="new-password"
+            />
+          </div>
+        </Transition>
 
         <!-- Error message -->
         <Transition name="error-fade">
@@ -471,6 +473,18 @@ const handleSubmit = async () => {
 
 .error-fade-enter-active,
 .error-fade-leave-active {
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+/* Confirm password field slide transition */
+.field-slide-enter-from,
+.field-slide-leave-to {
+  opacity: 0;
+  transform: translateY(-8px);
+}
+
+.field-slide-enter-active,
+.field-slide-leave-active {
   transition: opacity 0.2s ease, transform 0.2s ease;
 }
 </style>
