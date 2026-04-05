@@ -224,6 +224,37 @@ def get_characters(
     ).all()
 
 
+# Character stats endpoint - MUST be before /character/{character_id} to avoid path conflict
+@router.get("/character/stats", response_model=CharacterStatsResponse)
+def get_character_stats(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Get character statistics for the current user."""
+    total = db.query(Character).filter(Character.user_id == current_user.id).count()
+    sage_count = db.query(Character).filter(
+        Character.user_id == current_user.id,
+        Character.type == "sage"
+    ).count()
+    traveler_count = db.query(Character).filter(
+        Character.user_id == current_user.id,
+        Character.type == "traveler"
+    ).count()
+    # Count worlds that have at least one character bound
+    active_worlds = db.query(WorldCharacter.world_id).join(
+        Character, WorldCharacter.character_id == Character.id
+    ).filter(
+        Character.user_id == current_user.id
+    ).distinct().count()
+
+    return CharacterStatsResponse(
+        total_characters=total,
+        sage_count=sage_count,
+        traveler_count=traveler_count,
+        active_worlds=active_worlds,
+    )
+
+
 @router.get("/character/{character_id}", response_model=CharacterResponse)
 def get_character(
     character_id: int,
@@ -277,37 +308,6 @@ def delete_character(
     db.delete(character)
     db.commit()
     return {"message": "Character deleted"}
-
-
-# Character stats endpoint
-@router.get("/character/stats", response_model=CharacterStatsResponse)
-def get_character_stats(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """Get character statistics for the current user."""
-    total = db.query(Character).filter(Character.user_id == current_user.id).count()
-    sage_count = db.query(Character).filter(
-        Character.user_id == current_user.id,
-        Character.type == "sage"
-    ).count()
-    traveler_count = db.query(Character).filter(
-        Character.user_id == current_user.id,
-        Character.type == "traveler"
-    ).count()
-    # Count worlds that have at least one character bound
-    active_worlds = db.query(WorldCharacter.world_id).join(
-        Character, WorldCharacter.character_id == Character.id
-    ).filter(
-        Character.user_id == current_user.id
-    ).distinct().count()
-
-    return CharacterStatsResponse(
-        total_characters=total,
-        sage_count=sage_count,
-        traveler_count=traveler_count,
-        active_worlds=active_worlds,
-    )
 
 
 # Character avatar upload endpoint
