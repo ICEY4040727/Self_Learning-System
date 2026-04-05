@@ -1,0 +1,5 @@
+
+Running 1 test using 1 worker
+
+[1A[2K[1/1] e2e/shared-style-foundation.spec.mjs:16:1 › shared style baseline for dialog/hud/backlog/checkpoint
+[1A[2K  1 passed (7.0s)

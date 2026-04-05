@@ -7,13 +7,13 @@
       </div>
 
       <div class="tabs">
-          <button class="galgame-btn galgame-menu-item" :class="{ active: mode === 'commit' }" @click="mode = 'commit'">COMMIT</button>
-          <button class="galgame-btn galgame-menu-item" :class="{ active: mode === 'branch' }" @click="mode = 'branch'">BRANCH</button>
+          <button class="galgame-hud-btn" :class="{ active: mode === 'commit' }" @click="mode = 'commit'">COMMIT</button>
+          <button class="galgame-hud-btn" :class="{ active: mode === 'branch' }" @click="mode = 'branch'">BRANCH</button>
       </div>
 
       <div v-if="errorMessage" class="error">{{ errorMessage }}</div>
 
-      <div class="list">
+      <div class="list galgame-scrollbar">
         <button
           v-for="checkpoint in checkpoints"
           :key="checkpoint.id"
@@ -167,6 +167,7 @@ watch(
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.66);
+  backdrop-filter: blur(2px);
   display: flex;
   justify-content: center;
   align-items: center;
@@ -177,6 +178,7 @@ watch(
   width: min(560px, 92vw);
   padding: 14px;
   border-radius: var(--radius-modal);
+  animation: panelIn var(--transition-normal);
 }
 
 .header {
@@ -191,9 +193,12 @@ watch(
 }
 
 .close-btn {
-  border: none;
-  background: transparent;
-  color: var(--text-muted);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(17, 24, 39, 0.6);
+  color: var(--text-secondary);
+  border-radius: 8px;
+  width: 28px;
+  height: 28px;
   cursor: pointer;
 }
 
@@ -204,13 +209,12 @@ watch(
 }
 
 .tabs button {
-  color: var(--text-secondary);
   padding: 6px 10px;
 }
 
 .tabs button.active {
-  color: var(--accent-gold);
-  border-color: var(--accent-gold);
+  border-color: rgba(74, 223, 106, 0.65);
+  color: var(--emotion-positive);
 }
 
 .list {
@@ -228,6 +232,7 @@ watch(
 
 .checkpoint-item small {
   color: var(--text-muted);
+  font-size: 12px;
 }
 
 .checkpoint-item.selected {

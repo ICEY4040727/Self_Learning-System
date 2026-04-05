@@ -8,20 +8,22 @@
       <CharacterDisplay name="旅者" :sprites="travelerSprites" expression="default" position="right" />
     </div>
 
-    <div v-if="!uiHidden" class="dialog-layer" @click.stop>
-      <DialogBox
-        :mode="dialogMode"
-        :character-name="teacherName"
-        :display-content="displayContent"
-        :is-typing="isTyping"
-        :has-more-segments="false"
-        :choices="currentChoices"
-        @click-next="handleDialogContinue"
-        @skip-typing="skipTyping"
-        @send-message="sendMessage"
-        @select-choice="handleChoice"
-      />
-    </div>
+    <Transition name="dialog-slide">
+      <div v-if="!uiHidden" class="dialog-layer" @click.stop>
+        <DialogBox
+          :mode="dialogMode"
+          :character-name="teacherName"
+          :display-content="displayContent"
+          :is-typing="isTyping"
+          :has-more-segments="false"
+          :choices="currentChoices"
+          @click-next="handleDialogContinue"
+          @skip-typing="skipTyping"
+          @send-message="sendMessage"
+          @select-choice="handleChoice"
+        />
+      </div>
+    </Transition>
 
     <div v-if="!uiHidden" class="hud-layer" @click.stop>
       <HudBar

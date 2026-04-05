@@ -1,16 +1,25 @@
 <template>
-  <div id="app">
-    <router-view />
-  </div>
+  <RouterView v-slot="{ Component }">
+    <Transition name="page-fade" mode="out-in">
+      <component :is="Component" />
+    </Transition>
+  </RouterView>
 </template>
 
 <script setup lang="ts">
 </script>
 
 <style>
-#app {
-  min-height: 100vh;
-  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
-  color: #eee;
+.page-fade-enter-from,
+.page-fade-leave-to {
+  opacity: 0;
+}
+
+.page-fade-enter-active {
+  transition: opacity var(--transition-page, 0.4s ease);
+}
+
+.page-fade-leave-active {
+  transition: opacity 0.3s ease;
 }
 </style>

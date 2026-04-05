@@ -1,5 +1,5 @@
 <template>
-  <div class="dialog-box galgame-dialog-box" @click="handleClick">
+  <div class="dialog-box galgame-dialog galgame-dialog-box galgame-scrollbar" @click="handleClick">
     <!-- Name tag -->
     <div class="name-tag galgame-name-tag" :class="{ 'name-tag-user': mode === 'USER_INPUT' }">
       {{ mode === 'USER_INPUT' ? '我' : characterName }}
@@ -152,6 +152,7 @@ const handleSend = () => {
   font-family: var(--font-ui);
   margin-top: 8px;
   animation: breathe 2s ease-in-out infinite;
+  letter-spacing: 1px;
 }
 
 /* User input mode */
@@ -179,7 +180,7 @@ const handleSend = () => {
   background: var(--accent-gold);
   color: var(--bg-primary);
   border-color: rgba(0, 0, 0, 0.15);
-  border-radius: 0;
+  border-radius: 8px;
   font-size: 20px;
   font-weight: bold;
   flex-shrink: 0;
@@ -209,6 +210,7 @@ const handleSend = () => {
   font-size: 15px;
   padding: 10px 16px;
   text-align: left;
+  border-radius: 8px;
 }
 
 .choice-item:hover {
