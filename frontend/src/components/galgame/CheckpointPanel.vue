@@ -46,7 +46,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { onMounted, ref, watch } from 'vue'
 import axios from 'axios'
 import { useAuthStore } from '@/stores/auth'
 import { parseApiError } from '@/utils/error'
@@ -71,6 +71,7 @@ interface BranchResult {
 const props = defineProps<{
   worldId: number
   sessionId?: number
+  initialMode?: 'commit' | 'branch'
 }>()
 
 const emit = defineEmits<{
@@ -80,7 +81,7 @@ const emit = defineEmits<{
 }>()
 
 const authStore = useAuthStore()
-const mode = ref<'commit' | 'branch'>('commit')
+const mode = ref<'commit' | 'branch'>(props.initialMode ?? 'commit')
 const checkpoints = ref<CheckpointItem[]>([])
 const selectedCheckpointId = ref<number | null>(null)
 const saveName = ref('')
@@ -152,6 +153,13 @@ const formatDate = (value: string): string => {
 onMounted(() => {
   void fetchCheckpoints()
 })
+
+watch(
+  () => props.initialMode,
+  (nextMode) => {
+    if (nextMode) mode.value = nextMode
+  },
+)
 </script>
 
 <style scoped>

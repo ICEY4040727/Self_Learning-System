@@ -257,6 +257,7 @@ async def send_message(
     return ChatResponse(
         type=result.get("type", "text"),
         reply=result.get("reply", ""),
+        choices=result.get("choices"),
         emotion=result.get("emotion"),
         relationship_stage=result.get("relationship_stage"),
         relationship=result.get("relationship"),
