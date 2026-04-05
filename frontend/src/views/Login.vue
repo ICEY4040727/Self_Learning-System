@@ -74,10 +74,11 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { parseApiError } from '@/utils/error'
 
+const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
 
@@ -157,12 +158,20 @@ const showToast = (msg: string) => {
   setTimeout(() => { toast.value = '' }, 3000)
 }
 
+const getPostLoginRedirect = () => {
+  const redirect = route.query.redirect
+  if (typeof redirect === 'string' && redirect.startsWith('/') && !redirect.startsWith('//')) {
+    return redirect
+  }
+  return '/home'
+}
+
 const handleLogin = async () => {
   error.value = ''
   isLoading.value = true
   try {
     await authStore.login(username.value, password.value)
-    router.push('/home')
+    router.replace(getPostLoginRedirect())
   } catch (e: any) {
     error.value = parseApiError(e)
   } finally {

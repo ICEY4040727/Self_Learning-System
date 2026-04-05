@@ -116,6 +116,7 @@ import { useRouter } from 'vue-router'
 import axios from 'axios'
 import { useAuthStore } from '@/stores/auth'
 import { parseApiError } from '@/utils/error'
+import { buildLearningRoute } from '@/utils/navigation'
 import EmotionTrajectory from '@/components/EmotionTrajectory.vue'
 
 const router = useRouter()
@@ -242,13 +243,10 @@ const loadSave = async (saveId: number) => {
       alert('分叉结果缺少课程信息')
       return
     }
-    router.push({
-      path: `/learning/${courseId}`,
-      query: {
-        worldId: String(data.world_id || ''),
-        sessionId: String(data.session_id || '')
-      }
-    })
+    router.push(buildLearningRoute(courseId, {
+      worldId: data.world_id,
+      sessionId: data.session_id,
+    }))
   } catch (error) {
     alert(parseApiError(error))
   }

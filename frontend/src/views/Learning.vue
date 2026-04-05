@@ -72,6 +72,7 @@ import CheckpointPanel from '@/components/galgame/CheckpointPanel.vue'
 import KnowledgeGraph from '@/components/KnowledgeGraph.vue'
 import { parseApiError } from '@/utils/error'
 import { useAuthStore } from '@/stores/auth'
+import { buildLearningRoute, parseQueryNumber } from '@/utils/navigation'
 
 interface Message {
   id: number
@@ -86,8 +87,8 @@ const router = useRouter()
 const authStore = useAuthStore()
 
 const courseId = computed(() => Number(route.params.courseId))
-const worldId = ref(Number(route.query.worldId || 0))
-const sessionId = ref<number>()
+const worldId = ref(parseQueryNumber(route.query.worldId) ?? 0)
+const sessionId = ref<number | undefined>(parseQueryNumber(route.query.sessionId))
 const teacherName = ref('知者')
 const sageSprites = ref<Record<string, string>>({})
 const travelerSprites = ref<Record<string, string>>({})
@@ -215,9 +216,16 @@ const handleChoice = (choice: string) => sendMessage(choice)
 const handleBranched = (payload: { session_id: number; course_id: number }) => {
   sessionId.value = payload.session_id
   if (payload.course_id !== courseId.value) {
-    router.push(`/learning/${payload.course_id}`)
+    router.push(buildLearningRoute(payload.course_id, {
+      worldId: worldId.value,
+      sessionId: payload.session_id,
+    }))
     return
   }
+  void router.replace(buildLearningRoute(payload.course_id, {
+    worldId: worldId.value,
+    sessionId: payload.session_id,
+  }))
   void startLearning()
 }
 
