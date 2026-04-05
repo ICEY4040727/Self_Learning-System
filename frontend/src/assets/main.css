@@ -1,4 +1,6 @@
 /* === Galgame style foundation === */
+/* Phase A — migrated from wating_punish/Phase A */
+
 /* Fonts are loaded via <link> in index.html for non-blocking rendering. */
 
 :root {
@@ -30,6 +32,7 @@
 
   /* Radius baseline (from UI迁移书) */
   --radius-none: 0;
+  --radius-panel: 14px;
   --radius-hud-btn: 5px;
   --radius-world-card: 12px;
   --radius-modal: 16px;
@@ -73,35 +76,64 @@ body {
   color: var(--text-primary);
 }
 
+/* Page fade transition (safe for no backdrop-filter at root) */
+.page-fade-enter-from,
+.page-fade-leave-to {
+  opacity: 0;
+}
+.page-fade-enter-active {
+  transition: opacity 0.4s ease;
+}
+.page-fade-leave-active {
+  transition: opacity 0.3s ease;
+}
+
+/* === Shared galgame component classes === */
+
+/* Prevent backdrop-filter flicker: force GPU compositing layer */
 .galgame-panel,
+.galgame-dialog,
 .galgame-dialog-box,
-.galgame-hud {
-  /* Keep blur layers transform-driven to avoid backdrop-filter flicker. */
+.galgame-hud,
+.galgame-login-panel {
   transform: translateZ(0);
   will-change: transform;
   transition: transform var(--transition-normal), border-color var(--transition-fast), box-shadow var(--transition-fast);
 }
 
+/* Panel — frosted glass */
 .galgame-panel {
   background: var(--panel-bg-strong);
   border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-none);
+  border-radius: var(--radius-panel);
   box-shadow: var(--shadow-panel);
   backdrop-filter: blur(var(--blur-panel));
   -webkit-backdrop-filter: blur(var(--blur-panel));
 }
 
+/* Login panel — dedicated blur */
+.galgame-login-panel {
+  background: rgba(8, 10, 20, 0.72);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-panel);
+  box-shadow: var(--shadow-panel);
+  backdrop-filter: blur(var(--blur-login-panel));
+  -webkit-backdrop-filter: blur(var(--blur-login-panel));
+}
+
+/* Dialog box — accent border + saturated blur */
+.galgame-dialog,
 .galgame-dialog-box {
   padding: 20px 24px;
   border: 1px solid var(--border-accent);
-  border-radius: var(--radius-none);
+  border-radius: 10px;
   background: var(--panel-bg-soft);
   box-shadow: 0 -4px 30px rgba(0, 0, 0, 0.5);
-  animation: panelIn var(--transition-normal);
   backdrop-filter: blur(var(--blur-dialog)) saturate(1.5);
   -webkit-backdrop-filter: blur(var(--blur-dialog)) saturate(1.5);
 }
 
+/* Name tag — skewed parallelogram */
 .galgame-name-tag {
   background: linear-gradient(135deg, var(--accent-gold), var(--accent-orange));
   color: var(--bg-primary);
@@ -114,6 +146,7 @@ body {
   transform: skewX(-8deg);
 }
 
+/* HUD bar */
 .galgame-hud {
   background: rgba(0, 0, 0, 0.75);
   border-top: 1px solid var(--border-subtle);
@@ -121,9 +154,10 @@ body {
   -webkit-backdrop-filter: blur(var(--blur-hud));
 }
 
+/* Base button */
 .galgame-btn {
   border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-none);
+  border-radius: 8px;
   color: var(--text-primary);
   background: rgba(26, 26, 46, 0.88);
   cursor: pointer;
@@ -148,9 +182,33 @@ body {
   box-shadow: 0 0 12px rgba(111, 207, 151, 0.32);
 }
 
+/* Submit / send button — gold gradient, no radius */
+.galgame-send-btn {
+  border: none;
+  border-radius: 0;
+  background: linear-gradient(135deg, var(--accent-gold), var(--accent-orange));
+  color: var(--bg-primary);
+  font-family: var(--font-ui);
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.galgame-send-btn:hover:not(:disabled) {
+  transform: scale(1.02);
+  box-shadow: 0 0 20px rgba(255, 215, 0, 0.3);
+}
+
+.galgame-send-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* Text input */
 .galgame-input {
   border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-none);
+  border-radius: 8px;
   background: rgba(255, 255, 255, 0.05);
   color: var(--text-primary);
   font-family: var(--font-dialogue);
@@ -163,12 +221,18 @@ body {
   outline: none;
 }
 
+.galgame-input::placeholder {
+  color: var(--text-muted);
+}
+
+/* Menu item in lists */
 .galgame-menu-item {
   padding: 10px 12px;
   text-align: left;
   font-size: 14px;
 }
 
+/* World card */
 .galgame-world-card {
   display: flex;
   flex-direction: column;
@@ -188,110 +252,138 @@ body {
   transform: translateY(-1px);
 }
 
+/* Choice item animation */
 .galgame-choice-item {
   animation: choiceStagger var(--transition-normal) both;
 }
 
-/* Global animations */
+/* HUD compact button */
+.galgame-hud-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(17, 24, 39, 0.72);
+  border-radius: var(--radius-hud-btn);
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 12px;
+  line-height: 1;
+  padding: 5px 10px;
+  cursor: pointer;
+  transition: border-color var(--transition-fast), color var(--transition-fast), background var(--transition-fast);
+}
+
+.galgame-hud-btn:hover {
+  border-color: rgba(255, 215, 0, 0.65);
+  color: rgba(255, 215, 0, 0.95);
+  background: rgba(255, 215, 0, 0.08);
+}
+
+.galgame-hud-btn.active {
+  border-color: rgba(74, 223, 106, 0.65);
+  color: rgba(74, 223, 106, 0.95);
+  background: rgba(74, 223, 106, 0.12);
+}
+
+/* Custom scrollbar */
+.galgame-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 215, 0, 0.35) rgba(255, 255, 255, 0.05);
+}
+
+.galgame-scrollbar::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.galgame-scrollbar::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 999px;
+}
+
+.galgame-scrollbar::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, rgba(255, 215, 0, 0.7), rgba(255, 140, 0, 0.45));
+  border-radius: 999px;
+}
+
+/* Dialog slide transition — translateY only (NO opacity to keep backdrop-filter) */
+.dialog-slide-enter-from {
+  transform: translateY(14px);
+}
+.dialog-slide-enter-active {
+  transition: transform var(--transition-normal);
+}
+.dialog-slide-leave-to {
+  transform: translateY(14px);
+}
+.dialog-slide-leave-active {
+  transition: transform 0.24s ease;
+}
+
+/* === Animations === */
 @keyframes blink {
-  0%,
-  50% {
-    opacity: 1;
-  }
-  51%,
-  100% {
-    opacity: 0;
-  }
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0; }
 }
 
 @keyframes slideInRight {
-  from {
-    transform: translateX(100%);
-  }
-  to {
-    transform: translateX(0);
-  }
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
 }
 
 @keyframes fadeSlideIn {
-  from {
-    opacity: 0;
-    transform: translateX(-30px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
+  from { opacity: 0; transform: translateX(-30px); }
+  to { opacity: 1; transform: translateX(0); }
 }
 
 @keyframes flash {
-  0% {
-    background-color: var(--accent-gold);
-  }
-  100% {
-    background-color: transparent;
-  }
+  0% { background-color: var(--accent-gold); }
+  100% { background-color: transparent; }
 }
 
 @keyframes breathe {
-  0%,
-  100% {
-    opacity: 0.6;
-  }
-  50% {
-    opacity: 1;
-  }
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
 }
 
 @keyframes breatheGlow {
-  0%,
-  100% {
-    box-shadow: 0 0 0 rgba(255, 215, 0, 0);
-  }
-  50% {
-    box-shadow: 0 0 18px rgba(255, 215, 0, 0.3);
-  }
+  0%, 100% { box-shadow: 0 0 0 rgba(255, 215, 0, 0); }
+  50% { box-shadow: 0 0 18px rgba(255, 215, 0, 0.3); }
 }
 
 @keyframes floatParticle {
-  0% {
-    transform: translateY(0) scale(1);
-  }
-  50% {
-    transform: translateY(-8px) scale(1.03);
-  }
-  100% {
-    transform: translateY(0) scale(1);
-  }
+  0% { transform: translateY(0) scale(1); }
+  50% { transform: translateY(-8px) scale(1.03); }
+  100% { transform: translateY(0) scale(1); }
 }
 
 @keyframes dotFlash {
-  0%,
-  80%,
-  100% {
-    opacity: 0.2;
-  }
-  40% {
-    opacity: 1;
-  }
+  0%, 80%, 100% { opacity: 0.2; }
+  40% { opacity: 1; }
 }
 
 @keyframes panelIn {
-  from {
-    transform: translateY(16px);
-  }
-  to {
-    transform: translateY(0);
-  }
+  from { transform: translateY(16px); }
+  to { transform: translateY(0); }
 }
 
 @keyframes choiceStagger {
-  from {
-    transform: translateX(12px);
-    opacity: 0;
-  }
-  to {
-    transform: translateX(0);
-    opacity: 1;
-  }
+  from { transform: translateX(12px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes ambientPulse {
+  0%, 100% { opacity: 0.5; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.08); }
+}
+
+/* Breathe glow — for golden title text */
+.breathe-glow {
+  animation: breatheGlow 3s ease-in-out infinite;
+}
+
+/* Bounce indicator — for typewriter cursor */
+.bounce-indicator {
+  animation: breathe 1.5s ease-in-out infinite;
 }

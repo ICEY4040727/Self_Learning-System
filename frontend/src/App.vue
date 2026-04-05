@@ -1,16 +1,21 @@
 <template>
   <div id="app">
-    <router-view />
+    <router-view v-slot="{ Component }">
+      <Transition name="page-fade" mode="out-in">
+        <component :is="Component" />
+      </Transition>
+    </router-view>
   </div>
 </template>
 
 <script setup lang="ts">
+// Root component — just provides page-level fade transition
 </script>
 
 <style>
 #app {
   min-height: 100vh;
-  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
-  color: #eee;
+  background: var(--bg-primary);
+  color: var(--text-primary);
 }
 </style>

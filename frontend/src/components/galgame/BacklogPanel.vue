@@ -1,9 +1,9 @@
 <template>
-  <Transition name="backlog">
+  <Transition name="backlog-slide">
     <div v-if="visible" class="backlog-overlay" @click="$emit('close')">
-      <div class="backlog-panel" @click.stop>
+      <div class="backlog-panel galgame-panel" @click.stop>
         <h3 class="backlog-title">📖 回忆录</h3>
-        <div class="backlog-list" ref="listRef">
+        <div class="backlog-list galgame-scrollbar" ref="listRef">
           <div
             v-for="msg in messages"
             :key="msg.id"
@@ -65,12 +65,10 @@ watch(() => props.visible, (v) => {
 }
 
 .backlog-panel {
-  width: 40%;
+  width: min(360px, 90vw);
   height: 100%;
-  background: var(--bg-panel);
-  border-left: 1px solid var(--border-subtle);
-  display: flex;
-  flex-direction: column;
+  border-radius: 0;
+  border-right: none;
   padding: 20px;
 }
 
@@ -132,12 +130,18 @@ watch(() => props.visible, (v) => {
   padding: 40px 0;
 }
 
-/* Transition */
-.backlog-enter-active {
-  animation: slideInRight var(--transition-normal);
+/* Slide transition from right */
+.backlog-slide-enter-from .backlog-panel {
+  transform: translateX(100%);
 }
-.backlog-leave-active {
-  animation: slideInRight var(--transition-normal) reverse;
+.backlog-slide-enter-active .backlog-panel {
+  transition: transform var(--transition-normal);
+}
+.backlog-slide-leave-to .backlog-panel {
+  transform: translateX(100%);
+}
+.backlog-slide-leave-active .backlog-panel {
+  transition: transform 0.24s ease;
 }
 
 @media (max-width: 768px) {

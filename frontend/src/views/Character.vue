@@ -1,1147 +1,582 @@
 <template>
-  <div class="character-page">
-    <header class="header">
-      <button class="back-btn" @click="router.push('/home')">← 返回</button>
-      <h1>角色设定</h1>
-    </header>
+  <div class="char-page-v2">
+    <!-- Background -->
+    <div class="bg-image" :style="{ backgroundImage: `url(${BG_URL})` }"></div>
+    <div class="bg-gradient"></div>
+    <ParticleBackground :count="20" :gold-ratio="0.5" />
 
-    <div v-if="errorMessage" class="error-toast">{{ errorMessage }}</div>
+    <!-- Header -->
+    <div class="char-header font-ui">
+      <button class="galgame-hud-btn" @click="router.push('/home')">
+        <span>←</span> 返回
+      </button>
+      <span class="header-title">角 色 管 理</span>
+      <div style="width:80px;"></div>
+    </div>
 
-    <main class="main">
-      <!-- 角色列表 -->
-      <section class="section">
-        <div class="section-header">
-          <h2>我的角色</h2>
-          <button class="add-btn" @click="openCreateCharacter">+ 新建角色</button>
+    <!-- Content -->
+    <div class="char-content galgame-scrollbar">
+      <div class="char-inner">
+
+        <!-- Stats summary -->
+        <div class="stats-row">
+          <div class="stat-card galgame-panel">
+            <div class="stat-value">{{ stats.total_sessions }}</div>
+            <div class="stat-label font-ui">总学习次数</div>
+          </div>
+          <div class="stat-card galgame-panel">
+            <div class="stat-value">{{ stats.total_diary }}</div>
+            <div class="stat-label font-ui">学习日记</div>
+          </div>
+          <div class="stat-card galgame-panel">
+            <div class="stat-value">{{ stats.mastery }}%</div>
+            <div class="stat-label font-ui">平均掌握度</div>
+          </div>
+          <div class="stat-card galgame-panel">
+            <div class="stat-value">{{ stats.streak }}天</div>
+            <div class="stat-label font-ui">连续学习</div>
+          </div>
         </div>
 
-        <div class="characters-grid">
+        <!-- Characters grid -->
+        <div class="section-header">
+          <span class="font-ui section-title">我的角色</span>
+          <button class="galgame-hud-btn" @click="showCreate = true; createName = ''; createDesc = ''">
+            ✚ 创建角色
+          </button>
+        </div>
+
+        <!-- Create form -->
+        <Transition name="slide-down">
+          <div v-if="showCreate" class="create-form galgame-panel">
+            <div class="form-row">
+              <input
+                v-model="createName"
+                class="galgame-input font-ui"
+                placeholder="角色名称"
+                maxlength="20"
+              />
+              <button class="galgame-send-btn" @click="createCharacter">创建</button>
+              <button class="galgame-hud-btn" @click="showCreate = false">取消</button>
+            </div>
+            <textarea
+              v-model="createDesc"
+              class="galgame-input font-dialogue create-desc"
+              placeholder="角色描述（选填）..."
+              rows="2"
+            ></textarea>
+            <p v-if="createError" class="font-ui error-text">{{ createError }}</p>
+          </div>
+        </Transition>
+
+        <!-- Loading -->
+        <div v-if="loading" class="loading-text">加载中…</div>
+
+        <!-- Empty state -->
+        <div v-else-if="characters.length === 0" class="empty-state">
+          <p class="font-dialogue empty-hint">「还没有创建任何角色。」</p>
+          <p class="font-ui empty-sub">点击上方「创建角色」开始吧</p>
+        </div>
+
+        <!-- Character cards -->
+        <div v-else class="char-grid">
           <div
             v-for="char in characters"
             :key="char.id"
-            :class="['character-card', { selected: selectedCharacter?.id === char.id }]"
-            @click="selectCharacter(char)"
+            class="char-card"
+            :class="{ selected: selectedId === char.id }"
+            @click="selectedId = selectedId === char.id ? null : char.id"
           >
-            <div class="char-avatar">{{ char.name?.[0] || '?' }}</div>
-            <h3>{{ char.name }}</h3>
-            <span class="role-tag">{{ char.type === 'traveler' ? '旅者' : '知者' }}</span>
-            <p>{{ char.personality || '暂无描述' }}</p>
-            <div class="card-actions">
-              <button @click.stop="openEditCharacter(char)">编辑</button>
-              <button @click.stop="openSpriteUpload(char)" class="sprite-btn">立绘</button>
-              <button @click.stop="deleteCharacter(char.id)" class="delete">删除</button>
+            <!-- Avatar area -->
+            <div class="char-avatar" :style="{ background: avatarGradient(char) }">
+              <div v-if="char.avatar_url" class="char-avatar-img">
+                <img :src="char.avatar_url" :alt="char.name" />
+              </div>
+              <div v-else class="char-avatar-placeholder">
+                {{ char.name.charAt(0) }}
+              </div>
             </div>
-          </div>
-        </div>
-      </section>
 
-      <!-- 立绘上传对话框 -->
-      <div v-if="showSpriteDialog" class="dialog-overlay" @click.self="showSpriteDialog = false">
-        <div class="dialog">
-          <h3>上传立绘 — {{ spriteCharacter?.name }}</h3>
-          <p class="sprite-hint">文件名须为 default/happy/thinking/concerned + .png/.jpg/.webp，每张 ≤ 2MB</p>
-          <div class="form-group">
-            <input
-              type="file"
-              ref="spriteFileInput"
-              multiple
-              accept="image/png,image/jpeg,image/webp"
-              class="sprite-file-input"
-            />
-          </div>
-          <div v-if="spriteCharacter?.sprites" class="sprite-preview">
-            <span v-for="(_url, expr) in spriteCharacter.sprites" :key="expr" class="sprite-tag">
-              ✅ {{ expr }}
-            </span>
-          </div>
-          <div class="dialog-actions">
-            <button @click="showSpriteDialog = false">取消</button>
-            <button class="primary" @click="uploadSprites" :disabled="spriteUploading">
-              {{ spriteUploading ? '上传中...' : '上传' }}
-            </button>
+            <!-- Info -->
+            <div class="char-info">
+              <div class="font-ui char-name">{{ char.name }}</div>
+              <div v-if="char.description" class="font-ui char-desc">{{ char.description }}</div>
+              <div class="font-ui char-meta">
+                Lv.{{ char.level || 1 }} · 经验 {{ char.exp || 0 }}
+              </div>
+            </div>
+
+            <!-- Expanded actions -->
+            <Transition name="expand">
+              <div v-if="selectedId === char.id" class="char-actions">
+                <!-- Avatar upload -->
+                <div class="avatar-upload">
+                  <label class="galgame-hud-btn upload-btn">
+                    📷 上传立绘
+                    <input
+                      type="file"
+                      accept="image/*"
+                      style="display:none;"
+                      @change="handleAvatarUpload($event, char.id)"
+                    />
+                  </label>
+                  <span v-if="uploadProgress[char.id]" class="font-ui upload-progress">
+                    {{ uploadProgress[char.id] }}%
+                  </span>
+                </div>
+                <!-- Level up -->
+                <button
+                  class="galgame-send-btn levelup-btn"
+                  :disabled="!canLevelUp(char)"
+                  @click.stop="levelUp(char.id)"
+                >
+                  ⭐ 升级
+                </button>
+                <!-- Delete -->
+                <button class="galgame-hud-btn delete-btn" @click.stop="deleteCharacter(char.id)">
+                  🗑 删除
+                </button>
+              </div>
+            </Transition>
           </div>
         </div>
       </div>
-
-      <!-- 教师人格列表 -->
-      <section v-if="selectedCharacter" class="section">
-        <div class="section-header">
-          <h2>教师人格 - {{ selectedCharacter.name }}</h2>
-          <button class="add-btn" @click="openCreatePersona">+ 新建人格</button>
-        </div>
-
-        <div class="personas-list">
-          <div
-            v-for="persona in teacherPersonas"
-            :key="persona.id"
-            :class="['persona-card', { active: persona.is_active }]"
-          >
-            <div class="persona-header">
-              <h3>{{ persona.name }}</h3>
-              <span class="version">v{{ persona.version }}</span>
-            </div>
-            <p class="traits" v-if="persona.traits">
-              特质: {{ formatTraits(persona.traits) }}
-            </p>
-            <p class="prompt-preview" v-if="persona.system_prompt_template">
-              {{ persona.system_prompt_template.substring(0, 100) }}...
-            </p>
-            <div class="card-actions">
-              <button v-if="!persona.is_active" @click="activatePersona(persona.id)">激活</button>
-              <span v-else class="active-badge">已激活</span>
-              <button @click="openEditPersona(persona)">编辑</button>
-              <button @click="deletePersona(persona.id)" class="delete">删除</button>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- 课程列表 -->
-      <section v-if="selectedCharacter" class="section">
-        <div class="section-header">
-          <h2>学习课程</h2>
-          <button class="add-btn" @click="openCreateSubject">+ 新建课程</button>
-        </div>
-
-        <div class="subjects-list">
-          <div
-            v-for="subj in subjects"
-            :key="subj.id"
-            class="subject-card"
-          >
-            <h3>{{ subj.name }}</h3>
-            <p>{{ subj.description || '暂无描述' }}</p>
-            <span class="target">{{ subj.target_level || '未设目标' }}</span>
-            <div class="card-actions">
-              <button @click.stop="openEditSubject(subj)">编辑</button>
-              <button @click.stop="deleteSubject(subj.id)" class="delete">删除</button>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- 角色对话框（创建/编辑） -->
-      <div v-if="showCreateDialog" class="dialog-overlay" @click.self="showCreateDialog = false">
-        <div class="dialog">
-          <h3>{{ editingCharacterId ? '编辑角色' : '新建角色' }}</h3>
-          <div class="form-group">
-            <label>角色名称</label>
-            <input v-model="characterForm.name" placeholder="输入角色名称" />
-          </div>
-          <div class="form-group">
-            <label>角色类型</label>
-            <select v-model="characterForm.type">
-              <option value="sage">知者（sage）</option>
-              <option value="traveler">旅者（traveler）</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label>性格描述</label>
-            <textarea v-model="characterForm.personality" placeholder="描述角色性格"></textarea>
-          </div>
-          <div class="form-group">
-            <label>背景故事</label>
-            <textarea v-model="characterForm.background" placeholder="描述角色背景"></textarea>
-          </div>
-          <div class="form-group">
-            <label>说话风格</label>
-            <textarea v-model="characterForm.speech_style" placeholder="如：温柔、幽默、严肃、口头禅等"></textarea>
-          </div>
-          <div class="dialog-actions">
-            <button @click="showCreateDialog = false">取消</button>
-            <button class="primary" @click="saveCharacter">
-              {{ editingCharacterId ? '保存' : '创建' }}
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <!-- 教师人格对话框（创建/编辑） -->
-      <div v-if="showPersonaDialog" class="dialog-overlay" @click.self="showPersonaDialog = false">
-        <div class="dialog">
-          <h3>{{ editingPersonaId ? '编辑教师人格' : '新建教师人格' }}</h3>
-          <div class="form-group">
-            <label>人格名称</label>
-            <input v-model="personaForm.name" placeholder="如：苏格拉底型、朋友型" />
-          </div>
-          <div class="form-group">
-            <label>版本</label>
-            <input v-model="personaForm.version" placeholder="1.0" />
-          </div>
-          <div class="form-group">
-            <label>教学风格</label>
-            <!-- AI Generate -->
-            <div class="ai-generate">
-              <input
-                v-model="aiDescription"
-                placeholder="描述你想要的教师风格，如：像爱因斯坦一样幽默的物理老师"
-                class="ai-input"
-              />
-              <button class="ai-btn" @click="generatePersona" :disabled="aiGenerating || !aiDescription.trim() || aiCooldown > 0">
-                {{ aiGenerating ? '生成中...' : aiCooldown > 0 ? `${aiCooldown}s` : '✨ AI 生成' }}
-              </button>
-            </div>
-            <!-- Quick Presets -->
-            <div class="preset-row">
-              <button
-                v-for="preset in PERSONA_PRESETS"
-                :key="preset.id"
-                class="preset-tag"
-                :class="{ 'preset-tag-active': selectedPreset === preset.id }"
-                @click="selectPreset(preset)"
-              >
-                {{ preset.icon }} {{ preset.name }}
-              </button>
-            </div>
-          </div>
-          <div class="form-group">
-            <label>性格特质（逗号分隔）</label>
-            <input v-model="personaForm.traitsInput" placeholder="如：耐心, 幽默, 严谨, 鼓励" />
-          </div>
-          <div class="form-group">
-            <label>教师人格描述 <span class="label-hint">（可手动编辑）</span></label>
-            <textarea v-model="personaForm.system_prompt_template" rows="4" placeholder="AI 生成或从预设选择后可在此编辑..."></textarea>
-          </div>
-          <div class="dialog-actions">
-            <button @click="showPersonaDialog = false">取消</button>
-            <button class="primary" @click="savePersona">
-              {{ editingPersonaId ? '保存' : '创建' }}
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <!-- 课程对话框（创建/编辑） -->
-      <div v-if="showSubjectDialog" class="dialog-overlay" @click.self="showSubjectDialog = false">
-        <div class="dialog">
-          <h3>{{ editingSubjectId ? '编辑课程' : '新建课程' }}</h3>
-          <div class="form-group">
-            <label>所属世界</label>
-            <select v-model.number="subjectForm.world_id">
-              <option v-for="world in characterWorlds" :key="world.id" :value="world.id">
-                {{ world.name }}
-              </option>
-            </select>
-            <p v-if="characterWorlds.length === 0" class="field-hint">保存时将自动创建角色默认世界</p>
-          </div>
-          <div class="form-group">
-            <label>课程名称</label>
-            <input v-model="subjectForm.name" placeholder="如：数学、英语" />
-          </div>
-          <div class="form-group">
-            <label>描述</label>
-            <textarea v-model="subjectForm.description" placeholder="科目描述"></textarea>
-          </div>
-          <div class="form-group">
-            <label>目标级别</label>
-            <input v-model="subjectForm.target_level" placeholder="如：初级、中级、高级" />
-          </div>
-          <div class="dialog-actions">
-            <button @click="showSubjectDialog = false">取消</button>
-            <button class="primary" @click="saveSubject">
-              {{ editingSubjectId ? '保存' : '创建' }}
-            </button>
-          </div>
-        </div>
-      </div>
-    </main>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import axios from 'axios'
 import { useAuthStore } from '@/stores/auth'
 import { parseApiError } from '@/utils/error'
+import ParticleBackground from '@/components/ParticleBackground.vue'
 
 const router = useRouter()
 const authStore = useAuthStore()
-const errorMessage = ref('')
 
-const showError = (e: any) => {
-  errorMessage.value = parseApiError(e)
-  setTimeout(() => { errorMessage.value = '' }, 5000)
-}
+const BG_URL = 'https://images.unsplash.com/photo-1534796636912-3b95b3ab5986?w=1920&q=80'
 
 interface Character {
   id: number
   name: string
-  type?: 'sage' | 'traveler'
-  personality?: string
-  sprites?: Record<string, string>
-  background?: string
-  speech_style?: string
-}
-
-interface TeacherPersona {
-  id: number
-  character_id: number
-  name: string
-  version: string
-  traits?: any
-  system_prompt_template?: string
-  is_active: boolean
-}
-
-interface Course {
-  id: number
-  world_id: number
-  name: string
   description?: string
-  target_level?: string
+  avatar_url?: string
+  level?: number
+  exp?: number
 }
 
-interface World {
-  id: number
-  name: string
-}
-
-interface WorldCharacterLink {
-  character_id: number
+interface Stats {
+  total_sessions: number
+  total_diary: number
+  mastery: number
+  streak: number
 }
 
 const characters = ref<Character[]>([])
-const teacherPersonas = ref<TeacherPersona[]>([])
-const subjects = ref<Course[]>([])
-const characterWorlds = ref<World[]>([])
-const selectedCharacter = ref<Character | null>(null)
-
-const showCreateDialog = ref(false)
-const showPersonaDialog = ref(false)
-const showSubjectDialog = ref(false)
-const showSpriteDialog = ref(false)
-const spriteCharacter = ref<Character | null>(null)
-const spriteUploading = ref(false)
-const spriteFileInput = ref<HTMLInputElement | null>(null)
-
-const openSpriteUpload = (char: Character) => {
-  spriteCharacter.value = char
-  showSpriteDialog.value = true
-}
-
-const uploadSprites = async () => {
-  if (!spriteCharacter.value || !spriteFileInput.value?.files?.length) return
-  spriteUploading.value = true
-  try {
-    const formData = new FormData()
-    for (const file of spriteFileInput.value.files) {
-      formData.append('files', file)
-    }
-    const res = await axios.post(
-      `/api/characters/${spriteCharacter.value.id}/sprites`,
-      formData,
-      { headers: headers() }
-    )
-    // Update local character data
-    spriteCharacter.value.sprites = res.data.sprites
-    // Update in characters list
-    const idx = characters.value.findIndex(c => c.id === spriteCharacter.value?.id)
-    if (idx >= 0) characters.value[idx].sprites = res.data.sprites
-    if (spriteFileInput.value) spriteFileInput.value.value = ''
-    showSpriteDialog.value = false
-  } catch (error) {
-    showError(error)
-  } finally {
-    spriteUploading.value = false
-  }
-}
-
-const editingCharacterId = ref<number | null>(null)
-const editingPersonaId = ref<number | null>(null)
-const editingSubjectId = ref<number | null>(null)
-
-// AI persona generation
-const aiDescription = ref('')
-const aiGenerating = ref(false)
-const aiCooldown = ref(0)
-let cooldownTimer: number | null = null
-const selectedPreset = ref('')
-
-const PERSONA_PRESETS = [
-  { id: 'socrates', icon: '🏛️', name: '苏格拉底',
-    prompt: '你是苏格拉底，古希腊雅典的哲学家。你相信真正的智慧始于承认自己的无知。你说话平和从容但思维极其犀利，喜欢用市集上买菜、匠人做陶这样的日常类比来探讨深刻的问题。面对学生的错误你从不恼怒，只是微笑着抛出下一个问题。',
-    traits: '平和, 犀利, 类比, 追问' },
-  { id: 'zhuge', icon: '🎯', name: '诸葛亮',
-    prompt: '你是诸葛孔明，蜀汉丞相。你运筹帷幄、思虑缜密，善于从全局出发分析问题。你说话不疾不徐、引经据典，偶尔用三国战役中的策略来类比学习中的难题。你对学生要求严格但从不苛刻，更希望他们学会"谋定而后动"。',
-    traits: '缜密, 全局, 引经据典, 战略' },
-  { id: 'explorer', icon: '🤝', name: '探险伙伴',
-    prompt: '你是一个热爱探索的冒险家，把每个知识点都当作一座待攀登的山峰。你语气轻松活泼，会说「我们一起看看这里有什么宝藏」「哇这个问题比想象的有趣」。你把犯错当作探险的一部分——「走错路也能发现新风景」。',
-    traits: '冒险, 乐观, 好奇, 轻松' },
-  { id: 'professor', icon: '📚', name: '学院导师',
-    prompt: '你是一位现代大学的资深教授，治学严谨、逻辑清晰。你习惯用专业术语讨论问题，会纠正不精确的表述，但也善于用学科内的经典案例让抽象概念变得直观。你对学术诚信和独立思考有很高的期望。',
-    traits: '严谨, 专业, 逻辑, 案例' },
-  { id: 'senpai', icon: '🌸', name: '治愈系学姐',
-    prompt: '你是一个温柔体贴的学姐，总是笑眯眯地鼓励后辈。你常说「这个想法超棒的！」「别担心，我刚学这个的时候也觉得好难」。你喜欢用生活中的小例子解释复杂的东西，犯错的时候你会说「没关系啦，我们换个角度试试～」',
-    traits: '温柔, 鼓励, 共情, 亲切' },
-]
-
-const selectPreset = (preset: typeof PERSONA_PRESETS[0]) => {
-  selectedPreset.value = preset.id
-  personaForm.value.system_prompt_template = preset.prompt
-  personaForm.value.traitsInput = preset.traits
-  if (!personaForm.value.name) {
-    personaForm.value.name = preset.name
-  }
-}
-
-const startCooldown = () => {
-  aiCooldown.value = 30
-  cooldownTimer = window.setInterval(() => {
-    aiCooldown.value--
-    if (aiCooldown.value <= 0 && cooldownTimer) {
-      clearInterval(cooldownTimer)
-      cooldownTimer = null
-    }
-  }, 1000)
-}
-
-const generatePersona = async () => {
-  if (!aiDescription.value.trim() || aiCooldown.value > 0) return
-  aiGenerating.value = true
-  try {
-    const res = await axios.post('/api/persona/generate', {
-      description: aiDescription.value.trim(),
-    }, { headers: headers() })
-    personaForm.value.system_prompt_template = res.data.system_prompt_template || ''
-    personaForm.value.traitsInput = (res.data.traits || []).join(', ')
-    if (!personaForm.value.name) {
-      personaForm.value.name = res.data.name_suggestion
-    }
-    selectedPreset.value = ''
-    startCooldown()
-  } catch (error) {
-    showError(error)
-  } finally {
-    aiGenerating.value = false
-  }
-}
-
-const characterForm = ref({ name: '', type: 'sage' as 'sage' | 'traveler', personality: '', background: '', speech_style: '' })
-const personaForm = ref({ name: '', version: '1.0', traitsInput: '', system_prompt_template: '' })
-const subjectForm = ref({ world_id: null as number | null, name: '', description: '', target_level: '' })
+const stats = reactive<Stats>({ total_sessions: 0, total_diary: 0, mastery: 0, streak: 0 })
+const selectedId = ref<number | null>(null)
+const showCreate = ref(false)
+const createName = ref('')
+const createDesc = ref('')
+const createError = ref('')
+const loading = ref(false)
+const uploadProgress = reactive<Record<number, number>>({})
 
 const headers = () => ({ Authorization: `Bearer ${authStore.token}` })
 
-// --- Helpers ---
-
-const formatTraits = (traits: any): string => {
-  if (Array.isArray(traits)) return traits.join(', ')
-  if (typeof traits === 'object') return Object.values(traits).join(', ')
-  return String(traits)
+const avatarGradient = (char: Character) => {
+  const hues = [200, 260, 320, 180, 40]
+  const hue = hues[char.id % hues.length]
+  return `linear-gradient(135deg, hsl(${hue},60%,25%), hsl(${hue+40},50%,15%))`
 }
 
-const parseTraits = (input: string): string[] => {
-  return input.split(/[,，]/).map(s => s.trim()).filter(Boolean)
+const canLevelUp = (char: Character) => {
+  return (char.exp || 0) >= 100
 }
-
-// --- Fetch ---
 
 const fetchCharacters = async () => {
+  loading.value = true
   try {
-    const res = await axios.get('/api/character', { headers: headers() })
+    const res = await axios.get('/api/characters', { headers: headers() })
     characters.value = res.data
   } catch (error) {
-    showError(error)
+    console.error(parseApiError(error))
+  } finally {
+    loading.value = false
   }
 }
 
-const fetchTeacherPersonas = async (characterId: number) => {
+const fetchStats = async () => {
   try {
-    const res = await axios.get(`/api/teacher_persona?character_id=${characterId}`, { headers: headers() })
-    teacherPersonas.value = res.data
-  } catch (error) {
-    showError(error)
+    const res = await axios.get('/api/characters/stats', { headers: headers() })
+    Object.assign(stats, res.data)
+  } catch {}
+}
+
+const createCharacter = async () => {
+  if (!createName.value.trim()) { createError.value = '请输入角色名'; return }
+  createError.value = ''
+  try {
+    const res = await axios.post('/api/characters', {
+      name: createName.value.trim(),
+      description: createDesc.value.trim() || undefined,
+    }, { headers: headers() })
+    characters.value.unshift(res.data)
+    showCreate.value = false
+    createName.value = ''
+    createDesc.value = ''
+  } catch (e: any) {
+    createError.value = e?.response?.data?.detail ?? '创建失败'
   }
 }
 
-const fetchCharacterWorlds = async (characterId: number) => {
-  const worldsRes = await axios.get('/api/worlds', { headers: headers() })
-  const allWorlds = (worldsRes.data || []) as World[]
-  const worldWithLinks = await Promise.all(
-    allWorlds.map(async (world) => {
-      const linksRes = await axios.get(`/api/worlds/${world.id}/characters`, { headers: headers() })
-      return { world, links: (linksRes.data || []) as WorldCharacterLink[] }
+const handleAvatarUpload = async (event: Event, charId: number) => {
+  const file = (event.target as HTMLInputElement).files?.[0]
+  if (!file) return
+
+  const formData = new FormData()
+  formData.append('file', file)
+
+  uploadProgress[charId] = 0
+  try {
+    const res = await axios.post(`/api/characters/${charId}/avatar`, formData, {
+      headers: { ...headers(), 'Content-Type': 'multipart/form-data' },
+      onUploadProgress: (e) => {
+        if (e.total) uploadProgress[charId] = Math.round((e.loaded * 100) / e.total)
+      },
     })
-  )
-  characterWorlds.value = worldWithLinks
-    .filter((item) => item.links.some((link) => link.character_id === characterId))
-    .map((item) => item.world)
-}
-
-const ensurePrimaryWorldForCharacter = async (character: Character) => {
-  await fetchCharacterWorlds(character.id)
-  if (characterWorlds.value.length > 0) {
-    return characterWorlds.value[0].id
+    const char = characters.value.find(c => c.id === charId)
+    if (char) char.avatar_url = res.data.avatar_url
+  } catch (e) {
+    console.error(parseApiError(e))
+  } finally {
+    delete uploadProgress[charId]
   }
-
-  const worldRes = await axios.post(
-    '/api/worlds',
-    {
-      name: `${character.name} World`,
-      description: `Auto-created world for ${character.name}`,
-      scenes: {},
-    },
-    { headers: headers() }
-  )
-  const worldId = worldRes.data.id as number
-  await axios.post(
-    `/api/worlds/${worldId}/characters`,
-    {
-      character_id: character.id,
-      role: character.type === 'traveler' ? 'traveler' : 'sage',
-      is_primary: true,
-    },
-    { headers: headers() }
-  )
-  characterWorlds.value = [{ id: worldId, name: worldRes.data.name }]
-  return worldId
 }
 
-const fetchSubjects = async (characterId: number) => {
+const levelUp = async (charId: number) => {
   try {
-    await fetchCharacterWorlds(characterId)
-    if (characterWorlds.value.length === 0) {
-      subjects.value = []
-      return
-    }
-    const courseResponses = await Promise.all(
-      characterWorlds.value.map((world) =>
-        axios.get(`/api/worlds/${world.id}/courses`, { headers: headers() })
-      )
-    )
-    subjects.value = courseResponses.flatMap((response) => response.data)
-  } catch (error) {
-    showError(error)
+    const res = await axios.post(`/api/characters/${charId}/levelup`, {}, { headers: headers() })
+    const char = characters.value.find(c => c.id === charId)
+    if (char) Object.assign(char, res.data)
+  } catch (e) {
+    console.error(parseApiError(e))
   }
 }
 
-const selectCharacter = (char: Character) => {
-  selectedCharacter.value = char
-  fetchTeacherPersonas(char.id)
-  fetchSubjects(char.id)
-}
-
-// --- Character CRUD ---
-
-const resetCharacterForm = () => {
-  characterForm.value = { name: '', type: 'sage', personality: '', background: '', speech_style: '' }
-  editingCharacterId.value = null
-}
-
-const openCreateCharacter = () => {
-  resetCharacterForm()
-  showCreateDialog.value = true
-}
-
-const openEditCharacter = (char: Character) => {
-  editingCharacterId.value = char.id
-  characterForm.value = {
-    name: char.name,
-    type: char.type || 'sage',
-    personality: char.personality || '',
-    background: char.background || '',
-    speech_style: char.speech_style || '',
-  }
-  showCreateDialog.value = true
-}
-
-const saveCharacter = async () => {
+const deleteCharacter = async (charId: number) => {
+  if (!confirm('确定删除该角色？')) return
   try {
-    if (editingCharacterId.value) {
-      await axios.put(`/api/character/${editingCharacterId.value}`, characterForm.value, { headers: headers() })
-    } else {
-      await axios.post('/api/character', characterForm.value, { headers: headers() })
-    }
-    showCreateDialog.value = false
-    resetCharacterForm()
-    fetchCharacters()
-  } catch (error) {
-    showError(error)
+    await axios.delete(`/api/characters/${charId}`, { headers: headers() })
+    characters.value = characters.value.filter(c => c.id !== charId)
+    if (selectedId.value === charId) selectedId.value = null
+  } catch (e) {
+    console.error(parseApiError(e))
   }
 }
 
-const deleteCharacter = async (id: number) => {
-  if (!confirm('确定要删除这个角色吗？相关的世界绑定与学习数据可能会受影响。')) return
-  try {
-    await axios.delete(`/api/character/${id}`, { headers: headers() })
-    if (selectedCharacter.value?.id === id) {
-      selectedCharacter.value = null
-      teacherPersonas.value = []
-      subjects.value = []
-      characterWorlds.value = []
-    }
-    fetchCharacters()
-  } catch (error) {
-    showError(error)
-  }
-}
-
-// --- Persona CRUD ---
-
-const resetPersonaForm = () => {
-  personaForm.value = { name: '', version: '1.0', traitsInput: '', system_prompt_template: '' }
-  editingPersonaId.value = null
-}
-
-const openCreatePersona = () => {
-  resetPersonaForm()
-  showPersonaDialog.value = true
-}
-
-const editingPersonaWasActive = ref(false)
-
-const openEditPersona = (persona: TeacherPersona) => {
-  editingPersonaId.value = persona.id
-  editingPersonaWasActive.value = persona.is_active
-  personaForm.value = {
-    name: persona.name,
-    version: persona.version,
-    traitsInput: persona.traits ? formatTraits(persona.traits) : '',
-    system_prompt_template: persona.system_prompt_template || '',
-  }
-  showPersonaDialog.value = true
-}
-
-const savePersona = async () => {
-  if (!selectedCharacter.value) return
-  const payload = {
-    character_id: selectedCharacter.value.id,
-    name: personaForm.value.name,
-    version: personaForm.value.version,
-    traits: parseTraits(personaForm.value.traitsInput),
-    system_prompt_template: personaForm.value.system_prompt_template,
-    is_active: editingPersonaId.value ? editingPersonaWasActive.value : false,
-  }
-  try {
-    if (editingPersonaId.value) {
-      await axios.put(`/api/teacher_persona/${editingPersonaId.value}`, payload, { headers: headers() })
-    } else {
-      await axios.post('/api/teacher_persona', payload, { headers: headers() })
-    }
-    showPersonaDialog.value = false
-    resetPersonaForm()
-    fetchTeacherPersonas(selectedCharacter.value.id)
-  } catch (error) {
-    showError(error)
-  }
-}
-
-const deletePersona = async (id: number) => {
-  if (!confirm('确定要删除这个教师人格吗？')) return
-  try {
-    await axios.delete(`/api/teacher_persona/${id}`, { headers: headers() })
-    if (selectedCharacter.value) {
-      fetchTeacherPersonas(selectedCharacter.value.id)
-    }
-  } catch (error) {
-    showError(error)
-  }
-}
-
-const activatePersona = async (personaId: number) => {
-  try {
-    await axios.put(`/api/teacher_persona/${personaId}/activate`, {}, { headers: headers() })
-    if (selectedCharacter.value) {
-      fetchTeacherPersonas(selectedCharacter.value.id)
-    }
-  } catch (error) {
-    showError(error)
-  }
-}
-
-// --- Subject CRUD ---
-
-const resetSubjectForm = () => {
-  subjectForm.value = { world_id: characterWorlds.value[0]?.id ?? null, name: '', description: '', target_level: '' }
-  editingSubjectId.value = null
-}
-
-const openCreateSubject = () => {
-  resetSubjectForm()
-  showSubjectDialog.value = true
-}
-
-const openEditSubject = (subj: Course) => {
-  editingSubjectId.value = subj.id
-  subjectForm.value = {
-    world_id: subj.world_id,
-    name: subj.name,
-    description: subj.description || '',
-    target_level: subj.target_level || '',
-  }
-  showSubjectDialog.value = true
-}
-
-const saveSubject = async () => {
-  if (!selectedCharacter.value) return
-  try {
-    if (editingSubjectId.value) {
-      if (!subjectForm.value.world_id) {
-        showError(new Error('缺少世界信息，无法更新课程'))
-        return
-      }
-      await axios.put(
-        `/api/courses/${editingSubjectId.value}`,
-        {
-          world_id: subjectForm.value.world_id,
-          name: subjectForm.value.name,
-          description: subjectForm.value.description,
-          target_level: subjectForm.value.target_level,
-        },
-        { headers: headers() }
-      )
-    } else {
-      const worldId = subjectForm.value.world_id ?? await ensurePrimaryWorldForCharacter(selectedCharacter.value)
-      await axios.post(
-        `/api/worlds/${worldId}/courses`,
-        {
-          name: subjectForm.value.name,
-          description: subjectForm.value.description,
-          target_level: subjectForm.value.target_level,
-        },
-        { headers: headers() }
-      )
-    }
-    showSubjectDialog.value = false
-    resetSubjectForm()
-    fetchSubjects(selectedCharacter.value.id)
-  } catch (error) {
-    showError(error)
-  }
-}
-
-const deleteSubject = async (id: number) => {
-  if (!confirm('确定要删除这个课程吗？')) return
-  try {
-    await axios.delete(`/api/courses/${id}`, { headers: headers() })
-    if (selectedCharacter.value) {
-      fetchSubjects(selectedCharacter.value.id)
-    }
-  } catch (error) {
-    showError(error)
-  }
-}
-
-onMounted(() => {
-  fetchCharacters()
-})
-
-onUnmounted(() => {
-  if (cooldownTimer) clearInterval(cooldownTimer)
+onMounted(async () => {
+  await Promise.all([fetchCharacters(), fetchStats()])
 })
 </script>
 
 <style scoped>
-.character-page {
-  min-height: 100vh;
-  padding: 20px;
-  background: linear-gradient(180deg, #1a1a2e 0%, #16213e 100%);
+.char-page-v2 {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  background: #0a0a1e;
 }
 
-.header {
+.bg-image {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center;
+  opacity: 0.08;
+}
+
+.bg-gradient {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to bottom, rgba(10,10,30,0.95) 0%, rgba(10,10,30,0.98) 100%);
+}
+
+.char-header {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
   display: flex;
   align-items: center;
-  gap: 20px;
-  margin-bottom: 30px;
+  justify-content: space-between;
+  padding: 16px 24px;
+  border-bottom: 1px solid rgba(255,215,0,0.1);
+  z-index: 10;
 }
 
-.header h1 {
+.char-header button {
+  font-size: 13px;
+  padding: 6px 14px;
+}
+
+.header-title {
   color: #ffd700;
+  font-size: 16px;
+  letter-spacing: 4px;
 }
 
-.back-btn {
-  padding: 8px 16px;
-  background: #2a2a4a;
-  border: 1px solid #4a4a8a;
-  color: #fff;
-  border-radius: 6px;
-  cursor: pointer;
+.char-content {
+  position: absolute;
+  inset: 0;
+  overflow-y: auto;
+  padding-top: 68px;
+  padding-bottom: 32px;
+  padding-left: 24px;
+  padding-right: 24px;
 }
 
-.back-btn:hover {
-  background: #3a3a5a;
-  border-color: #ffd700;
+.char-inner {
+  max-width: 900px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
 }
 
-.section {
-  margin-bottom: 30px;
+.stats-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+
+.stat-card {
+  padding: 16px;
+  text-align: center;
+}
+
+.stat-value {
+  font-size: 28px;
+  font-weight: bold;
+  color: #ffd700;
+  letter-spacing: 2px;
+  margin-bottom: 4px;
+}
+
+.stat-label {
+  font-size: 11px;
+  color: rgba(255,255,255,0.4);
+  letter-spacing: 1px;
 }
 
 .section-header {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  margin-bottom: 20px;
+  justify-content: space-between;
 }
 
-.section h2 {
+.section-title {
   color: #ffd700;
+  font-size: 14px;
+  letter-spacing: 2px;
 }
 
-.add-btn {
-  padding: 8px 16px;
-  background: #4a8a4a;
-  border: none;
-  border-radius: 6px;
-  color: #fff;
-  cursor: pointer;
+.create-form {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
-.add-btn:hover {
-  background: #5a9a5a;
+.form-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
 }
 
-.characters-grid, .subjects-list {
+.form-row input {
+  flex: 1;
+  padding: 8px 12px;
+  font-size: 13px;
+}
+
+.create-desc {
+  width: 100%;
+  padding: 8px 12px;
+  font-size: 13px;
+  resize: none;
+}
+
+.error-text {
+  font-size: 12px;
+  color: #ef4444;
+}
+
+.loading-text {
+  color: rgba(255,255,255,0.5);
+  text-align: center;
+  padding: 40px;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 40px;
+}
+
+.empty-hint {
+  font-size: 18px;
+  color: rgba(255,255,255,0.5);
+  margin-bottom: 8px;
+}
+
+.empty-sub {
+  font-size: 12px;
+  color: rgba(255,255,255,0.3);
+}
+
+.char-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 20px;
+  gap: 16px;
 }
 
-.character-card, .subject-card {
-  background: rgba(0, 0, 0, 0.5);
-  border: 2px solid #4a4a8a;
-  border-radius: 12px;
-  padding: 20px;
+.char-card {
+  background: rgba(0,0,0,0.5);
+  border: 1px solid rgba(255,215,0,0.1);
+  border-radius: var(--radius-panel);
+  overflow: hidden;
   cursor: pointer;
-  transition: all 0.3s;
+  transition: all 0.2s ease;
 }
 
-.character-card:hover {
-  border-color: #ffd700;
+.char-card:hover {
+  border-color: rgba(255,215,0,0.3);
+  transform: translateY(-2px);
 }
 
-.character-card.selected {
-  border-color: #ffd700;
-  box-shadow: 0 0 12px rgba(255, 215, 0, 0.3);
+.char-card.selected {
+  border-color: rgba(255,215,0,0.5);
+  box-shadow: 0 0 16px rgba(255,215,0,0.15);
 }
 
 .char-avatar {
-  width: 60px;
-  height: 60px;
-  background: linear-gradient(135deg, #4a4a8a, #2a2a4a);
-  border-radius: 50%;
+  height: 140px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 24px;
-  color: #ffd700;
-  margin-bottom: 10px;
 }
 
-.character-card h3, .subject-card h3 {
-  color: #fff;
-  margin-bottom: 8px;
+.char-avatar-img img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
-.character-card p, .subject-card p {
-  color: #888;
-  font-size: 14px;
-  margin-bottom: 10px;
+.char-avatar-placeholder {
+  font-size: 48px;
+  font-weight: bold;
+  color: rgba(255,255,255,0.3);
 }
 
-.target {
-  display: inline-block;
-  padding: 4px 12px;
-  background: #4a8a4a;
-  border-radius: 12px;
-  font-size: 12px;
-  color: #fff;
+.char-info {
+  padding: 12px;
 }
 
-.role-tag {
-  display: inline-block;
-  margin-bottom: 8px;
-  padding: 2px 10px;
-  border-radius: 999px;
-  font-size: 12px;
-  color: #fff;
-  background: #4a4a8a;
+.char-name {
+  font-size: 15px;
+  color: #f0f0ff;
+  letter-spacing: 2px;
+  margin-bottom: 4px;
 }
 
-.card-actions {
-  display: flex;
-  gap: 10px;
-  margin-top: 10px;
+.char-desc {
+  font-size: 11px;
+  color: rgba(255,255,255,0.5);
+  line-height: 1.4;
+  margin-bottom: 6px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
-.card-actions button {
-  padding: 6px 12px;
-  background: #2a2a4a;
-  border: 1px solid #4a4a8a;
-  border-radius: 4px;
-  color: #fff;
-  font-size: 12px;
-  cursor: pointer;
+.char-meta {
+  font-size: 11px;
+  color: rgba(255,215,0,0.5);
 }
 
-.card-actions button:hover {
-  background: #3a3a5a;
-}
-
-.card-actions button.delete {
-  border-color: #8a4a4a;
-}
-
-.card-actions button.delete:hover {
-  background: #8a4a4a;
-}
-
-.active-badge {
-  padding: 6px 12px;
-  background: #4a8a4a;
-  border-radius: 4px;
-  font-size: 12px;
-  color: #fff;
-}
-
-.personas-list {
+.char-actions {
+  padding: 12px;
+  border-top: 1px solid rgba(255,215,0,0.1);
   display: flex;
   flex-direction: column;
-  gap: 15px;
-}
-
-.persona-card {
-  background: rgba(0, 0, 0, 0.5);
-  border: 2px solid #4a4a8a;
-  border-radius: 12px;
-  padding: 20px;
-}
-
-.persona-card.active {
-  border-color: #4a8a4a;
-}
-
-.persona-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 10px;
-}
-
-.persona-header h3 {
-  color: #fff;
-}
-
-.version {
-  color: #888;
-  font-size: 12px;
-}
-
-.traits, .prompt-preview {
-  color: #888;
-  font-size: 14px;
-  margin-bottom: 10px;
-}
-
-.dialog-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.8);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-}
-
-.dialog {
-  background: #2a2a4a;
-  border: 1px solid #4a4a8a;
-  border-radius: 12px;
-  padding: 30px;
-  width: 90%;
-  max-width: 500px;
-  max-height: 90vh;
-  overflow-y: auto;
-}
-
-.dialog h3 {
-  color: #ffd700;
-  margin-bottom: 20px;
-}
-
-.form-group {
-  margin-bottom: 15px;
-}
-
-.form-group label {
-  display: block;
-  color: #fff;
-  margin-bottom: 8px;
-}
-
-.field-hint {
-  margin-top: 6px;
-  color: #aaa;
-  font-size: 12px;
-}
-
-.form-group input, .form-group textarea {
-  width: 100%;
-  padding: 10px;
-  background: #1a1a2e;
-  border: 1px solid #4a4a8a;
-  border-radius: 6px;
-  color: #fff;
-  box-sizing: border-box;
-}
-
-.form-group textarea {
-  resize: vertical;
-  min-height: 80px;
-}
-
-.dialog-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-  margin-top: 20px;
-}
-
-.dialog-actions button {
-  padding: 10px 20px;
-  border-radius: 6px;
-  cursor: pointer;
-  background: #2a2a4a;
-  border: 1px solid #4a4a8a;
-  color: #fff;
-}
-
-.dialog-actions button.primary {
-  background: #4a8a4a;
-  border: none;
-}
-
-.dialog-actions button.primary:hover {
-  background: #5a9a5a;
-}
-
-.error-toast {
-  position: fixed;
-  top: 20px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: rgba(215, 58, 74, 0.9);
-  color: #fff;
-  padding: 12px 24px;
-  border-radius: 8px;
-  z-index: 2000;
-  font-size: 14px;
-}
-
-/* AI Generate */
-.ai-generate {
-  display: flex;
   gap: 8px;
-  margin-bottom: 10px;
 }
 
-.ai-input {
-  flex: 1;
-  padding: 10px;
-  background: var(--bg-secondary, #1a1a2e);
-  border: 1px solid var(--border-subtle, #4a4a8a);
-  border-radius: 6px;
-  color: var(--text-primary, #fff);
-  font-size: 13px;
-}
-
-.ai-input:focus {
-  outline: none;
-  border-color: var(--accent-gold, #ffd700);
-}
-
-.ai-btn {
-  padding: 10px 16px;
-  background: linear-gradient(135deg, var(--accent-gold, #ffd700), var(--accent-orange, #ff8c00));
-  color: var(--bg-primary, #0a0a1e);
-  border: none;
-  border-radius: 6px;
-  font-weight: bold;
-  font-size: 13px;
-  cursor: pointer;
-  white-space: nowrap;
-  transition: all var(--transition-fast, 0.2s);
-}
-
-.ai-btn:hover:not(:disabled) {
-  box-shadow: 0 0 12px rgba(255, 215, 0, 0.4);
-}
-
-.ai-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-/* Preset Tags */
-.preset-row {
+.avatar-upload {
   display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
+  align-items: center;
+  gap: 8px;
 }
 
-.preset-tag {
-  padding: 6px 12px;
-  background: var(--bg-secondary, #2a2a4a);
-  border: 1px solid var(--border-subtle, #4a4a8a);
-  border-radius: 16px;
-  color: var(--text-secondary, #aaa);
+.upload-btn {
   font-size: 12px;
-  cursor: pointer;
-  transition: all var(--transition-fast, 0.2s);
+  padding: 4px 10px;
 }
 
-.preset-tag:hover {
-  border-color: var(--accent-gold, #ffd700);
-  color: var(--text-primary, #fff);
-}
-
-.preset-tag-active {
-  border-color: var(--accent-gold, #ffd700);
-  color: var(--accent-gold, #ffd700);
-  background: rgba(255, 215, 0, 0.1);
-}
-
-.label-hint {
+.upload-progress {
   font-size: 11px;
-  color: var(--text-muted, #666);
-  font-weight: normal;
+  color: rgba(255,215,0,0.5);
 }
 
-/* Sprite upload */
-.sprite-btn {
-  border-color: var(--emotion-thinking, #60a5fa) !important;
-  color: var(--emotion-thinking, #60a5fa) !important;
-}
-
-.sprite-hint {
+.levelup-btn {
   font-size: 12px;
-  color: var(--text-muted, #888);
-  margin-bottom: 12px;
+  padding: 6px;
 }
 
-.sprite-file-input {
-  width: 100%;
-  color: var(--text-secondary, #aaa);
-  font-size: 13px;
-}
-
-.sprite-preview {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-  margin-top: 10px;
-}
-
-.sprite-tag {
+.delete-btn {
   font-size: 12px;
-  padding: 3px 10px;
-  background: rgba(74, 223, 106, 0.1);
-  border: 1px solid var(--emotion-positive, #4adf6a);
-  border-radius: 12px;
-  color: var(--emotion-positive, #4adf6a);
+  padding: 4px 10px;
+  color: rgba(255,100,100,0.7);
+}
+
+.slide-down-enter-from {
+  opacity: 0;
+  transform: translateY(-12px);
+}
+
+.slide-down-enter-active {
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+
+.slide-down-leave-to {
+  opacity: 0;
+  transform: translateY(-8px);
+}
+
+.slide-down-leave-active {
+  transition: opacity 0.2s ease;
+}
+
+.expand-enter-from {
+  opacity: 0;
+  max-height: 0;
+}
+
+.expand-enter-active {
+  transition: opacity 0.25s ease, max-height 0.25s ease;
+  max-height: 200px;
+}
+
+.expand-leave-to {
+  opacity: 0;
+  max-height: 0;
+}
+
+.expand-leave-active {
+  transition: opacity 0.2s ease, max-height 0.2s ease;
 }
 </style>

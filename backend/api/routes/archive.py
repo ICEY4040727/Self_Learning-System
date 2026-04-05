@@ -43,6 +43,33 @@ class CharacterResponse(CharacterCreate):
         from_attributes = True
 
 
+class CharacterStatsResponse(BaseModel):
+    total_characters: int
+    sage_count: int
+    traveler_count: int
+    active_worlds: int
+
+
+class CharacterLevelupRequest(BaseModel):
+    experience_points: int = 0
+
+
+class CharacterLevelupResponse(BaseModel):
+    id: int
+    level: int
+    experience_points: int
+    message: str
+
+
+class SageInfo(BaseModel):
+    id: int
+    name: str
+    title: str
+    symbol: str
+    color: str
+    accentColor: str
+
+
 class WorldCreate(BaseModel):
     name: str
     description: str | None = None
@@ -52,6 +79,9 @@ class WorldCreate(BaseModel):
 class WorldResponse(WorldCreate):
     id: int
     user_id: int
+    sages: list[SageInfo] | None = None
+    stageLabel: str | None = None
+    relationship: dict | None = None
 
     class Config:
         from_attributes = True
@@ -249,6 +279,131 @@ def delete_character(
     return {"message": "Character deleted"}
 
 
+# Character stats endpoint
+@router.get("/character/stats", response_model=CharacterStatsResponse)
+def get_character_stats(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Get character statistics for the current user."""
+    total = db.query(Character).filter(Character.user_id == current_user.id).count()
+    sage_count = db.query(Character).filter(
+        Character.user_id == current_user.id,
+        Character.type == "sage"
+    ).count()
+    traveler_count = db.query(Character).filter(
+        Character.user_id == current_user.id,
+        Character.type == "traveler"
+    ).count()
+    # Count worlds that have at least one character bound
+    active_worlds = db.query(WorldCharacter.world_id).join(
+        Character, WorldCharacter.character_id == Character.id
+    ).filter(
+        Character.user_id == current_user.id
+    ).distinct().count()
+
+    return CharacterStatsResponse(
+        total_characters=total,
+        sage_count=sage_count,
+        traveler_count=traveler_count,
+        active_worlds=active_worlds,
+    )
+
+
+# Character avatar upload endpoint
+@router.post("/character/{character_id}/avatar")
+async def upload_character_avatar(
+    character_id: int,
+    file: UploadFile,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Upload character avatar (single image)."""
+    from pathlib import Path
+
+    character = db.query(Character).filter(
+        Character.id == character_id,
+        Character.user_id == current_user.id,
+    ).first()
+    if not character:
+        raise HTTPException(status_code=404, detail="Character not found")
+
+    if file.content_type not in ALLOWED_MIME_TYPES:
+        raise HTTPException(
+            status_code=422,
+            detail=f"文件类型 '{file.content_type}' 不支持，允许：png, jpeg, webp"
+        )
+
+    content = await file.read()
+    if len(content) > MAX_FILE_SIZE:
+        raise HTTPException(status_code=413, detail="文件超过 2MB 限制")
+
+    static_base = Path(__file__).resolve().parents[2] / "static" / "characters" / str(character_id)
+    static_base.mkdir(parents=True, exist_ok=True)
+
+    ext = Path(file.filename or "").suffix or ".png"
+    avatar_path = static_base / f"avatar{ext}"
+    avatar_path.write_bytes(content)
+
+    avatar_url = f"/static/characters/{character_id}/avatar{ext}"
+    character.avatar = avatar_url
+    db.commit()
+
+    return {"avatar": avatar_url}
+
+
+# Character levelup endpoint
+@router.post("/character/{character_id}/levelup", response_model=CharacterLevelupResponse)
+def character_levelup(
+    character_id: int,
+    req: CharacterLevelupRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Add experience points and handle levelup for a character."""
+    character = db.query(Character).filter(
+        Character.id == character_id,
+        Character.user_id == current_user.id,
+    ).first()
+    if not character:
+        raise HTTPException(status_code=404, detail="Character not found")
+
+    # Initialize experience and level if not present
+    current_exp = getattr(character, 'experience_points', 0) or 0
+    current_level = getattr(character, 'level', 1) or 1
+
+    # Add experience
+    new_exp = current_exp + req.experience_points
+
+    # Calculate level based on experience thresholds
+    level_thresholds = [0, 100, 250, 500, 1000]
+    new_level = 1
+    for i, threshold in enumerate(level_thresholds):
+        if new_exp >= threshold:
+            new_level = i + 1
+
+    # Update character
+    character.experience_points = new_exp
+    character.level = new_level
+    db.commit()
+    db.refresh(character)
+
+    # Generate message
+    if new_level > current_level:
+        message = f"升级了！当前等级：{new_level}"
+    else:
+        next_threshold = level_thresholds[new_level] if new_level < len(level_thresholds) else level_thresholds[-1] * 2
+        remaining = next_threshold - new_exp
+        message = f"经验 +{req.experience_points}，距离下一级还需 {remaining} 点"
+
+    return CharacterLevelupResponse(
+        id=character.id,
+        level=new_level,
+        experience_points=new_exp,
+        message=message,
+    )
+
+
 # World endpoints
 def _ensure_world_knowledge(db: Session, world_id: int) -> None:
     knowledge = db.query(Knowledge).filter(Knowledge.world_id == world_id).first()
@@ -266,6 +421,64 @@ def _ensure_world_knowledge(db: Session, world_id: int) -> None:
             existing = db.query(Knowledge).filter(Knowledge.world_id == world_id).first()
             if existing is None:
                 raise
+
+
+def _get_world_sages(db: Session, world_id: int) -> list[SageInfo]:
+    """Get all sage characters bound to a world."""
+    links = db.query(WorldCharacter).filter(
+        WorldCharacter.world_id == world_id,
+        WorldCharacter.role == "sage"
+    ).all()
+    
+    result = []
+    for link in links:
+        char = db.query(Character).filter(Character.id == link.character_id).first()
+        if char:
+            result.append(SageInfo(
+                id=char.id,
+                name=char.name,
+                title=char.personality or "",
+                symbol=char.avatar or "☉",
+                color=(char.sprites or {}).get("color", "#ffd700"),
+                accentColor=(char.sprites or {}).get("accentColor", "#fbbf24"),
+            ))
+    return result
+
+
+def _build_world_response(world: World, db: Session) -> WorldResponse:
+    """Build WorldResponse with sages, stageLabel and relationship data."""
+    sages = _get_world_sages(db, world.id)
+    
+    # Try to get relationship stage from the most recent session
+    from backend.models.models import Session as SessionModel
+    latest_session = db.query(SessionModel).filter(
+        SessionModel.world_id == world.id
+    ).order_by(SessionModel.started_at.desc()).first()
+    
+    stage_label = None
+    relationship = None
+    if latest_session and latest_session.relationship:
+        stage = latest_session.relationship.get("stage", "stranger")
+        stage_map = {
+            "stranger": "初识",
+            "acquaintance": "相识",
+            "friend": "朋友",
+            "mentor": "导师",
+            "partner": "伙伴",
+        }
+        stage_label = stage_map.get(stage, stage)
+        relationship = latest_session.relationship
+    
+    return WorldResponse(
+        id=world.id,
+        user_id=world.user_id,
+        name=world.name,
+        description=world.description,
+        scenes=world.scenes,
+        sages=sages if sages else None,
+        stageLabel=stage_label,
+        relationship=relationship,
+    )
 
 
 @router.post("/worlds", response_model=WorldResponse)
@@ -293,12 +506,13 @@ def get_worlds(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    return (
+    worlds = (
         db.query(World)
         .filter(World.user_id == current_user.id)
         .order_by(World.created_at.desc())
         .all()
     )
+    return [_build_world_response(w, db) for w in worlds]
 
 
 @router.get("/worlds/{world_id}", response_model=WorldResponse)
@@ -313,7 +527,7 @@ def get_world(
     ).first()
     if not world:
         raise HTTPException(status_code=404, detail="World not found")
-    return world
+    return _build_world_response(world, db)
 
 
 @router.put("/worlds/{world_id}", response_model=WorldResponse)
