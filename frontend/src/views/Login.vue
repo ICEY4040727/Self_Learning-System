@@ -36,9 +36,9 @@
       </div>
 
       <!-- Form -->
-      <form @submit.prevent="handleSubmit" class="form-stack">
+      <TransitionGroup name="field-list" tag="form" @submit.prevent="handleSubmit" class="form-stack">
         <!-- Username -->
-        <div class="field-group">
+        <div key="username" class="field-group">
           <label class="field-label">用 户 名</label>
           <input
             v-model="username"
@@ -51,7 +51,7 @@
         </div>
 
         <!-- Password -->
-        <div class="field-group">
+        <div key="password" class="field-group">
           <label class="field-label">密 码</label>
           <div class="pw-wrapper">
             <input
@@ -72,33 +72,33 @@
           </div>
         </div>
 
-        <!-- Confirm password (register only) -->
-        <div class="field-group confirm-field">
-          <Transition name="confirm-fast">
-            <div v-if="mode === 'register'" class="field-group-inner">
-              <label class="field-label">确 认 密 码</label>
-              <input
-                v-model="confirmPw"
-                :type="showPw ? 'text' : 'password'"
-                class="galgame-input"
-                placeholder="再次输入密码"
-                autocomplete="new-password"
-              />
-            </div>
-          </Transition>
+        <!-- Confirm password (register only) - fast fade out, key on Transition -->
+        <Transition name="confirm-fast" :key="'confirmPw'">
+          <div v-if="mode === 'register'" class="field-group">
+            <label class="field-label">确 认 密 码</label>
+            <input
+              v-model="confirmPw"
+              :type="showPw ? 'text' : 'password'"
+              class="galgame-input"
+              placeholder="再次输入密码"
+              autocomplete="new-password"
+            />
+          </div>
+        </Transition>
+
+        <!-- Error message - always render with conditional visibility -->
+        <div key="error" class="error-box font-ui" :style="{ visibility: error ? 'visible' : 'hidden', height: error ? 'auto' : '0', overflow: 'hidden' }">
+          {{ error }}
         </div>
 
-        <!-- Submit button -->
-        <button type="submit" class="submit-btn" :disabled="loading">
+        <!-- Submit -->
+        <button key="submit" type="submit" class="submit-btn" :disabled="loading">
           <span v-if="loading" class="loading-dots">
             <span v-for="i in 3" :key="i" :style="{ animationDelay: `${(i-1) * 0.2}s` }">·</span>
           </span>
           <span v-else>{{ mode === 'login' ? '进 入 学 堂' : '创 建 账 号' }}</span>
         </button>
-
-        <!-- Error message -->
-        <div v-if="error" class="error-box font-ui">{{ error }}</div>
-      </form>
+      </TransitionGroup>
 
       <!-- Demo hint -->
       <div class="demo-hint font-ui">演示模式：输入任意用户名密码即可进入</div>
@@ -335,17 +335,6 @@ const handleSubmit = async () => {
   flex-direction: column;
   gap: 8px;
   padding-bottom: 16px;
-}
-
-/* Confirm field wrapper for transitions */
-.confirm-field {
-  /* No special positioning needed */
-}
-
-.field-group-inner {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
 }
 
 .field-label {
