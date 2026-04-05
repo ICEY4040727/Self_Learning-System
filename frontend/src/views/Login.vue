@@ -1,6 +1,17 @@
 <template>
   <div class="login-page">
-    <div class="login-container">
+    <div class="scene-layer"></div>
+    <div class="particle-layer" aria-hidden="true">
+      <span
+        v-for="particle in particles"
+        :key="particle.id"
+        class="particle"
+        :class="particle.tone"
+        :style="particle.style"
+      ></span>
+    </div>
+
+    <div class="login-container galgame-login-panel">
       <h1 class="title">苏 格 拉 底 学 习 系 统</h1>
       <p class="subtitle">基于苏格拉底教学法的个性化学习系统</p>
 
@@ -11,7 +22,7 @@
             v-model="username"
             type="text"
             :placeholder="isRegisterMode ? '用户名（3-50 字符，字母数字下划线）' : '用户名'"
-            class="input"
+            class="input galgame-input"
             :class="{ 'input-error': usernameError }"
             @blur="validateUsername"
           />
@@ -24,7 +35,7 @@
             v-model="password"
             type="password"
             :placeholder="isRegisterMode ? '密码（至少 8 位）' : '密码'"
-            class="input"
+            class="input galgame-input"
             :class="{ 'input-error': passwordError }"
             @input="validatePassword"
             @keyup.enter="isRegisterMode ? handleRegister() : handleLogin()"
@@ -40,12 +51,12 @@
 
         <!-- Buttons -->
         <div class="buttons" v-if="!isRegisterMode">
-          <button class="btn primary" @click="handleLogin" :disabled="isLoading">
+          <button class="btn primary galgame-btn" @click="handleLogin" :disabled="isLoading">
             {{ isLoading ? '登录中...' : '登录' }}
           </button>
         </div>
         <div class="buttons" v-else>
-          <button class="btn primary" @click="handleRegister" :disabled="isLoading || !isFormValid">
+          <button class="btn primary galgame-btn" @click="handleRegister" :disabled="isLoading || !isFormValid">
             {{ isLoading ? '注册中...' : '注册' }}
           </button>
         </div>
@@ -90,6 +101,32 @@ const isRegisterMode = ref(false)
 const toast = ref('')
 const usernameError = ref('')
 const passwordError = ref('')
+
+type ParticleTone = 'gold' | 'blue'
+interface LoginParticle {
+  id: number
+  tone: ParticleTone
+  style: Record<string, string>
+}
+
+const particles: LoginParticle[] = Array.from({ length: 28 }, (_value, index) => {
+  const tone: ParticleTone = index < 17 ? 'gold' : 'blue' // ~60% gold
+  const left = (index * 37) % 100
+  const top = (index * 19) % 100
+  return {
+    id: index,
+    tone,
+    style: {
+      left: `${left}%`,
+      top: `${top}%`,
+      animationDuration: `${8 + (index % 5) * 1.4}s`,
+      animationDelay: `${(index % 7) * 0.45}s`,
+      opacity: `${0.18 + (index % 4) * 0.08}`,
+      width: `${2 + (index % 3)}px`,
+      height: `${2 + (index % 3)}px`,
+    },
+  }
+})
 
 const validateUsername = () => {
   if (!isRegisterMode.value) { usernameError.value = ''; return }
@@ -151,6 +188,7 @@ const switchMode = () => {
   error.value = ''
   usernameError.value = ''
   passwordError.value = ''
+  password.value = ''
 }
 
 const showToast = (msg: string) => {
@@ -171,6 +209,7 @@ const handleLogin = async () => {
   isLoading.value = true
   try {
     await authStore.login(username.value, password.value)
+    password.value = ''
     router.replace(getPostLoginRedirect())
   } catch (e: any) {
     error.value = parseApiError(e)
@@ -189,6 +228,7 @@ const handleRegister = async () => {
   try {
     await authStore.register(username.value, password.value)
     isRegisterMode.value = false
+    password.value = ''
     showToast('注册成功，请登录')
   } catch (e: any) {
     error.value = parseApiError(e)
@@ -201,20 +241,49 @@ const handleRegister = async () => {
 <style scoped>
 .login-page {
   min-height: 100vh;
+  position: relative;
+  overflow: hidden;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: radial-gradient(ellipse at 50% 30%, var(--bg-secondary) 0%, var(--bg-primary) 70%);
+}
+
+.scene-layer {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse at 50% 25%, rgba(67, 57, 123, 0.26) 0%, rgba(10, 10, 30, 0.94) 62%),
+    linear-gradient(180deg, #09091a 0%, #070714 100%);
+}
+
+.particle-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.particle {
+  position: absolute;
+  border-radius: 50%;
+  animation: floatParticle linear infinite;
+}
+
+.particle.gold {
+  background: rgba(255, 215, 0, 0.95);
+  box-shadow: 0 0 8px rgba(255, 215, 0, 0.42);
+}
+
+.particle.blue {
+  background: rgba(96, 165, 250, 0.95);
+  box-shadow: 0 0 8px rgba(96, 165, 250, 0.36);
 }
 
 .login-container {
+  position: relative;
+  z-index: 1;
   text-align: center;
-  padding: 40px;
-  background: var(--bg-panel);
-  border-radius: 12px;
-  border: 1px solid var(--border-subtle);
-  max-width: 400px;
-  width: 90%;
+  padding: 42px 36px;
+  width: min(92vw, 420px);
 }
 
 .title {
@@ -250,19 +319,10 @@ const handleRegister = async () => {
 .input {
   width: 100%;
   padding: 14px;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-subtle);
-  border-radius: 6px;
   color: var(--text-primary);
   font-size: 15px;
   font-family: var(--font-ui);
-  transition: border-color var(--transition-fast);
   box-sizing: border-box;
-}
-
-.input:focus {
-  outline: none;
-  border-color: var(--accent-gold);
 }
 
 .input::placeholder {
@@ -319,11 +379,8 @@ const handleRegister = async () => {
 .btn {
   width: 100%;
   padding: 14px;
-  border: none;
-  border-radius: 6px;
   font-size: 16px;
   font-family: var(--font-ui);
-  cursor: pointer;
   transition: all var(--transition-normal);
 }
 
@@ -334,7 +391,7 @@ const handleRegister = async () => {
 }
 
 .btn.primary:hover:not(:disabled) {
-  transform: scale(1.02);
+  transform: translateY(-1px);
   box-shadow: 0 0 20px rgba(255, 215, 0, 0.3);
 }
 
