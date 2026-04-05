@@ -322,19 +322,16 @@ const handleSubmit = async () => {
 }
 
 .form-stack {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0;
 }
 
 .field-group {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  margin-bottom: 16px;
-}
-
-.field-group:last-child {
-  margin-bottom: 0;
+  padding-bottom: 16px;
 }
 
 .field-label {
