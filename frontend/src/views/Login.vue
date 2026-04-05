@@ -495,12 +495,12 @@ const handleSubmit = async () => {
 
 .field-list-enter-from {
   opacity: 0;
-  transform: translateY(-12px);
+  transform: translateY(12px);
 }
 
 .field-list-leave-to {
   opacity: 0;
-  transform: translateY(-12px);
+  transform: translateY(12px);
 }
 
 .field-list-enter-active {
