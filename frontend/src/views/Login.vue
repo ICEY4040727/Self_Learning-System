@@ -36,9 +36,9 @@
       </div>
 
       <!-- Form -->
-      <TransitionGroup name="field-list" tag="form" @submit.prevent="handleSubmit" class="form-stack">
-        <!-- Username -->
-        <div key="username" class="field-group">
+      <form @submit.prevent="handleSubmit" class="form-stack">
+        <!-- Row 1: Username -->
+        <div key="username" class="field-group field-row">
           <label class="field-label">用 户 名</label>
           <input
             v-model="username"
@@ -50,8 +50,8 @@
           />
         </div>
 
-        <!-- Password -->
-        <div key="password" class="field-group">
+        <!-- Row 2: Password -->
+        <div key="password" class="field-group field-row">
           <label class="field-label">密 码</label>
           <div class="pw-wrapper">
             <input
@@ -72,31 +72,34 @@
           </div>
         </div>
 
-        <!-- Confirm password (register only) - fast fade out -->
-        <Transition name="confirm-fast">
-          <div key="confirmPw" v-if="mode === 'register'" class="field-group">
-            <label class="field-label">确 认 密 码</label>
-            <input
-              v-model="confirmPw"
-              :type="showPw ? 'text' : 'password'"
-              class="galgame-input"
-              placeholder="再次输入密码"
-              autocomplete="new-password"
-            />
-          </div>
-        </Transition>
+        <!-- Row 3: Confirm Password (register) / Submit (login) - same position -->
+        <div key="bottom-row" class="field-row bottom-row">
+          <!-- Confirm password -->
+          <Transition name="confirm-fast">
+            <div v-if="mode === 'register'" class="field-group confirm-group">
+              <label class="field-label">确 认 密 码</label>
+              <input
+                v-model="confirmPw"
+                :type="showPw ? 'text' : 'password'"
+                class="galgame-input"
+                placeholder="再次输入密码"
+                autocomplete="new-password"
+              />
+            </div>
+          </Transition>
+          
+          <!-- Submit button -->
+          <button type="submit" class="submit-btn" :disabled="loading">
+            <span v-if="loading" class="loading-dots">
+              <span v-for="i in 3" :key="i" :style="{ animationDelay: `${(i-1) * 0.2}s` }">·</span>
+            </span>
+            <span v-else>{{ mode === 'login' ? '进 入 学 堂' : '创 建 账 号' }}</span>
+          </button>
+        </div>
 
         <!-- Error message -->
-        <div key="error" v-if="error" class="error-box font-ui">{{ error }}</div>
-
-        <!-- Submit -->
-        <button key="submit" type="submit" class="submit-btn" :disabled="loading">
-          <span v-if="loading" class="loading-dots">
-            <span v-for="i in 3" :key="i" :style="{ animationDelay: `${(i-1) * 0.2}s` }">·</span>
-          </span>
-          <span v-else>{{ mode === 'login' ? '进 入 学 堂' : '创 建 账 号' }}</span>
-        </button>
-      </TransitionGroup>
+        <div v-if="error" class="error-box font-ui">{{ error }}</div>
+      </form>
 
       <!-- Demo hint -->
       <div class="demo-hint font-ui">演示模式：输入任意用户名密码即可进入</div>
@@ -323,16 +326,40 @@ const handleSubmit = async () => {
 }
 
 .form-stack {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.field-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.field-row:last-child {
+  margin-bottom: 0;
 }
 
 .field-group {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding-bottom: 16px;
+}
+
+/* Bottom row: Confirm Password and Submit share the same space */
+.bottom-row {
+  position: relative;
+  height: 70px; /* Fixed height to prevent layout shift */
+  margin-bottom: 0;
+}
+
+.confirm-group {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .field-label {
