@@ -36,9 +36,9 @@
       </div>
 
       <!-- Form -->
-      <form @submit.prevent="handleSubmit" class="form-stack">
+      <TransitionGroup name="field-list" tag="form" @submit.prevent="handleSubmit" class="form-stack">
         <!-- Username -->
-        <div class="field-group">
+        <div key="username" class="field-group">
           <label class="field-label">用 户 名</label>
           <input
             v-model="username"
@@ -51,7 +51,7 @@
         </div>
 
         <!-- Password -->
-        <div class="field-group">
+        <div key="password" class="field-group">
           <label class="field-label">密 码</label>
           <div class="pw-wrapper">
             <input
@@ -73,32 +73,28 @@
         </div>
 
         <!-- Confirm password (register only) -->
-        <Transition name="field-slide">
-          <div v-if="mode === 'register'" class="field-group">
-            <label class="field-label">确 认 密 码</label>
-            <input
-              v-model="confirmPw"
-              :type="showPw ? 'text' : 'password'"
-              class="galgame-input"
-              placeholder="再次输入密码"
-              autocomplete="new-password"
-            />
-          </div>
-        </Transition>
+        <div key="confirmPw" v-if="mode === 'register'" class="field-group">
+          <label class="field-label">确 认 密 码</label>
+          <input
+            v-model="confirmPw"
+            :type="showPw ? 'text' : 'password'"
+            class="galgame-input"
+            placeholder="再次输入密码"
+            autocomplete="new-password"
+          />
+        </div>
 
         <!-- Error message -->
-        <Transition name="error-fade">
-          <div v-if="error" class="error-box font-ui">{{ error }}</div>
-        </Transition>
+        <div key="error" v-if="error" class="error-box font-ui">{{ error }}</div>
 
         <!-- Submit -->
-        <button type="submit" class="submit-btn" :disabled="loading">
+        <button key="submit" type="submit" class="submit-btn" :disabled="loading">
           <span v-if="loading" class="loading-dots">
             <span v-for="i in 3" :key="i" :style="{ animationDelay: `${(i-1) * 0.2}s` }">·</span>
           </span>
           <span v-else>{{ mode === 'login' ? '进 入 学 堂' : '创 建 账 号' }}</span>
         </button>
-      </form>
+      </TransitionGroup>
 
       <!-- Demo hint -->
       <div class="demo-hint font-ui">演示模式：输入任意用户名密码即可进入</div>
@@ -486,5 +482,25 @@ const handleSubmit = async () => {
 .field-slide-enter-active,
 .field-slide-leave-active {
   transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+/* TransitionGroup animations for all form fields - unified for all elements */
+.field-list-move {
+  transition: transform 0.3s ease;
+}
+
+.field-list-enter-from {
+  opacity: 0;
+  transform: translateY(-12px);
+}
+
+.field-list-leave-to {
+  opacity: 0;
+  transform: translateY(-12px);
+}
+
+.field-list-enter-active,
+.field-list-leave-active {
+  transition: opacity 0.25s ease, transform 0.25s ease;
 }
 </style>
