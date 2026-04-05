@@ -1,14 +1,14 @@
 <template>
   <div class="checkpoint-overlay" @click.self="$emit('close')">
-    <div class="checkpoint-panel">
+    <div class="checkpoint-panel galgame-panel">
       <div class="header">
         <h3>Checkpoint</h3>
         <button class="close-btn" @click="$emit('close')">✕</button>
       </div>
 
       <div class="tabs">
-        <button :class="{ active: mode === 'commit' }" @click="mode = 'commit'">COMMIT</button>
-        <button :class="{ active: mode === 'branch' }" @click="mode = 'branch'">BRANCH</button>
+          <button class="galgame-btn galgame-menu-item" :class="{ active: mode === 'commit' }" @click="mode = 'commit'">COMMIT</button>
+          <button class="galgame-btn galgame-menu-item" :class="{ active: mode === 'branch' }" @click="mode = 'branch'">BRANCH</button>
       </div>
 
       <div v-if="errorMessage" class="error">{{ errorMessage }}</div>
@@ -17,7 +17,7 @@
         <button
           v-for="checkpoint in checkpoints"
           :key="checkpoint.id"
-          class="checkpoint-item"
+          class="checkpoint-item galgame-world-card"
           :class="{ selected: selectedCheckpointId === checkpoint.id }"
           @click="selectedCheckpointId = checkpoint.id"
         >
@@ -29,14 +29,14 @@
 
       <div class="actions">
         <template v-if="mode === 'commit'">
-          <input v-model="saveName" placeholder="checkpoint 名称" />
-          <button class="primary" :disabled="!saveName.trim() || pending" @click="commitCheckpoint">
+          <input v-model="saveName" class="galgame-input" placeholder="checkpoint 名称" />
+          <button class="primary galgame-btn galgame-btn-primary" :disabled="!saveName.trim() || pending" @click="commitCheckpoint">
             {{ pending ? '提交中...' : '创建 Checkpoint' }}
           </button>
         </template>
         <template v-else>
-          <input v-model="branchName" placeholder="分支名称（可选）" />
-          <button class="primary" :disabled="!selectedCheckpointId || pending" @click="branchFromCheckpoint">
+          <input v-model="branchName" class="galgame-input" placeholder="分支名称（可选）" />
+          <button class="primary galgame-btn galgame-btn-primary" :disabled="!selectedCheckpointId || pending" @click="branchFromCheckpoint">
             {{ pending ? '分叉中...' : '从选中 Checkpoint 分叉' }}
           </button>
         </template>
@@ -167,9 +167,6 @@ onMounted(() => {
 
 .checkpoint-panel {
   width: min(560px, 92vw);
-  background: rgba(10, 10, 20, 0.96);
-  border: 1px solid var(--border-subtle);
-  border-radius: 12px;
   padding: 14px;
 }
 
@@ -198,12 +195,8 @@ onMounted(() => {
 }
 
 .tabs button {
-  border: 1px solid var(--border-subtle);
-  background: transparent;
   color: var(--text-secondary);
-  border-radius: 8px;
   padding: 6px 10px;
-  cursor: pointer;
 }
 
 .tabs button.active {
@@ -220,14 +213,8 @@ onMounted(() => {
 }
 
 .checkpoint-item {
-  border: 1px solid rgba(74, 74, 138, 0.5);
-  background: rgba(24, 24, 38, 0.9);
-  color: var(--text-primary);
-  border-radius: 8px;
-  padding: 8px 10px;
   display: flex;
   justify-content: space-between;
-  cursor: pointer;
 }
 
 .checkpoint-item small {
@@ -246,20 +233,11 @@ onMounted(() => {
 
 .actions input {
   flex: 1;
-  border: 1px solid var(--border-subtle);
-  background: rgba(24, 24, 38, 0.9);
-  border-radius: 8px;
-  color: var(--text-primary);
   padding: 8px 10px;
 }
 
 .primary {
-  border: 1px solid #4a8a4a;
-  background: #2f6f2f;
-  border-radius: 8px;
-  color: #fff;
   padding: 8px 12px;
-  cursor: pointer;
   white-space: nowrap;
 }
 
