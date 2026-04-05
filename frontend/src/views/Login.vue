@@ -486,7 +486,7 @@ const handleSubmit = async () => {
 
 /* TransitionGroup animations for all form fields */
 .field-list-move {
-  transition: transform 0.3s ease;
+  transition: transform 0.5s ease;
 }
 
 .field-list-enter-from {
@@ -503,6 +503,6 @@ const handleSubmit = async () => {
 }
 
 .field-list-leave-active {
-  transition: opacity 0.2s ease;
+  transition: opacity 0.10s ease;
 }
 </style>
