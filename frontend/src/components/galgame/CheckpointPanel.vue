@@ -168,6 +168,7 @@ onMounted(() => {
 .checkpoint-panel {
   width: min(560px, 92vw);
   padding: 14px;
+  border-radius: var(--radius-modal);
 }
 
 .header {
