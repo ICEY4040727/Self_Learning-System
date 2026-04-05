@@ -72,11 +72,10 @@
           </div>
         </div>
 
-        <!-- Bottom row: Confirm password and Submit share same position -->
-        <div class="bottom-row">
-          <!-- Confirm password (register only) - absolutely positioned -->
+        <!-- Confirm password (register only) -->
+        <div class="field-group confirm-field">
           <Transition name="confirm-fast">
-            <div v-if="mode === 'register'" class="field-group confirm-field">
+            <div v-if="mode === 'register'" class="field-group-inner">
               <label class="field-label">确 认 密 码</label>
               <input
                 v-model="confirmPw"
@@ -87,15 +86,15 @@
               />
             </div>
           </Transition>
-          
-          <!-- Submit button -->
-          <button type="submit" class="submit-btn" :disabled="loading">
-            <span v-if="loading" class="loading-dots">
-              <span v-for="i in 3" :key="i" :style="{ animationDelay: `${(i-1) * 0.2}s` }">·</span>
-            </span>
-            <span v-else>{{ mode === 'login' ? '进 入 学 堂' : '创 建 账 号' }}</span>
-          </button>
         </div>
+
+        <!-- Submit button -->
+        <button type="submit" class="submit-btn" :disabled="loading">
+          <span v-if="loading" class="loading-dots">
+            <span v-for="i in 3" :key="i" :style="{ animationDelay: `${(i-1) * 0.2}s` }">·</span>
+          </span>
+          <span v-else>{{ mode === 'login' ? '进 入 学 堂' : '创 建 账 号' }}</span>
+        </button>
 
         <!-- Error message -->
         <div v-if="error" class="error-box font-ui">{{ error }}</div>
@@ -338,26 +337,15 @@ const handleSubmit = async () => {
   padding-bottom: 16px;
 }
 
-/* Bottom row contains confirm password and submit button - positioned the same */
-.bottom-row {
-  position: relative;
-  min-height: 70px;
-}
-
-/* Confirm field uses absolute positioning so it doesn't affect submit button position */
+/* Confirm field wrapper for transitions */
 .confirm-field {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
+  /* No special positioning needed */
 }
 
-/* Submit button also uses absolute positioning */
-.bottom-row .submit-btn {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
+.field-group-inner {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .field-label {
