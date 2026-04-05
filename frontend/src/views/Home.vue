@@ -414,7 +414,7 @@ const fetchWorlds = async () => {
 
 const fetchCharacters = async () => {
   try {
-    const res = await axios.get('/api/characters', { headers: headers() })
+    const res = await axios.get('/api/character', { headers: headers() })
     const characters = res.data
     sageCharacters.value = characters.filter((c: any) => c.type === 'sage').map((c: any) => ({
       id: c.id,

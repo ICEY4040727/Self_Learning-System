@@ -199,7 +199,7 @@ const canLevelUp = (char: Character) => {
 const fetchCharacters = async () => {
   loading.value = true
   try {
-    const res = await axios.get('/api/characters', { headers: headers() })
+    const res = await axios.get('/api/character', { headers: headers() })
     characters.value = res.data
   } catch (error) {
     console.error(parseApiError(error))
@@ -210,7 +210,7 @@ const fetchCharacters = async () => {
 
 const fetchStats = async () => {
   try {
-    const res = await axios.get('/api/characters/stats', { headers: headers() })
+    const res = await axios.get('/api/character/stats', { headers: headers() })
     Object.assign(stats, res.data)
   } catch {}
 }
@@ -219,7 +219,7 @@ const createCharacter = async () => {
   if (!createName.value.trim()) { createError.value = '请输入角色名'; return }
   createError.value = ''
   try {
-    const res = await axios.post('/api/characters', {
+    const res = await axios.post('/api/character', {
       name: createName.value.trim(),
       description: createDesc.value.trim() || undefined,
     }, { headers: headers() })
@@ -241,7 +241,7 @@ const handleAvatarUpload = async (event: Event, charId: number) => {
 
   uploadProgress[charId] = 0
   try {
-    const res = await axios.post(`/api/characters/${charId}/avatar`, formData, {
+    const res = await axios.post(`/api/character/${charId}/avatar`, formData, {
       headers: { ...headers(), 'Content-Type': 'multipart/form-data' },
       onUploadProgress: (e) => {
         if (e.total) uploadProgress[charId] = Math.round((e.loaded * 100) / e.total)
@@ -258,7 +258,7 @@ const handleAvatarUpload = async (event: Event, charId: number) => {
 
 const levelUp = async (charId: number) => {
   try {
-    const res = await axios.post(`/api/characters/${charId}/levelup`, {}, { headers: headers() })
+    const res = await axios.post(`/api/character/${charId}/levelup`, {}, { headers: headers() })
     const char = characters.value.find(c => c.id === charId)
     if (char) Object.assign(char, res.data)
   } catch (e) {
@@ -269,7 +269,7 @@ const levelUp = async (charId: number) => {
 const deleteCharacter = async (charId: number) => {
   if (!confirm('确定删除该角色？')) return
   try {
-    await axios.delete(`/api/characters/${charId}`, { headers: headers() })
+    await axios.delete(`/api/character/${charId}`, { headers: headers() })
     characters.value = characters.value.filter(c => c.id !== charId)
     if (selectedId.value === charId) selectedId.value = null
   } catch (e) {
