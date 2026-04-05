@@ -20,6 +20,9 @@ docker compose version &>/dev/null || { echo "❌ 需要 Docker Compose v2"; exi
 if [[ -f .env ]]; then
     read -p ".env 已存在，是否覆盖？(y/N) " confirm
     [[ "$confirm" != "y" && "$confirm" != "Y" ]] && echo "取消。" && exit 0
+    echo "⚠️  将覆盖现有 .env。"
+    echo "⚠️  SQLite 数据默认位于 data/socratic_learning.db，不会自动删除。"
+    echo "⚠️  如需安全回滚，建议先备份：cp data/socratic_learning.db data/socratic_learning.db.bak"
 fi
 
 # 自动生成密钥（python3 优先，openssl fallback）

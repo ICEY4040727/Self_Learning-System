@@ -70,3 +70,28 @@ docker compose logs -f frontend
 # 进入后端容器
 docker compose exec backend sh
 ```
+
+## 六、失败场景与回滚
+
+### 6.1 常见失败场景
+
+1. `docker compose up -d --build` 失败：优先查看 `docker compose logs backend frontend`。
+2. `/health` 返回非 healthy：通常是数据库文件权限或容器未就绪。
+3. 前端可打开但 API 401/500：检查 `.env` 的 `SECRET_KEY` 与 `DATABASE_URL`，确认后端容器已重启。
+
+### 6.2 最小回滚流程
+
+```bash
+# 1) 停止当前栈
+docker compose down
+
+# 2) 回滚代码到上一个稳定 commit（示例）
+git checkout <stable_commit_sha>
+
+# 3) 恢复 SQLite 数据（如需）
+cp data/socratic_learning.db.bak data/socratic_learning.db
+
+# 4) 重启
+docker compose up -d --build
+curl http://localhost:8000/health
+```
