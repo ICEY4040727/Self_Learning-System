@@ -54,6 +54,7 @@ import { useRouter } from 'vue-router'
 import axios from 'axios'
 import { useAuthStore } from '@/stores/auth'
 import { parseApiError } from '@/utils/error'
+import { buildLearningRoute } from '@/utils/navigation'
 import TimelineTree from '@/components/TimelineTree.vue'
 
 interface World {
@@ -127,14 +128,17 @@ const enterCourses = async () => {
 }
 
 const startLearning = (courseId: number) => {
-  router.push({ path: `/learning/${courseId}`, query: { worldId: String(selectedWorld.value?.id || '') } })
+  router.push(buildLearningRoute(courseId, { worldId: selectedWorld.value?.id }))
 }
 
 const branchFromCheckpoint = async (checkpoint: { id: number; save_name: string }) => {
   try {
     const branchName = prompt('请输入分叉名称（可选）') || undefined
     const res = await axios.post(`/api/checkpoints/${checkpoint.id}/branch`, { branch_name: branchName }, { headers: headers() })
-    router.push({ path: `/learning/${res.data.course_id}`, query: { worldId: String(res.data.world_id || selectedWorld.value?.id || '') } })
+    router.push(buildLearningRoute(res.data.course_id, {
+      worldId: res.data.world_id || selectedWorld.value?.id,
+      sessionId: res.data.session_id,
+    }))
   } catch (error) {
     showError(error)
   }
