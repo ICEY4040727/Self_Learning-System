@@ -91,6 +91,17 @@ body {
   -webkit-backdrop-filter: blur(var(--blur-panel));
 }
 
+.galgame-login-panel {
+  background: rgba(8, 10, 20, 0.72);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-none);
+  box-shadow: var(--shadow-panel);
+  backdrop-filter: blur(var(--blur-login-panel));
+  -webkit-backdrop-filter: blur(var(--blur-login-panel));
+  transform: translateZ(0);
+  will-change: transform;
+}
+
 .galgame-dialog-box {
   padding: 20px 24px;
   border: 1px solid var(--border-accent);

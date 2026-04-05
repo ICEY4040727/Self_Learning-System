@@ -14,6 +14,14 @@ interface AuthState {
   user: User | null
 }
 
+const syncAxiosAuthHeader = (token: string | null) => {
+  if (token) {
+    axios.defaults.headers.common['Authorization'] = `Bearer ${token}`
+  } else {
+    delete axios.defaults.headers.common['Authorization']
+  }
+}
+
 export const useAuthStore = defineStore('auth', {
   state: (): AuthState => ({
     token: localStorage.getItem('token'),
@@ -31,11 +39,14 @@ export const useAuthStore = defineStore('auth', {
       formData.append('password', password)
 
       const response = await axios.post('/api/auth/login', formData)
-      this.token = response.data.access_token
-      localStorage.setItem('token', this.token!)
+      const accessToken = response.data.access_token as string | undefined
+      if (!accessToken) {
+        throw new Error('登录响应缺少 access_token')
+      }
 
-      axios.defaults.headers.common['Authorization'] = `Bearer ${this.token}`
-
+      this.token = accessToken
+      localStorage.setItem('token', accessToken)
+      syncAxiosAuthHeader(accessToken)
       await this.fetchUser()
     },
 
@@ -48,15 +59,20 @@ export const useAuthStore = defineStore('auth', {
     },
 
     async fetchUser() {
-      if (!this.token) return
-
-      axios.defaults.headers.common['Authorization'] = `Bearer ${this.token}`
+      if (!this.token) {
+        this.user = null
+        syncAxiosAuthHeader(null)
+        return null
+      }
+      syncAxiosAuthHeader(this.token)
 
       try {
         const response = await axios.get('/api/auth/me')
         this.user = response.data
+        return this.user
       } catch (error) {
         this.logout()
+        throw error
       }
     },
 
@@ -64,13 +80,17 @@ export const useAuthStore = defineStore('auth', {
       this.token = null
       this.user = null
       localStorage.removeItem('token')
-      delete axios.defaults.headers.common['Authorization']
+      syncAxiosAuthHeader(null)
     },
 
     async initAuth() {
       if (this.token) {
-        axios.defaults.headers.common['Authorization'] = `Bearer ${this.token}`
-        await this.fetchUser()
+        syncAxiosAuthHeader(this.token)
+        try {
+          await this.fetchUser()
+        } catch {
+          // token is stale/invalid, fetchUser already called logout()
+        }
       }
     }
   }
