@@ -20,14 +20,8 @@
       <div class="gold-divider"></div>
     </div>
 
-    <!-- Login panel - v-motion animation -->
-    <div 
-      class="login-panel"
-      v-motion
-      :initial="{ opacity: 0, y: 24 }"
-      :enter="{ opacity: 1, y: 0 }"
-      :transition="{ duration: 700, delay: 350 }"
-    >
+    <!-- Login panel -->
+    <div class="login-panel">
       <!-- Mode tabs -->
       <div class="mode-tabs">
         <button
@@ -79,18 +73,16 @@
         </div>
 
         <!-- Confirm password (register only) -->
-        <Transition name="field-slide">
-          <div v-if="mode === 'register'" class="field-group">
-            <label class="field-label">确 认 密 码</label>
-            <input
-              v-model="confirmPw"
-              :type="showPw ? 'text' : 'password'"
-              class="galgame-input"
-              placeholder="再次输入密码"
-              autocomplete="new-password"
-            />
-          </div>
-        </Transition>
+        <div v-if="mode === 'register'" class="field-group">
+          <label class="field-label">确 认 密 码</label>
+          <input
+            v-model="confirmPw"
+            :type="showPw ? 'text' : 'password'"
+            class="galgame-input"
+            placeholder="再次输入密码"
+            autocomplete="new-password"
+          />
+        </div>
 
         <!-- Error message -->
         <Transition name="error-fade">
@@ -267,6 +259,7 @@ const handleSubmit = async () => {
   z-index: 10;
   width: 420px;
   max-width: 92vw;
+  min-height: 320px;
   padding: 28px 32px 26px;
   background: rgba(8, 8, 25, 0.35);
   border: 1px solid rgba(255, 215, 0, 0.15);
@@ -468,18 +461,6 @@ const handleSubmit = async () => {
   font-size: 12px;
   letter-spacing: 4px;
   text-shadow: 0 0 16px rgba(255,215,0,0.25);
-}
-
-.field-slide-enter-from,
-.field-slide-leave-to {
-  height: 0;
-  opacity: 0;
-  overflow: hidden;
-}
-
-.field-slide-enter-active,
-.field-slide-leave-active {
-  transition: height 0.3s ease, opacity 0.3s ease;
 }
 
 .error-fade-enter-from,
