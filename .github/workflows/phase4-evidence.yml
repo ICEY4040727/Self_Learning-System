@@ -1,0 +1,90 @@
+name: Phase4 Evidence
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  phase4-ui-e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Install frontend dependencies
+        run: |
+          cd frontend
+          npm ci
+      - name: Install Playwright Chromium
+        run: |
+          cd frontend
+          npx playwright install --with-deps chromium
+      - name: Start frontend
+        run: |
+          cd frontend
+          node ./node_modules/vite/bin/vite.js --host 127.0.0.1 --port 5173 > ../frontend-e2e.log 2>&1 &
+          echo $! > ../frontend-e2e.pid
+          cd ..
+          for i in {1..40}; do
+            if curl -sf http://127.0.0.1:5173 >/dev/null; then break; fi
+            sleep 2
+          done
+      - name: Run phase4 UI E2E
+        run: |
+          cd frontend
+          npx playwright test e2e/*.spec.mjs --workers=1 --reporter=line
+      - name: Upload phase4 UI artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase4-ui-e2e-artifacts
+          path: |
+            docs/evidence/issue-127/03-knowledge-graph-node-click.png
+            docs/evidence/issue-127/04-learning-mobile-layout.png
+            docs/evidence/issue-127/08-character-auto-world-binding.png
+            docs/evidence/issue-127/09-character-edit-world-course.png
+            docs/evidence/issue-127/10-character-multiworld-delete.png
+            frontend-e2e.log
+          if-no-files-found: warn
+      - name: Stop frontend
+        if: always()
+        run: |
+          if [ -f frontend-e2e.pid ]; then kill "$(cat frontend-e2e.pid)" || true; fi
+
+  docker-compose-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare .env
+        run: |
+          cp .env.example .env
+          sed -i 's/^SECRET_KEY=.*/SECRET_KEY=ci-smoke-secret-key-127/' .env
+          sed -i 's/^CORS_ORIGIN=.*/CORS_ORIGIN=http:\/\/localhost/' .env
+      - name: Build and start compose stack
+        run: docker compose up -d --build
+      - name: Verify compose runtime
+        run: |
+          docker compose ps > docker-compose-ps.txt
+          for i in {1..40}; do
+            if curl -sf http://127.0.0.1:8000/health > docker-health.json; then break; fi
+            sleep 3
+          done
+          cat docker-health.json
+          docker compose logs backend --tail=120 > docker-backend.log
+          docker compose logs frontend --tail=120 > docker-frontend.log
+      - name: Upload docker smoke artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-compose-smoke-artifacts
+          path: |
+            docker-compose-ps.txt
+            docker-health.json
+            docker-backend.log
+            docker-frontend.log
+          if-no-files-found: warn
+      - name: Teardown compose stack
+        if: always()
+        run: docker compose down -v

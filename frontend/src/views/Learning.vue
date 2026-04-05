@@ -85,7 +85,7 @@ const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
 
-const courseId = computed(() => Number(route.params.courseId || route.params.subjectId))
+const courseId = computed(() => Number(route.params.courseId))
 const worldId = ref(Number(route.query.worldId || 0))
 const sessionId = ref<number>()
 const teacherName = ref('知者')

@@ -5,7 +5,7 @@
       <select v-model="selectedSession" @change="fetchTrajectory">
         <option value="">选择会话</option>
         <option v-for="s in sessions" :key="s.id" :value="s.id">
-          {{ formatDate(s.started_at) }} — {{ s.subject_name || '会话 #' + s.id }}
+          {{ formatDate(s.started_at) }} — {{ s.course_name || '会话 #' + s.id }}
         </option>
       </select>
     </div>
@@ -51,7 +51,7 @@ const headers = () => ({ Authorization: `Bearer ${authStore.token}` })
 interface SessionItem {
   id: number
   started_at: string
-  subject_name?: string
+  course_name?: string
 }
 
 interface EmotionPoint {
@@ -103,7 +103,7 @@ const formatDate = (d: string) => {
 
 const fetchSessions = async () => {
   try {
-    const params = props.subjectId ? `?subject_id=${props.subjectId}` : ''
+    const params = props.courseId ? `?course_id=${props.courseId}` : ''
     const res = await axios.get(`/api/sessions${params}`, { headers: headers() })
     sessions.value = res.data
   } catch {
@@ -250,7 +250,7 @@ onUnmounted(() => {
 })
 
 const props = defineProps<{
-  subjectId?: number
+  courseId?: number
 }>()
 </script>
 

@@ -96,11 +96,11 @@
         </div>
       </section>
 
-      <!-- 科目列表 -->
+      <!-- 课程列表 -->
       <section v-if="selectedCharacter" class="section">
         <div class="section-header">
-          <h2>学习科目</h2>
-          <button class="add-btn" @click="openCreateSubject">+ 新建科目</button>
+          <h2>学习课程</h2>
+          <button class="add-btn" @click="openCreateSubject">+ 新建课程</button>
         </div>
 
         <div class="subjects-list">
@@ -211,12 +211,21 @@
         </div>
       </div>
 
-      <!-- 科目对话框（创建/编辑） -->
+      <!-- 课程对话框（创建/编辑） -->
       <div v-if="showSubjectDialog" class="dialog-overlay" @click.self="showSubjectDialog = false">
         <div class="dialog">
-          <h3>{{ editingSubjectId ? '编辑科目' : '新建科目' }}</h3>
+          <h3>{{ editingSubjectId ? '编辑课程' : '新建课程' }}</h3>
           <div class="form-group">
-            <label>科目名称</label>
+            <label>所属世界</label>
+            <select v-model.number="subjectForm.world_id">
+              <option v-for="world in characterWorlds" :key="world.id" :value="world.id">
+                {{ world.name }}
+              </option>
+            </select>
+            <p v-if="characterWorlds.length === 0" class="field-hint">保存时将自动创建角色默认世界</p>
+          </div>
+          <div class="form-group">
+            <label>课程名称</label>
             <input v-model="subjectForm.name" placeholder="如：数学、英语" />
           </div>
           <div class="form-group">
@@ -275,17 +284,27 @@ interface TeacherPersona {
   is_active: boolean
 }
 
-interface Subject {
+interface Course {
   id: number
-  character_id: number
+  world_id: number
   name: string
   description?: string
   target_level?: string
 }
 
+interface World {
+  id: number
+  name: string
+}
+
+interface WorldCharacterLink {
+  character_id: number
+}
+
 const characters = ref<Character[]>([])
 const teacherPersonas = ref<TeacherPersona[]>([])
-const subjects = ref<Subject[]>([])
+const subjects = ref<Course[]>([])
+const characterWorlds = ref<World[]>([])
 const selectedCharacter = ref<Character | null>(null)
 
 const showCreateDialog = ref(false)
@@ -400,7 +419,7 @@ const generatePersona = async () => {
 
 const characterForm = ref({ name: '', type: 'sage' as 'sage' | 'traveler', personality: '', background: '', speech_style: '' })
 const personaForm = ref({ name: '', version: '1.0', traitsInput: '', system_prompt_template: '' })
-const subjectForm = ref({ name: '', description: '', target_level: '' })
+const subjectForm = ref({ world_id: null as number | null, name: '', description: '', target_level: '' })
 
 const headers = () => ({ Authorization: `Bearer ${authStore.token}` })
 
@@ -436,10 +455,62 @@ const fetchTeacherPersonas = async (characterId: number) => {
   }
 }
 
+const fetchCharacterWorlds = async (characterId: number) => {
+  const worldsRes = await axios.get('/api/worlds', { headers: headers() })
+  const allWorlds = (worldsRes.data || []) as World[]
+  const worldWithLinks = await Promise.all(
+    allWorlds.map(async (world) => {
+      const linksRes = await axios.get(`/api/worlds/${world.id}/characters`, { headers: headers() })
+      return { world, links: (linksRes.data || []) as WorldCharacterLink[] }
+    })
+  )
+  characterWorlds.value = worldWithLinks
+    .filter((item) => item.links.some((link) => link.character_id === characterId))
+    .map((item) => item.world)
+}
+
+const ensurePrimaryWorldForCharacter = async (character: Character) => {
+  await fetchCharacterWorlds(character.id)
+  if (characterWorlds.value.length > 0) {
+    return characterWorlds.value[0].id
+  }
+
+  const worldRes = await axios.post(
+    '/api/worlds',
+    {
+      name: `${character.name} World`,
+      description: `Auto-created world for ${character.name}`,
+      scenes: {},
+    },
+    { headers: headers() }
+  )
+  const worldId = worldRes.data.id as number
+  await axios.post(
+    `/api/worlds/${worldId}/characters`,
+    {
+      character_id: character.id,
+      role: character.type === 'traveler' ? 'traveler' : 'sage',
+      is_primary: true,
+    },
+    { headers: headers() }
+  )
+  characterWorlds.value = [{ id: worldId, name: worldRes.data.name }]
+  return worldId
+}
+
 const fetchSubjects = async (characterId: number) => {
   try {
-    const res = await axios.get(`/api/subjects?character_id=${characterId}`, { headers: headers() })
-    subjects.value = res.data
+    await fetchCharacterWorlds(characterId)
+    if (characterWorlds.value.length === 0) {
+      subjects.value = []
+      return
+    }
+    const courseResponses = await Promise.all(
+      characterWorlds.value.map((world) =>
+        axios.get(`/api/worlds/${world.id}/courses`, { headers: headers() })
+      )
+    )
+    subjects.value = courseResponses.flatMap((response) => response.data)
   } catch (error) {
     showError(error)
   }
@@ -491,13 +562,14 @@ const saveCharacter = async () => {
 }
 
 const deleteCharacter = async (id: number) => {
-  if (!confirm('确定要删除这个角色吗？相关的人格和科目也会被删除。')) return
+  if (!confirm('确定要删除这个角色吗？相关的世界绑定与学习数据可能会受影响。')) return
   try {
     await axios.delete(`/api/character/${id}`, { headers: headers() })
     if (selectedCharacter.value?.id === id) {
       selectedCharacter.value = null
       teacherPersonas.value = []
       subjects.value = []
+      characterWorlds.value = []
     }
     fetchCharacters()
   } catch (error) {
@@ -581,7 +653,7 @@ const activatePersona = async (personaId: number) => {
 // --- Subject CRUD ---
 
 const resetSubjectForm = () => {
-  subjectForm.value = { name: '', description: '', target_level: '' }
+  subjectForm.value = { world_id: characterWorlds.value[0]?.id ?? null, name: '', description: '', target_level: '' }
   editingSubjectId.value = null
 }
 
@@ -590,9 +662,10 @@ const openCreateSubject = () => {
   showSubjectDialog.value = true
 }
 
-const openEditSubject = (subj: Subject) => {
+const openEditSubject = (subj: Course) => {
   editingSubjectId.value = subj.id
   subjectForm.value = {
+    world_id: subj.world_id,
     name: subj.name,
     description: subj.description || '',
     target_level: subj.target_level || '',
@@ -602,17 +675,33 @@ const openEditSubject = (subj: Subject) => {
 
 const saveSubject = async () => {
   if (!selectedCharacter.value) return
-  const payload = {
-    character_id: selectedCharacter.value.id,
-    name: subjectForm.value.name,
-    description: subjectForm.value.description,
-    target_level: subjectForm.value.target_level,
-  }
   try {
     if (editingSubjectId.value) {
-      await axios.put(`/api/subjects/${editingSubjectId.value}`, payload, { headers: headers() })
+      if (!subjectForm.value.world_id) {
+        showError(new Error('缺少世界信息，无法更新课程'))
+        return
+      }
+      await axios.put(
+        `/api/courses/${editingSubjectId.value}`,
+        {
+          world_id: subjectForm.value.world_id,
+          name: subjectForm.value.name,
+          description: subjectForm.value.description,
+          target_level: subjectForm.value.target_level,
+        },
+        { headers: headers() }
+      )
     } else {
-      await axios.post('/api/subjects', payload, { headers: headers() })
+      const worldId = subjectForm.value.world_id ?? await ensurePrimaryWorldForCharacter(selectedCharacter.value)
+      await axios.post(
+        `/api/worlds/${worldId}/courses`,
+        {
+          name: subjectForm.value.name,
+          description: subjectForm.value.description,
+          target_level: subjectForm.value.target_level,
+        },
+        { headers: headers() }
+      )
     }
     showSubjectDialog.value = false
     resetSubjectForm()
@@ -623,9 +712,9 @@ const saveSubject = async () => {
 }
 
 const deleteSubject = async (id: number) => {
-  if (!confirm('确定要删除这个科目吗？')) return
+  if (!confirm('确定要删除这个课程吗？')) return
   try {
-    await axios.delete(`/api/subjects/${id}`, { headers: headers() })
+    await axios.delete(`/api/courses/${id}`, { headers: headers() })
     if (selectedCharacter.value) {
       fetchSubjects(selectedCharacter.value.id)
     }
@@ -882,6 +971,12 @@ onUnmounted(() => {
   display: block;
   color: #fff;
   margin-bottom: 8px;
+}
+
+.field-hint {
+  margin-top: 6px;
+  color: #aaa;
+  font-size: 12px;
 }
 
 .form-group input, .form-group textarea {

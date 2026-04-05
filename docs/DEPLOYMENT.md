@@ -1,176 +1,97 @@
-# 部署指南
+# 部署指南（SQLite + 双容器）
 
 ## 前置要求
 
-- Docker 20+ 和 Docker Compose v2
-- 至少 2GB 可用内存
-- LLM API Key（Claude 或 OpenAI 任选一个）
+- Docker 20+
+- Docker Compose v2
+- LLM API Key（在设置页配置）
 
-## 一、初始化配置
+## 一、初始化
 
 ```bash
 bash scripts/setup.sh
 ```
 
-脚本会自动：
-- 生成随机 SECRET_KEY 和 POSTGRES_PASSWORD
-- 询问前端访问地址（默认 http://localhost）
-- 可选输入 LLM API Key（也可稍后在网页设置页配置）
-- 将所有配置写入 `.env` 文件
+脚本会完成：
+- 生成 `SECRET_KEY`
+- 写入 `.env`（`DATABASE_URL=sqlite:///./data/socratic_learning.db`）
+- 初始化 `data/` 与 `backend/static/characters/`
 
-> 如需手动编辑配置，也可以 `cp .env.example .env` 后自行修改。本地开发请参考 CLAUDE.md 的 Commands 部分。
-
-## 二、Docker 一键启动
+## 二、启动服务
 
 ```bash
-# 构建并启动所有服务（--build 确保使用最新代码）
 docker compose up -d --build
-
-# 查看启动状态
 docker compose ps
-
-# 查看日志（持续输出）
-docker compose logs -f backend
 ```
 
-启动顺序（自动编排）：
-```
-postgres (5432) → chromadb (8001) → backend (8000) → frontend (80)
-```
+访问：
+- 前端：`http://localhost`
+- 后端：`http://localhost:8000`
 
-等待所有服务 healthy 后访问 `http://localhost`。
-
-## 三、验证部署
+## 三、部署验证
 
 ### 3.1 健康检查
 
 ```bash
-# API 健康状态（应返回 healthy + 各组件状态）
 curl http://localhost:8000/health
 ```
 
-期望输出：
-```json
-{
-  "status": "healthy",
-  "checks": {
-    "api": "ok",
-    "database": "ok",
-    "chromadb": "ok"
-  }
-}
-```
+### 3.2 端到端最小验证
 
-### 3.2 功能验证
+1. 注册并登录。
+2. 在设置页填入 API Key。
+3. 创建世界 → 绑定角色（知者/旅者）→ 创建课程。
+4. 进入学习页对话，确认消息与情感/关系状态更新。
+5. 创建 checkpoint，并从档案页分叉读档后继续学习。
 
-1. 打开 `http://localhost`
-2. 注册账号（用户名 3+ 字符，密码 8+ 字符）
-3. 登录后进入主页
-4. **先配置 LLM API Key**：进入设置页，输入 Claude 或 OpenAI 的 API Key
-5. 创建角色 → 创建教师人格（可选 AI 生成或预设模板）→ 激活人格 → 创建科目
-6. 可选：上传角色立绘（角色卡片的"立绘"按钮）
-7. 进入学习页，发送消息测试对话
-
-### 3.3 运行测试
-
-测试应在部署前本地运行，不要在生产容器中安装测试依赖：
-
-```bash
-# 本地运行（推荐）
-cd backend
-pip install -r requirements-dev.txt
-PYTHONPATH=.. pytest tests/ -v
-```
-
-## 四、服务架构
+## 四、架构说明
 
 ```
-┌──────────────┐    ┌──────────────┐    ┌──────────────┐
-│  frontend    │    │  backend     │    │  postgres    │
-│  Nginx :80   │───→│  FastAPI     │───→│  :5432       │
-│  Vue 3 SPA   │    │  :8000       │    └──────────────┘
-└──────────────┘    │              │    ┌──────────────┐
-                    │              │───→│  chromadb    │
-                    │              │    │  :8001       │
-                    └──────────────┘    └──────────────┘
-                           │
-                    ┌──────────────┐
-                    │  neo4j       │  ← 可选（需 KNOWLEDGE_GRAPH_ENABLED=true）
-                    │  :7687       │
+┌──────────────┐    ┌──────────────┐
+│  frontend    │───→│  backend     │
+│  Nginx :80   │    │  FastAPI :8000
+└──────────────┘    │  SQLite (/app/data/socratic_learning.db)
                     └──────────────┘
 ```
 
 ## 五、常用运维命令
 
 ```bash
-# 停止所有服务
+# 停止服务
 docker compose down
 
-# 停止并删除数据卷（慎用，数据丢失）
+# 停止并删除卷（会清空数据库）
 docker compose down -v
 
-# 重建单个服务（代码更新后）
-docker compose build backend
-docker compose up -d backend
+# 查看日志
+docker compose logs -f backend
+docker compose logs -f frontend
 
-# 数据库迁移
-docker compose exec backend sh -c "cd /app && alembic -c backend/alembic.ini upgrade head"
-
-# 查看 PostgreSQL 日志
-docker compose logs postgres
-
-# 进入后端容器 shell
+# 进入后端容器
 docker compose exec backend sh
 ```
 
-## 六、可选功能配置
+## 六、失败场景与回滚
 
-### 6.1 知识图谱（Graphiti + Neo4j）
+### 6.1 常见失败场景
 
-在 `.env` 中添加：
-```env
-KNOWLEDGE_GRAPH_ENABLED=true
-NEO4J_PASSWORD=<强密码>
-```
+1. `docker compose up -d --build` 失败：优先查看 `docker compose logs backend frontend`。
+2. `/health` 返回非 healthy：通常是数据库文件权限或容器未就绪。
+3. 前端可打开但 API 401/500：检查 `.env` 的 `SECRET_KEY` 与 `DATABASE_URL`，确认后端容器已重启。
 
-Neo4j 浏览器界面：`http://localhost:7474`
-
-### 6.2 Sentry 错误监控
-
-在 `.env` 中添加：
-```env
-SENTRY_DSN=https://xxx@xxx.ingest.sentry.io/xxx
-```
-
-免费额度：5K errors/月。
-
-### 6.3 HTTPS（生产环境）
-
-在 `frontend/nginx.conf` 中配置 SSL，或在前端加一层反向代理（如 Caddy、Traefik）处理 TLS 终止。
-
-## 七、故障排查
-
-| 症状 | 可能原因 | 解决方案 |
-|------|---------|---------|
-| 前端白屏 | backend 未启动 | `docker compose logs backend` 查错 |
-| API 返回 401 | Token 过期或未登录 | 重新登录 |
-| API 返回 500 | 数据库未就绪 | `docker compose ps` 检查 postgres 状态 |
-| 对话无回复 | LLM API Key 未配置 | 在设置页配置 API Key |
-| 健康检查 degraded | 某服务未就绪 | 查看 `/health` 返回的 checks 字段 |
-| 存档为空 | session_id 未传递 | 确认是最新版本代码 |
-| docker compose build 失败 | 网络或依赖问题 | 检查 Docker 网络，重试 |
-
-## 八、数据备份
-
-将下方 `<POSTGRES_USER>` 和 `<POSTGRES_DB>` 替换为你 `.env` 中的实际值：
+### 6.2 最小回滚流程
 
 ```bash
-# 备份 PostgreSQL
-docker compose exec postgres pg_dump -U <POSTGRES_USER> <POSTGRES_DB> > backup_$(date +%Y%m%d).sql
+# 1) 停止当前栈
+docker compose down
 
-# 恢复
-cat backup_20260325.sql | docker compose exec -T postgres psql -U <POSTGRES_USER> <POSTGRES_DB>
+# 2) 回滚代码到上一个稳定 commit（示例）
+git checkout <stable_commit_sha>
 
-# 备份所有卷
-docker run --rm -v self_learning-system_pg_data:/data -v $(pwd):/backup alpine tar czf /backup/pg_data.tar.gz -C /data .
+# 3) 恢复 SQLite 数据（如需）
+cp data/socratic_learning.db.bak data/socratic_learning.db
+
+# 4) 重启
+docker compose up -d --build
+curl http://localhost:8000/health
 ```

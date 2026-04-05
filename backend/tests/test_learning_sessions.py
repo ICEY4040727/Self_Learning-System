@@ -128,21 +128,6 @@ class TestCourseSessionRelationship:
         assert payload["traveler_sprites"] == {"default": "/sprites/traveler-default.png"}
         assert payload["character_sprites"] == {"default": "/sprites/socrates-default.png"}
 
-    def test_legacy_subject_chat_endpoint_is_available(self, client, auth_headers):
-        world_id = _create_world(client, auth_headers)
-        course_id = _create_course(client, auth_headers, world_id)
-
-        start_resp = client.post(f"/api/subjects/{course_id}/start", headers=auth_headers)
-        assert start_resp.status_code == 200
-
-        chat_resp = client.post(
-            f"/api/subjects/{course_id}/chat",
-            json={"message": "你好"},
-            headers=auth_headers,
-        )
-        assert chat_resp.status_code == 200
-        assert "reply" in chat_resp.json()
-
     def test_chat_updates_world_knowledge_graph(self, client, auth_headers):
         world_id = _create_world(client, auth_headers)
         course_id = _create_course(client, auth_headers, world_id)
