@@ -5,6 +5,7 @@ import { expect, test } from '@playwright/test'
 
 const TEST_DIR = path.dirname(fileURLToPath(import.meta.url))
 const EVIDENCE_DIR = path.resolve(TEST_DIR, '../../docs/evidence/issue-146')
+const BASE_URL = process.env.E2E_BASE_URL || 'http://127.0.0.1:5173'
 
 if (!fs.existsSync(EVIDENCE_DIR)) {
   fs.mkdirSync(EVIDENCE_DIR, { recursive: true })
@@ -164,7 +165,7 @@ test('archive page renders migrated layout and charts', async ({ page }) => {
   await page.addInitScript(() => localStorage.setItem('token', 'mock-token'))
   await mockArchiveApis(page, state)
 
-  await page.goto('http://127.0.0.1:5173/archive')
+  await page.goto(`${BASE_URL}/archive`)
   await expect(page.getByRole('heading', { name: '档 案 管 理' })).toBeVisible()
   await expect(page.locator('.archive-panel')).toHaveCount(4)
   await expect(page.locator('.chart-container').first()).toBeVisible()
@@ -177,7 +178,7 @@ test('archive diary modal and save branch flow work', async ({ page }) => {
   await page.addInitScript(() => localStorage.setItem('token', 'mock-token'))
   await mockArchiveApis(page, state)
 
-  await page.goto('http://127.0.0.1:5173/archive')
+  await page.goto(`${BASE_URL}/archive`)
   await page.getByRole('button', { name: '写日记' }).click()
   await expect(page.locator('.dialog-panel')).toBeVisible()
   await page.screenshot({ path: `${EVIDENCE_DIR}/02-archive-diary-dialog.png`, fullPage: true })
