@@ -484,7 +484,7 @@ const handleSubmit = async () => {
   transition: opacity 0.2s ease, transform 0.2s ease;
 }
 
-/* TransitionGroup animations for all form fields - unified for all elements */
+/* TransitionGroup animations for all form fields */
 .field-list-move {
   transition: transform 0.3s ease;
 }
@@ -496,11 +496,13 @@ const handleSubmit = async () => {
 
 .field-list-leave-to {
   opacity: 0;
-  transform: translateY(-12px);
 }
 
-.field-list-enter-active,
-.field-list-leave-active {
+.field-list-enter-active {
   transition: opacity 0.25s ease, transform 0.25s ease;
+}
+
+.field-list-leave-active {
+  transition: opacity 0.2s ease;
 }
 </style>
