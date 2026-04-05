@@ -515,7 +515,7 @@ const handleSubmit = async () => {
 }
 
 .confirm-fast-leave-active {
-  transition: opacity 0.05s ease 0.15s;
+  transition: opacity 0.05s ease 0.25s;
 }
 
 .confirm-fast-enter-from,
