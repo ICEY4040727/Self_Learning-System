@@ -72,9 +72,9 @@
           </div>
         </div>
 
-        <!-- Confirm password (register only) - fast fade out -->
-        <Transition name="confirm-fast">
-          <div key="confirmPw" v-if="mode === 'register'" class="field-group">
+        <!-- Confirm password (register only) - fast fade out, key on Transition -->
+        <Transition name="confirm-fast" :key="'confirmPw'">
+          <div v-if="mode === 'register'" class="field-group">
             <label class="field-label">确 认 密 码</label>
             <input
               v-model="confirmPw"
@@ -86,8 +86,10 @@
           </div>
         </Transition>
 
-        <!-- Error message -->
-        <div key="error" v-if="error" class="error-box font-ui">{{ error }}</div>
+        <!-- Error message - always render with conditional visibility -->
+        <div key="error" class="error-box font-ui" :style="{ visibility: error ? 'visible' : 'hidden', height: error ? 'auto' : '0', overflow: 'hidden' }">
+          {{ error }}
+        </div>
 
         <!-- Submit -->
         <button key="submit" type="submit" class="submit-btn" :disabled="loading">
