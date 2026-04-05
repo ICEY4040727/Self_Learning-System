@@ -72,17 +72,19 @@
           </div>
         </div>
 
-        <!-- Confirm password (register only) -->
-        <div key="confirmPw" v-if="mode === 'register'" class="field-group">
-          <label class="field-label">确 认 密 码</label>
-          <input
-            v-model="confirmPw"
-            :type="showPw ? 'text' : 'password'"
-            class="galgame-input"
-            placeholder="再次输入密码"
-            autocomplete="new-password"
-          />
-        </div>
+        <!-- Confirm password (register only) - fast fade out -->
+        <Transition name="confirm-fast">
+          <div key="confirmPw" v-if="mode === 'register'" class="field-group">
+            <label class="field-label">确 认 密 码</label>
+            <input
+              v-model="confirmPw"
+              :type="showPw ? 'text' : 'password'"
+              class="galgame-input"
+              placeholder="再次输入密码"
+              autocomplete="new-password"
+            />
+          </div>
+        </Transition>
 
         <!-- Error message -->
         <div key="error" v-if="error" class="error-box font-ui">{{ error }}</div>
@@ -505,5 +507,16 @@ const handleSubmit = async () => {
 
 .field-list-leave-active {
   transition: opacity 0.25s ease, transform 0.25s ease;
+}
+
+/* Fast fade for confirm password field - no movement */
+.confirm-fast-enter-active,
+.confirm-fast-leave-active {
+  transition: opacity 0.15s ease;
+}
+
+.confirm-fast-enter-from,
+.confirm-fast-leave-to {
+  opacity: 0;
 }
 </style>
