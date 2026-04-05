@@ -488,7 +488,7 @@ const handleSubmit = async () => {
 
 /* TransitionGroup animations for all form fields */
 .field-list-move {
-  transition: transform 0.5s ease;
+  transition: transform 0.7s ease;
 }
 
 .field-list-enter-from {
@@ -512,7 +512,7 @@ const handleSubmit = async () => {
 /* Fast fade for confirm password field - no movement */
 .confirm-fast-enter-active,
 .confirm-fast-leave-active {
-  transition: opacity 0.05s ease;
+  transition: opacity 0.02s ease;
 }
 
 .confirm-fast-enter-from,
