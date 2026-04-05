@@ -46,15 +46,20 @@
 
 ## 额外：前端关键迁移自动化覆盖（Character.vue 路径）
 
-- **自动化用例**：`backend/tests/test_phase4_e2e.py::TestCharacterCourseMigrationFlow::test_course_crud_and_world_binding_paths`
+- **自动化用例（UI）**：`frontend/e2e/character-migration.spec.mjs`
 - **覆盖点**：
-  - world 绑定路径（等价 `ensurePrimaryWorldForCharacter`）
-  - 课程创建/编辑/删除
-  - 多 world 聚合场景（按 world 读取课程）
+  - 无 world 时创建课程，触发自动建 world + 角色绑定（`ensurePrimaryWorldForCharacter` 路径）
+  - 课程编辑 `world_id` 后保存并刷新列表
+  - 多 world 课程聚合展示与删除后回显
+- **证据文件**：
+  - `08-character-ui-playwright.txt`（Character 页面自动化执行日志）
+  - `08-character-auto-world-binding.png`
+  - `09-character-edit-world-course.png`
+  - `10-character-multiworld-delete.png`
 
 ## 部署闭环证据（Docker）
 
-- **CI Job**：`.github/workflows/ci.yml` 新增 `docker-compose-smoke`
+- **CI Job**：`.github/workflows/phase4-evidence.yml` 中 `docker-compose-smoke`
 - **产物**：
   - `docker-compose-ps.txt`
   - `docker-health.json`

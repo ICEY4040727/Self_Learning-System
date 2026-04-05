@@ -34,7 +34,7 @@ jobs:
       - name: Run phase4 UI E2E
         run: |
           cd frontend
-          npx playwright test e2e/phase4-ui.spec.mjs --workers=1 --reporter=line
+          npx playwright test e2e/*.spec.mjs --workers=1 --reporter=line
       - name: Upload phase4 UI artifacts
         if: always()
         uses: actions/upload-artifact@v4
@@ -43,6 +43,9 @@ jobs:
           path: |
             docs/evidence/issue-127/03-knowledge-graph-node-click.png
             docs/evidence/issue-127/04-learning-mobile-layout.png
+            docs/evidence/issue-127/08-character-auto-world-binding.png
+            docs/evidence/issue-127/09-character-edit-world-course.png
+            docs/evidence/issue-127/10-character-multiworld-delete.png
             frontend-e2e.log
           if-no-files-found: warn
       - name: Stop frontend
