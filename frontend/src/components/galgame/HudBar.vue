@@ -86,6 +86,7 @@ const mastery = computed(() => props.mastery ?? 0)
   color: var(--text-secondary);
   font-size: 12px;
   padding: 3px 9px;
+  border-radius: var(--radius-hud-btn);
   transition: color var(--transition-fast);
   white-space: nowrap;
 }

@@ -159,6 +159,6 @@ h1,h2 { color: #ffd700; margin-bottom: 10px; }
 .actions { display: flex; justify-content: space-between; gap: 10px; margin-top: 8px; }
 .back { text-align: center; }
 .error { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); background: rgba(223,74,74,.9); padding: 8px 14px; border-radius: 6px; }
-.fade-enter-active,.fade-leave-active { transition: opacity .25s; }
-.fade-enter-from,.fade-leave-to { opacity: 0; }
+.fade-enter-active,.fade-leave-active { transition: transform .25s ease; }
+.fade-enter-from,.fade-leave-to { transform: translateY(8px); }
 </style>

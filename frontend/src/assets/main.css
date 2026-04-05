@@ -28,14 +28,17 @@
   --border-subtle: #4a4a8a;
   --border-accent: #ffd700;
 
-  /* Radius */
-  --radius-sm: 8px;
-  --radius-md: 12px;
-  --radius-lg: 16px;
+  /* Radius baseline (from UI迁移书) */
+  --radius-none: 0;
+  --radius-hud-btn: 5px;
+  --radius-world-card: 12px;
+  --radius-modal: 16px;
 
-  /* Blur */
-  --blur-sm: 8px;
-  --blur-md: 12px;
+  /* Blur baseline (from UI迁移书) */
+  --blur-dialog: 20px;
+  --blur-panel: 22px;
+  --blur-hud: 12px;
+  --blur-login-panel: 22px;
 
   /* Shadow */
   --shadow-soft: 0 6px 20px rgba(0, 0, 0, 0.28);
@@ -70,10 +73,10 @@ body {
   color: var(--text-primary);
 }
 
-/* Keep blur layers transform-driven to avoid backdrop-filter flicker. */
-.galgame-blur-surface {
-  backdrop-filter: blur(var(--blur-md));
-  -webkit-backdrop-filter: blur(var(--blur-md));
+.galgame-panel,
+.galgame-dialog-box,
+.galgame-hud {
+  /* Keep blur layers transform-driven to avoid backdrop-filter flicker. */
   transform: translateZ(0);
   will-change: transform;
   transition: transform var(--transition-normal), border-color var(--transition-fast), box-shadow var(--transition-fast);
@@ -82,24 +85,29 @@ body {
 .galgame-panel {
   background: var(--panel-bg-strong);
   border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-none);
   box-shadow: var(--shadow-panel);
+  backdrop-filter: blur(var(--blur-panel));
+  -webkit-backdrop-filter: blur(var(--blur-panel));
 }
 
 .galgame-dialog-box {
   padding: 20px 24px;
   border: 1px solid var(--border-accent);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-none);
   background: var(--panel-bg-soft);
   box-shadow: 0 -4px 30px rgba(0, 0, 0, 0.5);
   animation: panelIn var(--transition-normal);
+  backdrop-filter: blur(var(--blur-dialog)) saturate(1.5);
+  -webkit-backdrop-filter: blur(var(--blur-dialog)) saturate(1.5);
 }
 
 .galgame-name-tag {
   background: linear-gradient(135deg, var(--accent-gold), var(--accent-orange));
   color: var(--bg-primary);
-  border-radius: 999px;
+  border-radius: var(--radius-none);
   border: 1px solid rgba(0, 0, 0, 0.22);
+  clip-path: polygon(8% 0, 100% 0, 92% 100%, 0 100%);
   font-family: var(--font-ui);
   font-weight: 700;
   font-size: 14px;
@@ -109,11 +117,13 @@ body {
 .galgame-hud {
   background: rgba(0, 0, 0, 0.75);
   border-top: 1px solid var(--border-subtle);
+  backdrop-filter: blur(var(--blur-hud));
+  -webkit-backdrop-filter: blur(var(--blur-hud));
 }
 
 .galgame-btn {
   border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-none);
   color: var(--text-primary);
   background: rgba(26, 26, 46, 0.88);
   cursor: pointer;
@@ -140,7 +150,7 @@ body {
 
 .galgame-input {
   border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-none);
   background: rgba(255, 255, 255, 0.05);
   color: var(--text-primary);
   font-family: var(--font-dialogue);
@@ -165,7 +175,7 @@ body {
   gap: 4px;
   padding: 10px 12px;
   border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-world-card);
   color: var(--text-primary);
   background: rgba(24, 24, 38, 0.9);
   cursor: pointer;
