@@ -288,9 +288,11 @@ async for chunk in adapter.chat_stream(
 
 | 优先级 | 问题 | 状态 |
 |--------|------|------|
-| P3 | 官方 SDK 迁移（anthropic/openai） | ❌ 未实现 |
+| ~~P3~~ | ~~官方 SDK 迁移（anthropic/openai）~~ | ✅ **已实现** |
 | ~~P3~~ | ~~响应缓存~~ | ✅ **已实现** |
 | ~~P3~~ | ~~流式输出完善（Claude SSE）~~ | ✅ **已实现**（已有真正SSE） |
+
+> **2026-04-06**: 所有 P0-P3 级优化全部完成！
 
 ---
 

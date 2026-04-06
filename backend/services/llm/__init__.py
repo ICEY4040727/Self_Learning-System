@@ -100,6 +100,14 @@ from backend.services.llm.cache import (
 # 缓存适配器
 from backend.services.llm.adapter import CachedAdapter
 
+# SDK 适配器
+from backend.services.llm.sdk_adapter import (
+    SDKAdapter,
+    ClaudeSDKAdapter,
+    OpenAISDKAdapter,
+    get_sdk_adapter,
+)
+
 __all__ = [
     # 适配器
     "LLMAdapter",
@@ -109,6 +117,11 @@ __all__ = [
     "OpenAICompatibleAdapter",
     "CachedAdapter",
     "get_llm_adapter",
+    # SDK 适配器
+    "SDKAdapter",
+    "ClaudeSDKAdapter",
+    "OpenAISDKAdapter",
+    "get_sdk_adapter",
     # 错误
     "LLMError",
     "LLMErrorCode",
