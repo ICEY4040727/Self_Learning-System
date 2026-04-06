@@ -8,7 +8,7 @@ const client = axios.create({
 
 // Attach Bearer token on every request
 client.interceptors.request.use((config) => {
-  const token = localStorage.getItem('access_token')
+  const token = localStorage.getItem('token')
   if (token) config.headers.Authorization = `Bearer ${token}`
   return config
 })
@@ -18,7 +18,7 @@ client.interceptors.response.use(
   (res) => res,
   (err) => {
     if (err.response?.status === 401) {
-      localStorage.removeItem('access_token')
+      localStorage.removeItem('token')
       window.location.href = '/'
     }
     return Promise.reject(err)

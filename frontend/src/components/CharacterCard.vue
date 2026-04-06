@@ -63,7 +63,7 @@ const sourceLabel = computed(() => props.isBuiltin ? '内置' : '自定义')
   background: transparent;
   border: 1px solid rgba(255, 215, 0, 0.15);
   border-radius: 12px;
-  overflow: hidden;
+  overflow: visible;
   transition: all 0.3s ease;
   cursor: pointer;
   position: relative;
@@ -76,6 +76,7 @@ const sourceLabel = computed(() => props.isBuiltin ? '内置' : '自定义')
 }
 
 .char-avatar {
+  border-radius: 12px 12px 0 0;
   width: 100%;
   height: 100px;
   display: flex;

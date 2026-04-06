@@ -31,6 +31,7 @@
             :avatar-url="sage.avatar_url"
             type="sage"
             :is-builtin="sage.is_builtin"
+            :color="sage.color"
           />
           <!-- Add sage button -->
           <div class="add-card" @click="handleAddCharacter('sage')">
@@ -56,6 +57,7 @@
             :avatar-url="traveler.avatar_url"
             type="traveler"
             :is-builtin="traveler.is_builtin"
+            :color="traveler.color"
           />
           <!-- Add traveler button -->
           <div class="add-card" @click="handleAddCharacter('traveler')">
@@ -65,18 +67,34 @@
         </div>
       </div>
     </div>
+
+    <!-- Create Modal -->
+    <CreateCharacterModal
+      :show="showModal"
+      :default-type="modalType"
+      @close="showModal = false"
+      @create="handleCreate"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import axios from 'axios'
-import { useAuthStore } from '@/stores/auth'
+import client from '@/api/client'
 import CharacterCard from '@/components/CharacterCard.vue'
+import CreateCharacterModal from '@/components/CreateCharacterModal.vue'
 
 const router = useRouter()
-const authStore = useAuthStore()
+
+const COLORS = [
+  'rgba(245, 158, 11, 0.35)',
+  'rgba(139, 92, 246, 0.35)',
+  'rgba(16, 185, 129, 0.35)',
+  'rgba(220, 38, 38, 0.35)',
+  'rgba(59, 130, 246, 0.35)',
+  'rgba(6, 182, 212, 0.35)',
+]
 
 interface Character {
   id: number
@@ -86,23 +104,27 @@ interface Character {
   avatar_url?: string
   type: 'sage' | 'traveler'
   is_builtin: boolean
+  color?: string
+  tags?: string[]
 }
 
-const BG_URL = 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=1200'
+import charBg from '@/assets/char-bg.jpg'
+
+const BG_URL = charBg
 
 const characters = ref<Character[]>([])
 const loading = ref(false)
-
-const headers = () => ({ Authorization: `Bearer ${authStore.token}` })
+const showModal = ref(false)
+const modalType = ref<'sage' | 'traveler'>('sage')
 
 // Mock data for preview
 const MOCK_CHARACTERS: Character[] = [
-  { id: 1, name: '苏格拉底', title: '哲学之父', type: 'sage', is_builtin: true },
-  { id: 2, name: '柏拉图', title: '理念论者', type: 'sage', is_builtin: true },
-  { id: 3, name: '亚里士多德', title: '百科全书', type: 'sage', is_builtin: true },
-  { id: 4, name: '孙子', title: '兵圣', type: 'sage', is_builtin: true },
-  { id: 101, name: '旅者', title: '求知者', type: 'traveler', is_builtin: true },
-  { id: 102, name: '行者', title: '探索者', type: 'traveler', is_builtin: true },
+  { id: 1, name: '苏格拉底', title: '哲学之父', type: 'sage', is_builtin: true, color: COLORS[0] },
+  { id: 2, name: '柏拉图', title: '理念论者', type: 'sage', is_builtin: true, color: COLORS[1] },
+  { id: 3, name: '亚里士多德', title: '百科全书', type: 'sage', is_builtin: true, color: COLORS[2] },
+  { id: 4, name: '孙子', title: '兵圣', type: 'sage', is_builtin: true, color: COLORS[3] },
+  { id: 101, name: '旅者', title: '求知者', type: 'traveler', is_builtin: true, color: COLORS[4] },
+  { id: 102, name: '行者', title: '探索者', type: 'traveler', is_builtin: true, color: COLORS[5] },
 ]
 
 const sages = computed(() => characters.value.filter(c => c.type === 'sage'))
@@ -111,8 +133,8 @@ const travelers = computed(() => characters.value.filter(c => c.type === 'travel
 const fetchCharacters = async () => {
   loading.value = true
   try {
-    const res = await axios.get('/api/character', { headers: headers() })
-    characters.value = res.data
+    const { data } = await client.get('/character')
+    characters.value = data
     if (characters.value.length === 0) {
       characters.value = MOCK_CHARACTERS
     }
@@ -124,10 +146,32 @@ const fetchCharacters = async () => {
 }
 
 const handleAddCharacter = (type: 'sage' | 'traveler') => {
-  // TODO: Open create character modal
-  console.log('Add character:', type)
+  modalType.value = type
+  showModal.value = true
 }
 
+const handleCreate = (data: {
+  type: 'sage' | 'traveler'
+  title: string
+  description: string
+  tags: string[]
+  colorIdx: number
+  imageUrl?: string
+}) => {
+  const newChar: Character = {
+    id: Date.now(),
+    name: data.title,
+    title: data.title,
+    description: data.description,
+    avatar_url: data.imageUrl,
+    type: data.type,
+    is_builtin: false,
+    color: COLORS[data.colorIdx],
+    tags: data.tags,
+  }
+  characters.value.push(newChar)
+  showModal.value = false
+}
 
 onMounted(() => { fetchCharacters() })
 </script>
