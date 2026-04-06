@@ -87,7 +87,16 @@ class TokenBudget:
 - `with_retry` - 指数退避重试装饰器
 - `ResilientAdapter` - 弹性适配器封装
 
-### 2.7 管理器 (manager.py)
+### 2.7 响应缓存 (cache.py)
+
+| 类/函数 | 说明 |
+|---------|------|
+| `LLMCache` | LRU 缓存，支持 TTL |
+| `CacheEntry` | 缓存条目 |
+| `get_llm_cache()` | 获取全局缓存实例 |
+| `CachedAdapter` | 带缓存的适配器封装 |
+
+### 2.8 管理器 (manager.py)
 
 ```python
 class LLMManager:
@@ -280,8 +289,8 @@ async for chunk in adapter.chat_stream(
 | 优先级 | 问题 | 状态 |
 |--------|------|------|
 | P3 | 官方 SDK 迁移（anthropic/openai） | ❌ 未实现 |
-| P3 | 响应缓存 | ❌ 未实现 |
-| P3 | 流式输出完善（Claude SSE） | ❌ 未实现 |
+| ~~P3~~ | ~~响应缓存~~ | ✅ **已实现** |
+| ~~P3~~ | ~~流式输出完善（Claude SSE）~~ | ✅ **已实现**（已有真正SSE） |
 
 ---
 

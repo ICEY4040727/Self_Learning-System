@@ -89,6 +89,17 @@ from backend.services.llm.budget import (
     clear_user_budget,
 )
 
+# 缓存
+from backend.services.llm.cache import (
+    LLMCache,
+    CacheEntry,
+    get_llm_cache,
+    clear_llm_cache,
+)
+
+# 缓存适配器
+from backend.services.llm.adapter import CachedAdapter
+
 __all__ = [
     # 适配器
     "LLMAdapter",
@@ -96,6 +107,7 @@ __all__ = [
     "OpenAIAdapter",
     "LocalAdapter",
     "OpenAICompatibleAdapter",
+    "CachedAdapter",
     "get_llm_adapter",
     # 错误
     "LLMError",
