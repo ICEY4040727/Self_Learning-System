@@ -1,7 +1,7 @@
 <template>
   <div class="char-card">
     <!-- Avatar area -->
-    <div class="char-avatar" :style="{ background: avatarGradient }">
+    <div class="char-avatar" :style="{ background: avatarColor }">
       <img v-if="avatarUrl" :src="avatarUrl" :alt="name" class="avatar-img" />
       <span v-else class="avatar-placeholder">{{ name?.charAt(0) || '?' }}</span>
     </div>
@@ -31,14 +31,24 @@ interface Props {
   avatarUrl?: string
   type: 'sage' | 'traveler'
   isBuiltin?: boolean
+  color?: string
 }
 
 const props = defineProps<Props>()
 
-const avatarGradient = computed(() => {
-  const colors = ['#f59e0b', '#8b5cf6', '#10b981', '#dc2626', '#3b82f6', '#06b6d4']
-  const color = colors[props.name.charCodeAt(0) % colors.length]
-  return `linear-gradient(135deg, ${color}, ${color}88)`
+const COLORS = [
+  'rgba(245, 158, 11, 0.35)',   // 琥珀色
+  'rgba(139, 92, 246, 0.35)',   // 紫色
+  'rgba(16, 185, 129, 0.35)',   // 翠绿
+  'rgba(220, 38, 38, 0.35)',    // 朱红
+  'rgba(59, 130, 246, 0.35)',   // 天蓝
+  'rgba(6, 182, 212, 0.35)',    // 青色
+]
+
+const avatarColor = computed(() => {
+  if (props.color) return props.color
+  const idx = (props.name.charCodeAt(0) || 0) % COLORS.length
+  return COLORS[idx]
 })
 
 const typeLabel = computed(() => props.type === 'sage' ? '知者' : '旅者')
@@ -82,8 +92,8 @@ const sourceLabel = computed(() => props.isBuiltin ? '内置' : '自定义')
 .avatar-placeholder {
   font-size: 36px;
   font-weight: 700;
-  color: white;
-  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  color: #ffd700;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
 }
 
 .char-info {

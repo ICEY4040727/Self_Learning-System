@@ -38,6 +38,7 @@ from backend.services.dynamic_analyzer import DynamicAnalyzer
 from backend.services.knowledge import knowledge_service
 from backend.services.llm.adapter import get_llm_adapter
 from backend.services.relationship import relationship_service
+from backend.services.prompt_builder import PromptBuilder, SceneConfig
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +52,11 @@ class LearningEngine:
         self.analyzer = DynamicAnalyzer()
         self.knowledge = knowledge_service
         self.relationship = relationship_service
+        # 模块化提示词构建器
+        self.prompt_builder = PromptBuilder(
+            knowledge_svc=self.knowledge,
+            relationship_svc=self.relationship,
+        )
 
     # ------------------------------------------------------------------
     # Relationship stage prompts
@@ -225,6 +231,62 @@ class LearningEngine:
             parts.append("【学习者已掌握的知识关系】\n" + knowledge_context)
 
         return "\n\n".join(parts)
+
+    # ------------------------------------------------------------------
+    # 新版提示词构建方法（使用模块化 PromptBuilder）
+    # ------------------------------------------------------------------
+    def build_system_prompt_v2(
+        self,
+        teacher_persona: TeacherPersona,
+        relationship_stage: str,
+        relationship_instructions: str = "",
+        learner_profile: LearnerProfile | None = None,
+        prev_emotion: dict | None = None,
+        mastery_level: int = 50,
+        knowledge_context: str = "",
+        db: Session | None = None,
+        world_id: int | None = None,
+        session_id: int | None = None,
+        traveler_character=None,
+    ) -> str:
+        """
+        使用模块化 PromptBuilder 构建系统提示词
+        
+        Args:
+            teacher_persona: 教师人格
+            relationship_stage: 关系阶段
+            relationship_instructions: 关系维度指令
+            learner_profile: 学习者画像
+            prev_emotion: 上一轮情感
+            mastery_level: 掌握度
+            knowledge_context: 知识上下文
+            db: 数据库会话
+            world_id: 世界ID
+            session_id: 会话ID
+            traveler_character: 旅人角色
+        """
+        # 构建上下文
+        context = {
+            "db": db,
+            "world_id": world_id,
+            "session_id": session_id,
+            "relationship": {
+                "stage": relationship_stage,
+                "dimensions": {},
+                "instructions": relationship_instructions,
+            },
+            "learner_profile": learner_profile,
+            "prev_emotion": prev_emotion,
+            "mastery_level": mastery_level,
+            "knowledge_context": knowledge_context,
+        }
+        
+        return self.prompt_builder.build(
+            teacher_persona=teacher_persona,
+            scene=SceneConfig.LEARNING,
+            context=context,
+            traveler_character=traveler_character,
+        )
 
     def parse_tool_request(self, response: str) -> dict | None:
         """Parse tool request from LLM response"""
