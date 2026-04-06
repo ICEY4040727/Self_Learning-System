@@ -79,6 +79,16 @@ from backend.services.llm.manager import (
     set_llm_manager,
 )
 
+# 预算控制
+from backend.services.llm.budget import (
+    TokenBudget,
+    BudgetStatus,
+    BudgetLimit,
+    UsageRecord,
+    get_user_budget,
+    clear_user_budget,
+)
+
 __all__ = [
     # 适配器
     "LLMAdapter",

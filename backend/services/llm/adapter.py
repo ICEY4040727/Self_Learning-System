@@ -21,6 +21,7 @@ from backend.services.llm.errors import (
 )
 from backend.services.llm.models import ModelInfo, get_model_info
 from backend.services.llm.providers import get_provider_endpoint
+from backend.services.llm.types import Tool, ToolCall
 
 logger = logging.getLogger(__name__)
 
@@ -672,6 +673,141 @@ class OpenAICompatibleAdapter(LLMAdapter):
                     if choices:
                         return choices[0].get("message", {}).get("content", "")
                     return ""
+                else:
+                    error = from_http_response(
+                        self.provider,
+                        response.status_code,
+                        response.text
+                    )
+                    logger.error(f"OpenAI-compatible API error: {error}")
+                    raise error
+
+            except httpx.TimeoutException:
+                raise NetworkError(self.provider, f"Request timeout after {self._timeout}s")
+            except httpx.NetworkError as e:
+                raise NetworkError(self.provider, f"Network error: {str(e)}")
+            except LLMError:
+                raise
+            except Exception as e:
+                raise NetworkError(self.provider, f"Unexpected error: {str(e)}")
+
+    async def chat_with_tools(
+        self,
+        messages: list[dict],
+        tools: list[Tool],
+        system_prompt: str = "",
+        user_api_key: str = None,
+        temperature: float = 0.7,
+        tool_choice: str = "auto",
+        **kwargs
+    ) -> tuple[str, list[ToolCall]]:
+        """
+        发送带工具调用的聊天请求
+        
+        Args:
+            messages: 消息列表
+            tools: 可用工具列表
+            system_prompt: 系统提示
+            user_api_key: 用户 API Key
+            temperature: 温度参数
+            tool_choice: 工具选择策略 ("auto", "any", "none")
+        
+        Returns:
+            (text_response, tool_calls)
+        
+        Raises:
+            LLMError: API 调用错误
+        """
+        api_key = user_api_key or self._api_key or ""
+        if not api_key:
+            raise AuthError(self.provider, "API key not configured")
+
+        # 转换消息格式
+        openai_messages = []
+        if system_prompt:
+            openai_messages.append({"role": "system", "content": system_prompt})
+        for msg in messages:
+            role = msg.get("role", "user")
+            content = msg.get("content", "")
+            # 处理工具消息
+            if role == "tool":
+                openai_messages.append({
+                    "role": "tool",
+                    "content": content,
+                    "tool_call_id": msg.get("tool_call_id", "")
+                })
+            else:
+                openai_messages.append({
+                    "role": role,
+                    "content": content
+                })
+
+        # 转换工具格式为 OpenAI 格式
+        openai_tools = []
+        for tool in tools:
+            openai_tools.append({
+                "type": "function",
+                "function": {
+                    "name": tool.name,
+                    "description": tool.description,
+                    "parameters": tool.parameters.model_dump() if hasattr(tool.parameters, 'model_dump') else {
+                        "type": "object",
+                        "properties": {},
+                        "required": []
+                    }
+                }
+            })
+
+        request_data = {
+            "model": self.model,
+            "messages": openai_messages,
+            "tools": openai_tools,
+            "tool_choice": {"type": "function", "function": {"name": tool_choice}} if tool_choice != "auto" else "auto"
+        }
+        if temperature != 0.7:
+            request_data["temperature"] = temperature
+
+        headers = {"content-type": "application/json"}
+        if api_key:
+            headers["Authorization"] = f"Bearer {api_key}"
+
+        async with httpx.AsyncClient() as client:
+            try:
+                response = await client.post(
+                    f"{self._base_url}/chat/completions",
+                    headers=headers,
+                    json=request_data,
+                    timeout=self._timeout
+                )
+
+                if response.status_code == 200:
+                    data = response.json()
+                    usage = data.get("usage", {})
+                    logger.info(
+                        "LLM usage: provider=%s model=%s in_tokens=%d out_tokens=%d",
+                        self.provider, self.model,
+                        usage.get("prompt_tokens", 0),
+                        usage.get("completion_tokens", 0),
+                    )
+                    
+                    choices = data.get("choices", [{}])
+                    if not choices:
+                        return "", []
+                    
+                    message = choices[0].get("message", {})
+                    text_content = message.get("content", "") or ""
+                    
+                    # 解析工具调用
+                    tool_calls = []
+                    for tc in message.get("tool_calls", []):
+                        func = tc.get("function", {})
+                        tool_calls.append(ToolCall(
+                            id=tc.get("id", ""),
+                            name=func.get("name", ""),
+                            arguments=json.loads(func.get("arguments", "{}"))
+                        ))
+                    
+                    return text_content, tool_calls
                 else:
                     error = from_http_response(
                         self.provider,
