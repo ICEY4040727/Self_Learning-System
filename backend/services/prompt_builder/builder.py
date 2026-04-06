@@ -9,8 +9,11 @@ from backend.services.prompt_builder.base import ContextProvider, MemoryModule
 from backend.services.prompt_builder.contexts.relationship import RelationshipContext
 from backend.services.prompt_builder.contexts.scaffold import ScaffoldContext
 from backend.services.prompt_builder.modules.affect import AffectModule
+from backend.services.prompt_builder.modules.episode import EpisodeModule
 from backend.services.prompt_builder.modules.knowledge import KnowledgeModule
+from backend.services.prompt_builder.modules.memory_retrieval import MemoryRetrievalModule
 from backend.services.prompt_builder.modules.metacognition import MetacognitionModule
+from backend.services.prompt_builder.modules.misconception import MisconceptionModule
 from backend.services.prompt_builder.modules.preference import PreferenceModule
 
 logger = logging.getLogger(__name__)
@@ -24,15 +27,20 @@ class SceneConfig:
     ASSESSMENT = "assessment"
     
     # 场景配置：定义每个场景使用的模块
+    # 优先级顺序：Knowledge(10) → Misconception(30) → Episode(40) → Preference(50) → Affect(60) → Metacognition(70) → MemoryRetrieval(80)
     MODULE_CONFIGS = {
         LEARNING: [
             KnowledgeModule,
+            MisconceptionModule,
+            EpisodeModule,
             PreferenceModule,
             AffectModule,
             MetacognitionModule,
+            MemoryRetrievalModule,
         ],
         REVIEW: [
             KnowledgeModule,
+            MemoryRetrievalModule,
         ],
         ASSESSMENT: [
             KnowledgeModule,
