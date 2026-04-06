@@ -220,6 +220,7 @@ onMounted(async () => { await fetchWorlds() })
 }
 
 .section-header {
+  text-align: center;
   position: relative;
   z-index: 1;
   margin-bottom: 32px;
