@@ -215,6 +215,58 @@ OPENAI_COMPATIBLE_MODELS = {
 
 
 # ============================================================================
+# MiniMax Models
+# ============================================================================
+
+MINIMAX_MODELS = {
+    "MiniMax-M2.7-highspeed": ModelInfo(
+        name="MiniMax M2.7 Highspeed",
+        max_tokens=128000,
+        context_window=192000,
+        supports_reasoning=True,
+        input_price=0.6,
+        output_price=2.4,
+        description="MiniMax M2.7 high-speed version for low-latency scenarios",
+    ),
+    "MiniMax-M2.7": ModelInfo(
+        name="MiniMax M2.7",
+        max_tokens=128000,
+        context_window=192000,
+        supports_reasoning=True,
+        input_price=0.3,
+        output_price=1.2,
+        description="MiniMax M2.7 flagship model",
+    ),
+    "MiniMax-M2.5-highspeed": ModelInfo(
+        name="MiniMax M2.5 Highspeed",
+        max_tokens=128000,
+        context_window=192000,
+        supports_reasoning=True,
+        input_price=0.6,
+        output_price=2.4,
+        description="MiniMax M2.5 high-speed version",
+    ),
+    "MiniMax-M2.5": ModelInfo(
+        name="MiniMax M2.5",
+        max_tokens=128000,
+        context_window=192000,
+        supports_reasoning=True,
+        input_price=0.3,
+        output_price=1.2,
+        description="MiniMax M2.5 model",
+    ),
+    "MiniMax-M2.1": ModelInfo(
+        name="MiniMax M2.1",
+        max_tokens=128000,
+        context_window=192000,
+        input_price=0.3,
+        output_price=1.2,
+        description="MiniMax M2.1 model",
+    ),
+}
+
+
+# ============================================================================
 # Ollama / Local Models (默认配置)
 # ============================================================================
 
@@ -269,6 +321,7 @@ ALL_MODELS.update(CLAUDE_MODELS)
 ALL_MODELS.update(OPENAI_MODELS)
 ALL_MODELS.update(OPENAI_COMPATIBLE_MODELS)
 ALL_MODELS.update(OLLAMA_MODELS)
+ALL_MODELS.update(MINIMAX_MODELS)
 
 
 def get_model_info(model_id: str) -> ModelInfo:

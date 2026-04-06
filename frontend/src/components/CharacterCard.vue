@@ -50,7 +50,7 @@ const sourceLabel = computed(() => props.isBuiltin ? '内置' : '自定义')
   display: flex;
   flex-direction: column;
   width: 160px;
-  background: rgba(8, 8, 28, 0.97);
+  background: transparent;
   border: 1px solid rgba(255, 215, 0, 0.15);
   border-radius: 12px;
   overflow: hidden;
