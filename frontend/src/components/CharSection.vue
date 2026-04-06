@@ -96,7 +96,7 @@ interface Character {
   type: string
 }
 
-const props = withDefaults(defineProps<{
+withDefaults(defineProps<{
   label: string
   labelEn: string
   labelCn?: string

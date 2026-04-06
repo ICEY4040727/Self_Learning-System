@@ -1,4 +1,4 @@
-import { createRouter, createWebHistory } from 'vue-router'
+import { createRouter, createWebHashHistory } from 'vue-router'
 import type { RouteRecordRaw } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 
@@ -15,7 +15,26 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/home',
     name: 'Home',
-    component: () => import('@/views/Home.vue')
+    component: () => import('@/views/Home.vue'),
+    children: [
+      {
+        path: 'worlds',
+        name: 'Worlds',
+        component: () => import('@/views/Worlds.vue')
+      },
+      {
+        path: 'worlds/:worldId',
+        name: 'WorldDetail',
+        component: () => import('@/views/WorldDetail.vue'),
+        children: [
+          {
+            path: 'courses/:courseId',
+            name: 'CourseLearning',
+            component: () => import('@/views/Learning.vue')
+          }
+        ]
+      }
+    ]
   },
   {
     path: '/learning/:courseId',
@@ -40,7 +59,8 @@ const routes: RouteRecordRaw[] = [
 ]
 
 const router = createRouter({
-  history: createWebHistory(),
+  // Hash 路由更适合 Electron 打包
+  history: createWebHashHistory(),
   routes
 })
 

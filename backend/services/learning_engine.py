@@ -1,5 +1,19 @@
 """Learning Engine - Core logic for Socratic learning system"""
 
+# =============================================================================
+# 命名规范说明:
+#
+# traveler vs learner 的区分:
+#   - traveler: 游戏角色层 (Character.type="traveler", Session.traveler_character_id)
+#              玩家在游戏世界中的化身，关联故事/叙事
+#   - learner_profile: 学习追踪层 (LearnerProfile, Session.learner_profile_id)
+#              记录用户的学习状态、偏好、元认知等信息
+#
+# 在会话(Session)中的关联:
+#   - Session.traveler_character_id: 玩家扮演的旅人角色 (游戏角色)
+#   - Session.learner_profile_id: 用户的学习档案 (学习追踪)
+# =============================================================================
+
 import json
 import logging
 import re
@@ -274,9 +288,25 @@ class LearningEngine:
                     LearnerProfile.id == session.learner_profile_id
                 ).first()
 
-            retrieved_memories: list[dict] = []
+            # 4. Get checkpoint time for memory retrieval
+            checkpoint_time = None
+            if session.parent_checkpoint_id:
+                checkpoint = db.query(Checkpoint).filter(
+                    Checkpoint.id == session.parent_checkpoint_id
+                ).first()
+                checkpoint_time = checkpoint.created_at.isoformat() if checkpoint else None
 
-            # 4.5 Get previous emotion from last user message (for dynamic prompt layer)
+            # 5. Retrieve relevant learning memories
+            retrieved_memories: list[dict] = []
+            retrieved_memories = self.knowledge.retrieve_memories(
+                db=db,
+                world_id=session.world_id,
+                current_topic=user_message,
+                checkpoint_time=checkpoint_time,
+                limit=5
+            )
+
+            # 6. Get previous emotion from last user message (for dynamic prompt layer)
             prev_emotion = None
             last_user_msg = (
                 db.query(ChatMessage)
@@ -286,13 +316,6 @@ class LearningEngine:
             )
             if last_user_msg and last_user_msg.emotion_analysis:
                 prev_emotion = last_user_msg.emotion_analysis
-
-            checkpoint_time = None
-            if session.parent_checkpoint_id:
-                checkpoint = db.query(Checkpoint).filter(
-                    Checkpoint.id == session.parent_checkpoint_id
-                ).first()
-                checkpoint_time = checkpoint.created_at.isoformat() if checkpoint else None
 
             knowledge_graph = self.knowledge.get_knowledge(db, session.world_id)
             concept_mastery = [
@@ -410,6 +433,10 @@ class LearningEngine:
                 },
                 db=db,
             )
+
+            # 11.1 Update UserProfile (incremental update)
+            from backend.services.user_profile import update_user_profile_after_chat
+            update_user_profile_after_chat(db, session.user_id, session.world_id)
 
             # 12. Persist DB changes
             if own_db:

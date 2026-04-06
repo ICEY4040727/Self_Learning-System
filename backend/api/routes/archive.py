@@ -25,9 +25,24 @@ from backend.services import spaced_repetition
 router = APIRouter()
 
 
+# =============================================================================
+# 命名规范说明:
+#
+# traveler vs learner 的区分:
+#   - traveler: 游戏角色层 (Character.type="traveler", WorldCharacter.role="traveler")
+#              玩家在游戏世界中的化身，关联故事/叙事
+#   - learner:  学习追踪层 (LearnerProfile, learner_profile_id)
+#              记录用户的学习状态、偏好、元认知等信息
+#
+# 示例:
+#   - Session.traveler_character_id: 玩家扮演的旅人角色
+#   - Session.learner_profile_id: 用户的学习档案
+# =============================================================================
+
 # Pydantic Schemas
 class CharacterCreate(BaseModel):
     name: str
+    # type: "sage" | "traveler" - 导师或旅人角色
     type: str = "sage"
     avatar: str | None = None
     personality: str | None = None
@@ -82,6 +97,7 @@ class WorldResponse(WorldCreate):
     sages: list[SageInfo] | None = None
     stageLabel: str | None = None
     relationship: dict | None = None
+    courses: list["CourseResponse"] | None = None
 
     class Config:
         from_attributes = True
@@ -446,8 +462,12 @@ def _get_world_sages(db: Session, world_id: int) -> list[SageInfo]:
 
 
 def _build_world_response(world: World, db: Session) -> WorldResponse:
-    """Build WorldResponse with sages, stageLabel and relationship data."""
+    """Build WorldResponse with sages, stageLabel, relationship data and courses."""
     sages = _get_world_sages(db, world.id)
+    
+    # Get courses for this world
+    courses = db.query(Course).filter(Course.world_id == world.id).all()
+    course_list = [CourseResponse.model_validate(c) for c in courses] if courses else None
     
     # Try to get relationship stage from the most recent session
     from backend.models.models import Session as SessionModel
@@ -478,6 +498,7 @@ def _build_world_response(world: World, db: Session) -> WorldResponse:
         sages=sages if sages else None,
         stageLabel=stage_label,
         relationship=relationship,
+        courses=course_list,
     )
 
 
