@@ -25,7 +25,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, nextTick } from 'vue'
-import axios from 'axios'
+import client from '@/api/client'
 import { parseApiError } from '@/utils/error'
 import * as echarts from 'echarts/core'
 import { LineChart, PieChart } from 'echarts/charts'
@@ -43,10 +43,7 @@ echarts.use([
   TitleComponent, TooltipComponent, GridComponent, MarkLineComponent, LegendComponent,
   CanvasRenderer,
 ])
-import { useAuthStore } from '@/stores/auth'
 
-const authStore = useAuthStore()
-const headers = () => ({ Authorization: `Bearer ${authStore.token}` })
 
 interface SessionItem {
   id: number
@@ -104,8 +101,8 @@ const formatDate = (d: string) => {
 const fetchSessions = async () => {
   try {
     const params = props.courseId ? `?course_id=${props.courseId}` : ''
-    const res = await axios.get(`/api/sessions${params}`, { headers: headers() })
-    sessions.value = res.data
+    const { data } = await client.get(`/api/sessions${params}`, )
+    sessions.value = data
   } catch {
     // endpoint may not exist yet; silently skip
   }
@@ -115,11 +112,11 @@ const fetchTrajectory = async () => {
   if (!selectedSession.value) return
   loading.value = true
   try {
-    const res = await axios.get(
+    const { data } = await client.get(
       `/api/sessions/${selectedSession.value}/emotion_trajectory`,
-      { headers: headers() }
+      
     )
-    trajectoryData.value = res.data
+    trajectoryData.value = data
     await nextTick()
     renderCharts()
   } catch (error) {

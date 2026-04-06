@@ -11,7 +11,8 @@ export type ConceptType     = 'knowledge' | 'misconception' | 'skill' | 'episode
 export type BloomLevel      = 'remember' | 'understand' | 'apply' | 'analyze' | 'evaluate' | 'create'
 
 // §2 adaptation #2/#3: only 'local' (not 'ollama') matches backend adapter key
-export type LLMProvider = 'claude' | 'openai' | 'local' | 'anthropic' | 'google' | 'deepseek'
+// 后端支持的 provider: claude, openai, deepseek, local (对应 ollama)
+export type LLMProvider = 'claude' | 'openai' | 'deepseek' | 'local'
 
 // ---- Auth ----
 export interface User {

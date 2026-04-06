@@ -47,8 +47,7 @@
 
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
-import axios from 'axios'
-import { useAuthStore } from '@/stores/auth'
+import client from '@/api/client'
 import { parseApiError } from '@/utils/error'
 
 interface CheckpointItem {
@@ -79,7 +78,6 @@ const emit = defineEmits<{
   committed: [payload: CheckpointItem]
 }>()
 
-const authStore = useAuthStore()
 const mode = ref<'commit' | 'branch'>('commit')
 const checkpoints = ref<CheckpointItem[]>([])
 const selectedCheckpointId = ref<number | null>(null)
@@ -88,12 +86,10 @@ const branchName = ref('')
 const pending = ref(false)
 const errorMessage = ref('')
 
-const headers = () => ({ Authorization: `Bearer ${authStore.token}` })
-
 const fetchCheckpoints = async () => {
   try {
-    const response = await axios.get(`/api/worlds/${props.worldId}/checkpoints`, { headers: headers() })
-    checkpoints.value = Array.isArray(response.data) ? response.data : []
+    const { data } = await client.get(`/worlds/${props.worldId}/checkpoints`)
+    checkpoints.value = Array.isArray(data) ? data : []
     if (checkpoints.value.length > 0 && selectedCheckpointId.value == null) {
       selectedCheckpointId.value = checkpoints.value[0].id
     }
@@ -106,18 +102,14 @@ const commitCheckpoint = async () => {
   pending.value = true
   errorMessage.value = ''
   try {
-    const response = await axios.post(
-      '/api/checkpoints',
-      {
-        world_id: props.worldId,
-        session_id: props.sessionId,
-        save_name: saveName.value.trim(),
-      },
-      { headers: headers() },
-    )
+    const { data } = await client.post('/checkpoints', {
+      world_id: props.worldId,
+      session_id: props.sessionId,
+      save_name: saveName.value.trim(),
+    })
     saveName.value = ''
     await fetchCheckpoints()
-    emit('committed', response.data as CheckpointItem)
+    emit('committed', data as CheckpointItem)
   } catch (error) {
     errorMessage.value = parseApiError(error)
   } finally {
@@ -130,12 +122,10 @@ const branchFromCheckpoint = async () => {
   pending.value = true
   errorMessage.value = ''
   try {
-    const response = await axios.post(
-      `/api/checkpoints/${selectedCheckpointId.value}/branch`,
-      { branch_name: branchName.value.trim() || undefined },
-      { headers: headers() },
-    )
-    emit('branched', response.data as BranchResult)
+    const { data } = await client.post(`/checkpoints/${selectedCheckpointId.value}/branch`, {
+      branch_name: branchName.value.trim() || undefined,
+    })
+    emit('branched', data as BranchResult)
   } catch (error) {
     errorMessage.value = parseApiError(error)
   } finally {

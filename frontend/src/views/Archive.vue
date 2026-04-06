@@ -179,14 +179,12 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import axios from 'axios'
-import { useAuthStore } from '@/stores/auth'
+import client from '@/api/client'
 import { parseApiError } from '@/utils/error'
 import EmotionTrajectory from '@/components/EmotionTrajectory.vue'
 import ParticleBackground from '@/components/ParticleBackground.vue'
 
 const router = useRouter()
-const authStore = useAuthStore()
 
 const BG_URL = 'https://images.unsplash.com/photo-1675371708731-50d9c04eb530?w=1920&q=80'
 
@@ -209,7 +207,6 @@ const diaryOpen = ref(false)
 const diaryContent = ref('')
 const showWorldDropdown = ref(false)
 
-const headers = () => ({ Authorization: `Bearer ${authStore.token}` })
 
 const selectedWorldName = computed(() => worlds.value.find(w => w.id === selectedWorldId.value)?.name || '雅典学院')
 const selectedCourseName = computed(() => '哲学导论')
@@ -265,24 +262,24 @@ const getProgressColor = (level: number) => {
 
 const fetchDiaries = async () => {
   try {
-    const res = await axios.get('/api/learning_diary', { headers: headers() })
-    diaries.value = res.data
+    const { data } = await client.get('learning_diary', )
+    diaries.value = data
   } catch {}
 }
 
 const fetchProgress = async () => {
   try {
-    const res = await axios.get('/api/progress', { headers: headers() })
-    progressList.value = res.data
+    const { data } = await client.get('progress', )
+    progressList.value = data
   } catch {}
 }
 
 const fetchSessions = async () => {
   try {
-    const res = await axios.get('/api/sessions', { headers: headers() })
-    sessions.value = res.data
-    if (res.data.length > 0) {
-      selectedSessionId.value = res.data[0].id
+    const { data } = await client.get('sessions', )
+    sessions.value = data
+    if (data.length > 0) {
+      selectedSessionId.value = data[0].id
       await fetchEmotionTrajectory()
     }
   } catch {}
@@ -291,33 +288,33 @@ const fetchSessions = async () => {
 const fetchEmotionTrajectory = async () => {
   if (!selectedSessionId.value) return
   try {
-    const res = await axios.get(`/api/sessions/${selectedSessionId.value}/emotion_trajectory`, { headers: headers() })
-    emotionData.value = res.data
+    const { data } = await client.get(`/sessions/${selectedSessionId.value}/emotion_trajectory`)
+    emotionData.value = data
   } catch {}
 }
 
 const fetchCourses = async () => {
   try {
-    const res = await axios.get('/api/courses', { headers: headers() })
-    courses.value = res.data
+    const { data } = await client.get('courses')
+    courses.value = data
   } catch {}
 }
 
 const fetchWorlds = async () => {
   try {
-    const res = await axios.get('/api/worlds', { headers: headers() })
-    worlds.value = res.data
-    if (res.data.length > 0) selectedWorldId.value = res.data[0].id
+    const { data } = await client.get('worlds', )
+    worlds.value = data
+    if (data.length > 0) selectedWorldId.value = data[0].id
   } catch {}
 }
 
 const submitDiary = async () => {
   if (!diaryContent.value.trim()) return
   try {
-    await axios.post('/api/learning_diary', {
+    await client.post('learning_diary', {
       content: diaryContent.value.trim(),
       date: new Date().toISOString(),
-    }, { headers: headers() })
+    }, )
     diaryContent.value = ''
     diaryOpen.value = false
     await fetchDiaries()

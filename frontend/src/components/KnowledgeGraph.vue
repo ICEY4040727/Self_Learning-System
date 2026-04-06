@@ -35,9 +35,8 @@
 
 <script setup lang="ts">
 import { onMounted, ref, watch } from 'vue'
-import axios from 'axios'
+import client from '@/api/client'
 import * as d3 from 'd3'
-import { useAuthStore } from '@/stores/auth'
 import { parseApiError } from '@/utils/error'
 
 interface GraphNode {
@@ -64,7 +63,6 @@ const props = defineProps<{
   sessionId?: number | null
 }>()
 
-const authStore = useAuthStore()
 const svgRef = ref<SVGSVGElement | null>(null)
 const graph = ref<GraphPayload>({ nodes: [], edges: [] })
 const selectedNode = ref<GraphNode | null>(null)
@@ -107,16 +105,15 @@ const fetchGraph = async () => {
   loading.value = true
   errorMessage.value = ''
   try {
-    const response = await axios.get(`/api/worlds/${props.worldId}/knowledge-graph`, {
-      headers: { Authorization: `Bearer ${authStore.token}` },
+    const { data } = await client.get(`/worlds/${props.worldId}/knowledge-graph`, {
       params: {
         checkpoint_time: toCheckpointIso(),
         session_id: props.sessionId ?? undefined,
       },
     })
     graph.value = {
-      nodes: Array.isArray(response.data?.nodes) ? response.data.nodes : [],
-      edges: Array.isArray(response.data?.edges) ? response.data.edges : [],
+      nodes: Array.isArray(data?.nodes) ? data.nodes : [],
+      edges: Array.isArray(data?.edges) ? data.edges : [],
     }
     edgeTypes.value = [...new Set(graph.value.edges.map((edge) => edge.type || 'related_to'))]
     renderGraph()

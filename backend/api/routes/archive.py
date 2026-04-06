@@ -159,6 +159,8 @@ class CourseCreate(BaseModel):
 
 class CourseResponse(CourseCreate):
     id: int
+    progress: float | None = None  # 0.0 - 1.0 课程完成度
+    icon: str | None = None  # 课程图标
 
     class Config:
         from_attributes = True
@@ -461,13 +463,38 @@ def _get_world_sages(db: Session, world_id: int) -> list[SageInfo]:
     return result
 
 
-def _build_world_response(world: World, db: Session) -> WorldResponse:
+def _build_world_response(world: World, db: Session, current_user_id: int = None) -> WorldResponse:
     """Build WorldResponse with sages, stageLabel, relationship data and courses."""
     sages = _get_world_sages(db, world.id)
     
-    # Get courses for this world
+    # Get courses for this world with progress and icon
     courses = db.query(Course).filter(Course.world_id == world.id).all()
-    course_list = [CourseResponse.model_validate(c) for c in courses] if courses else None
+    course_list = []
+    if courses:
+        for course in courses:
+            progress = None
+            icon = "📖"  # 默认图标
+            
+            # 如果提供了 user_id，获取课程进度
+            if current_user_id:
+                course_progress = db.query(ProgressTracking).filter(
+                    ProgressTracking.course_id == course.id,
+                    ProgressTracking.user_id == current_user_id
+                ).first()
+                if course_progress:
+                    progress = course_progress.mastery_level / 100.0
+            
+            course_list.append(CourseResponse(
+                id=course.id,
+                world_id=course.world_id,
+                name=course.name,
+                description=course.description,
+                target_level=course.target_level,
+                progress=progress,
+                icon=icon,
+            ))
+    else:
+        course_list = None
     
     # Try to get relationship stage from the most recent session
     from backend.models.models import Session as SessionModel

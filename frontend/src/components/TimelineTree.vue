@@ -37,8 +37,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import axios from 'axios'
-import { useAuthStore } from '@/stores/auth'
+import client from '@/api/client'
 import { parseApiError } from '@/utils/error'
 
 interface TimelineSession {
@@ -58,11 +57,6 @@ interface TimelineCheckpoint {
   created_at: string
 }
 
-interface TimelinePayload {
-  sessions?: TimelineSession[]
-  checkpoints?: TimelineCheckpoint[]
-}
-
 const props = defineProps<{
   worldId: number
 }>()
@@ -71,22 +65,20 @@ defineEmits<{
   branch: [checkpoint: { id: number; save_name: string }]
 }>()
 
-const authStore = useAuthStore()
 const sessions = ref<TimelineSession[]>([])
 const checkpoints = ref<TimelineCheckpoint[]>([])
 const loading = ref(false)
 const errorMessage = ref('')
 
-const headers = () => ({ Authorization: `Bearer ${authStore.token}` })
 
 const fetchTimeline = async () => {
   loading.value = true
   errorMessage.value = ''
   try {
-    const response = await axios.get(`/api/worlds/${props.worldId}/timelines`, { headers: headers() })
-    const payload = response.data as TimelinePayload
-    sessions.value = Array.isArray(payload.sessions) ? payload.sessions : []
-    checkpoints.value = Array.isArray(payload.checkpoints) ? payload.checkpoints : []
+    const { data } = await client.get(`/worlds/${props.worldId}/timelines`)
+    
+    sessions.value = Array.isArray(data.sessions) ? data.sessions : []
+    checkpoints.value = Array.isArray(data.checkpoints) ? data.checkpoints : []
   } catch (error) {
     errorMessage.value = parseApiError(error)
   } finally {

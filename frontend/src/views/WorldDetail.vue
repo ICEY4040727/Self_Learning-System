@@ -106,13 +106,12 @@
 import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ArrowLeft, Play } from 'lucide-vue-next'
-import axios from 'axios'
-import { useAuthStore } from '@/stores/auth'
+import client from '@/api/client'
+
 import { parseApiError } from '@/utils/error'
 
 const route = useRoute()
 const router = useRouter()
-const authStore = useAuthStore()
 
 interface Sage { id: number; name: string; title: string; symbol: string; color: string; accentColor: string }
 interface World {
@@ -132,7 +131,6 @@ const errorMessage = ref('')
 const loading = ref(false)
 const checkpointsLoading = ref(false)
 
-const headers = () => ({ Authorization: `Bearer ${authStore.token}` })
 
 const getWorldBgStyle = (world: World | null) => {
   if (!world) return {}
@@ -154,8 +152,8 @@ const showError = (error: unknown) => {
 
 const fetchWorld = async () => {
   try {
-    const res = await axios.get(`/api/worlds/${worldId.value}`, { headers: headers() })
-    selectedWorld.value = res.data
+    const { data } = await client.get(`/worlds/${worldId.value}`)
+    selectedWorld.value = data
   } catch (error) {
     showError(error)
   }
@@ -164,8 +162,8 @@ const fetchWorld = async () => {
 const fetchCourses = async () => {
   loading.value = true
   try {
-    const res = await axios.get(`/api/worlds/${worldId.value}/courses`, { headers: headers() })
-    courses.value = res.data
+    const { data } = await client.get(`/worlds/${worldId.value}/courses`)
+    courses.value = data
   } catch (error) {
     courses.value = []
     showError(error)
@@ -177,8 +175,8 @@ const fetchCourses = async () => {
 const fetchCheckpoints = async (courseId: number) => {
   checkpointsLoading.value = true
   try {
-    const res = await axios.get(`/api/courses/${courseId}/checkpoints`, { headers: headers() })
-    checkpoints.value = res.data
+    const { data } = await client.get(`/courses/${courseId}/checkpoints`)
+    checkpoints.value = data
   } catch {
     checkpoints.value = []
   } finally {

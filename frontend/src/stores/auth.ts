@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import axios from 'axios'
+import client from '@/api/client'
 
 interface User {
   id: number
@@ -30,17 +30,15 @@ export const useAuthStore = defineStore('auth', {
       formData.append('username', username)
       formData.append('password', password)
 
-      const response = await axios.post('/api/auth/login', formData)
-      this.token = response.data.access_token
+      const { data } = await client.post('/auth/login', formData)
+      this.token = data.access_token
       localStorage.setItem('token', this.token!)
-
-      axios.defaults.headers.common['Authorization'] = `Bearer ${this.token}`
 
       await this.fetchUser()
     },
 
     async register(username: string, password: string) {
-      await axios.post('/api/auth/register', {
+      await client.post('/auth/register', {
         username,
         password,
         tenant_name: 'default'
@@ -50,11 +48,9 @@ export const useAuthStore = defineStore('auth', {
     async fetchUser() {
       if (!this.token) return
 
-      axios.defaults.headers.common['Authorization'] = `Bearer ${this.token}`
-
       try {
-        const response = await axios.get('/api/auth/me')
-        this.user = response.data
+        const { data } = await client.get('/auth/me')
+        this.user = data
       } catch (error) {
         this.logout()
       }
@@ -64,12 +60,10 @@ export const useAuthStore = defineStore('auth', {
       this.token = null
       this.user = null
       localStorage.removeItem('token')
-      delete axios.defaults.headers.common['Authorization']
     },
 
     async initAuth() {
       if (this.token) {
-        axios.defaults.headers.common['Authorization'] = `Bearer ${this.token}`
         await this.fetchUser()
       }
     }

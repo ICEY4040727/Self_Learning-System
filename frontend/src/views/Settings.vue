@@ -207,11 +207,10 @@ const settingsStore = useSettingsStore()
 const BG_URL = 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=1920&q=80'
 
 const providers: Array<{ value: LLMProvider; label: string }> = [
-  { value: 'openai', label: 'OpenAI' },
   { value: 'claude', label: 'Claude' },
-  { value: 'anthropic', label: 'Anthropic' },
-  { value: 'google', label: 'Google' },
+  { value: 'openai', label: 'OpenAI' },
   { value: 'deepseek', label: 'DeepSeek' },
+  { value: 'local', label: '本地模型 (Ollama)' },
 ]
 
 const settings = reactive({

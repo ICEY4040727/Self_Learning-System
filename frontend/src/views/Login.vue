@@ -122,7 +122,7 @@ import { ref } from 'vue'
 import loginBg from '@/assets/login-bg.jpg'
 import { useRouter } from 'vue-router'
 import { Eye, EyeOff } from 'lucide-vue-next'
-import axios from 'axios'
+import client from '@/api/client'
 import { useAuthStore } from '@/stores/auth'
 import { parseApiError } from '@/utils/error'
 
@@ -156,16 +156,15 @@ const handleSubmit = async () => {
       const formData = new FormData()
       formData.append('username', username.value.trim())
       formData.append('password', password.value)
-      const res = await axios.post('/api/auth/login', formData)
-      authStore.token = res.data.access_token
-      authStore.user = res.data
-      // Persist and set axios header
+      const { data } = await client.post('/auth/login', formData)
+      authStore.token = data.access_token
+      authStore.user = data
+      // Persist token
       localStorage.setItem('token', authStore.token!)
-      axios.defaults.headers.common['Authorization'] = `Bearer ${authStore.token}`
       router.push('/home')
     } else {
       // Register — JSON payload
-      await axios.post('/api/auth/register', {
+      await client.post('/auth/register', {
         username: username.value.trim(),
         password: password.value
       })

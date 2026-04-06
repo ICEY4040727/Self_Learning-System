@@ -86,14 +86,13 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ArrowLeft, Plus } from 'lucide-vue-next'
-import axios from 'axios'
-import { useAuthStore } from '@/stores/auth'
+import client from '@/api/client'
+
 import homeBg from '@/assets/home-bg.png'
 import { parseApiError } from '@/utils/error'
 import CreateWorldModal from '@/components/CreateWorldModal.vue'
 
 const router = useRouter()
-const authStore = useAuthStore()
 
 interface Sage { id: number; name: string; title: string; symbol: string; color: string; accentColor: string }
 interface World {
@@ -114,7 +113,6 @@ const errorMessage = ref('')
 const loading = ref(false)
 const showCreateWorld = ref(false)
 
-const headers = () => ({ Authorization: `Bearer ${authStore.token}` })
 
 const getWorldBgStyle = (world: World) => {
   const url = world.scenes?.background
@@ -149,8 +147,8 @@ const MOCK_WORLDS: World[] = [
 const fetchWorlds = async () => {
   loading.value = true
   try {
-    const res = await axios.get('/api/worlds', { headers: headers() })
-    worlds.value = res.data.map((world: any) => ({
+    const { data } = await client.get('worlds')
+    worlds.value = data.map((world: any) => ({
       ...world,
       sages: world.sages || [],
       courses: world.courses || [],
@@ -173,13 +171,13 @@ const selectWorld = (world: World) => {
 
 const handleCreateWorld = async (data: { name: string; description: string; sageIds: number[]; travelerId?: number }) => {
   try {
-    const res = await axios.post('/api/worlds', {
+    const { data: newWorld } = await client.post('/worlds', {
       name: data.name,
       description: data.description,
       sage_ids: data.sageIds,
       traveler_id: data.travelerId,
-    }, { headers: headers() })
-    worlds.value = [...worlds.value, { ...res.data, sages: [], courses: [], stageLabel: '初识' }]
+    })
+    worlds.value = [...worlds.value, { ...newWorld, sages: [], courses: [], stageLabel: '初识' }]
     showCreateWorld.value = false
   } catch (error) {
     showError(error)
