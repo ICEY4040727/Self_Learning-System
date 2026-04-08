@@ -1,6 +1,6 @@
 <template>
   <div class="character-display" :class="position" :key="jumpKey" :style="jumpKey > 0 ? { animation: 'jumpOnce 0.3s ease' } : {}">
-    <Transition name="sprite-switch" mode="out-in">
+    <Transition name="sprite-switch">
       <img
         v-if="spriteUrl"
         :key="spriteUrl"

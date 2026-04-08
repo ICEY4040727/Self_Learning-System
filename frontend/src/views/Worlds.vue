@@ -169,16 +169,17 @@ const selectWorld = (world: World) => {
   router.push(`/home/worlds/${world.id}`)
 }
 
-const handleCreateWorld = async (data: { name: string; description: string; sageIds: number[]; travelerId?: number }) => {
+const handleCreateWorld = async (data: { name: string; description: string; scenes: Record<string, any> }) => {
   try {
     const { data: newWorld } = await client.post('/worlds', {
       name: data.name,
       description: data.description,
-      sage_ids: data.sageIds,
-      traveler_id: data.travelerId,
+      scenes: data.scenes,
     })
     worlds.value = [...worlds.value, { ...newWorld, sages: [], courses: [], stageLabel: '初识' }]
     showCreateWorld.value = false
+    // 跳转到世界详情页，引导添加成员
+    router.push(`/home/worlds/${newWorld.id}`)
   } catch (error) {
     showError(error)
   }

@@ -369,6 +369,14 @@ export const EXPRESSION_SYMBOLS: Record<Expression, string> = {
   surprised: '( ꒪⌓꒪ )',
 }
 
+export const EXPRESSION_COLORS: Record<Expression, string> = {
+  default:   '#94a3b8',
+  happy:     '#4ade80',
+  thinking:  '#60a5fa',
+  concerned: '#f97316',
+  surprised: '#a78bfa',
+}
+
 // =============================================================================
 // Report Types - 学习报告相关类型
 // =============================================================================

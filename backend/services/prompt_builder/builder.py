@@ -9,12 +9,14 @@ from backend.services.prompt_builder.base import ContextProvider, MemoryModule
 from backend.services.prompt_builder.contexts.relationship import RelationshipContext
 from backend.services.prompt_builder.contexts.scaffold import ScaffoldContext
 from backend.services.prompt_builder.modules.affect import AffectModule
+from backend.services.prompt_builder.modules.course_intent import CourseIntentModule
 from backend.services.prompt_builder.modules.episode import EpisodeModule
 from backend.services.prompt_builder.modules.knowledge import KnowledgeModule
 from backend.services.prompt_builder.modules.memory_retrieval import MemoryRetrievalModule
 from backend.services.prompt_builder.modules.metacognition import MetacognitionModule
 from backend.services.prompt_builder.modules.misconception import MisconceptionModule
 from backend.services.prompt_builder.modules.preference import PreferenceModule
+from backend.services.prompt_builder.modules.world_setting import WorldSettingModule
 
 if TYPE_CHECKING:
     from backend.models.models import Character
@@ -148,6 +150,17 @@ class PromptBuilder:
             tags = getattr(character, 'tags', None)
             if tags and isinstance(tags, (list, tuple)):
                 parts.append(f"角色特质: {', '.join(str(t) for t in tags)}")
+            
+            # 注入 traits（性格参数，Phase 3 新增）
+            # 从 teacher_persona.traits 读取，格式: {"strictness": 5, "pace": 5, "questioning": 5, "warmth": 5, "humor": 5}
+            traits = getattr(teacher_persona, 'traits', None)
+            if traits and isinstance(traits, dict) and traits:
+                parts.append(
+                    f"【性格参数 0-10】严厉度={traits.get('strictness', 5)}, "
+                    f"节奏={traits.get('pace', 5)}, 提问倾向={traits.get('questioning', 5)}, "
+                    f"温度={traits.get('warmth', 5)}, 幽默={traits.get('humor', 5)}。"
+                    "请让你的回应风格严格符合上述参数。"
+                )
         else:
             # 降级方案：使用 teacher_persona 的 system_prompt_template 或 name
             persona = getattr(teacher_persona, "system_prompt_template", None) or ""
@@ -182,9 +195,25 @@ class PromptBuilder:
             background = getattr(traveler_character, "background", None)
             if background:
                 parts.append(f"角色背景: {background}")
-            personality = getattr(traveler_character, "personality", None)
-            if personality:
-                parts.append(f"角色特点: {personality}")
+            tags = getattr(traveler_character, "tags", None)
+            if tags and isinstance(tags, (list, tuple)):
+                parts.append(f"学习风格: {', '.join(str(t) for t in tags)}")
+        
+        # 5. World Setting Module（Phase 3 新增）- 世界氛围
+        if db:
+            world_module = WorldSettingModule()
+            if world_module.is_applicable({"world_id": context.get("world_id")} if context else {}):
+                world_content = world_module.assemble({"db": db, "world_id": context.get("world_id")} if context else {"db": db})
+                if world_content:
+                    parts.append(world_content)
+        
+        # 6. Course Intent Module（Phase 3 新增）- 课程学习意图
+        if db and context.get("course_id"):
+            course_module = CourseIntentModule()
+            if course_module.is_applicable({"course_id": context.get("course_id")}):
+                course_content = course_module.assemble({"db": db, "course_id": context.get("course_id")})
+                if course_content:
+                    parts.append(course_content)
         
         return "\n\n".join(parts)
     

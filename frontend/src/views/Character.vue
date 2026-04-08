@@ -206,29 +206,41 @@ const handleEdit = (character: Character) => {
   showEditModal.value = true
 }
 
-const handleCreate = async (data: {
-  type: 'sage' | 'traveler'
-  name: string
-  title: string
-  description: string
-  avatar?: string
-  colorIdx: number
-  tags: string[]
-  personality?: string
-  traits?: string[]
-}) => {
+const handleCreate = async (data: any) => {
   try {
-    const response = await client.post('/character', {
+    // 适配新的数据格式
+    const colorKey = data.colorKey || 'gold'
+    const colorMap: Record<string, string> = {
+      gold: COLORS[0],
+      purple: COLORS[1],
+      green: COLORS[2],
+      red: COLORS[3],
+      blue: COLORS[4],
+      cyan: COLORS[5],
+    }
+
+    const payload: any = {
       name: data.name,
-      title: data.title,
-      description: data.description,
-      avatar: data.avatar,
       type: data.type,
-      color: COLORS[data.colorIdx],
-      tags: data.tags,
-      personality: data.personality
-    })
-    // 添加到列表，使用后端返回的数据
+      title: data.title || '',
+      description: data.description || data.background || '',
+      avatar: data.avatar,
+      tags: data.tags || [],
+      personality: data.personality || '',
+    }
+
+    // Sage 特有的字段
+    if (data.type === 'sage') {
+      payload.color = colorMap[colorKey] || COLORS[0]
+      payload.traits = data.traits
+      payload.speech_styles = data.speechStyles
+      payload.template_name = data.template_name
+      payload.greeting = data.greeting
+    } else {
+      payload.color = colorMap[colorKey] || COLORS[4]
+    }
+
+    const response = await client.post('/character', payload)
     characters.value.push({
       ...response.data,
       avatar: response.data.avatar || response.data.avatar_url
@@ -238,14 +250,14 @@ const handleCreate = async (data: {
     const newChar: Character = {
       id: Date.now(),
       name: data.name,
-      title: data.title,
-      description: data.description,
+      title: data.title || '',
+      description: data.description || data.background || '',
       avatar: data.avatar,
       type: data.type,
       is_builtin: false,
-      color: COLORS[data.colorIdx],
-      tags: data.tags,
-      personality: data.personality
+      color: COLORS[4],
+      tags: data.tags || [],
+      personality: data.personality || '',
     }
     characters.value.push(newChar)
   }

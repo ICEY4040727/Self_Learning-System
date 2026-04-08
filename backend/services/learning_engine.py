@@ -73,6 +73,7 @@ class LearningEngine:
         db: Session | None = None,
         world_id: int | None = None,
         session_id: int | None = None,
+        course_id: int | None = None,  # P0 Fix: 传递 course_id 给 CourseIntentModule
         traveler_character=None,
     ) -> str:
         """
@@ -96,6 +97,7 @@ class LearningEngine:
             "db": db,
             "world_id": world_id,
             "session_id": session_id,
+            "course_id": course_id,  # P0 Fix: 传递 course_id 给 CourseIntentModule
             "relationship": {
                 "stage": relationship_stage,
                 "dimensions": {},
@@ -238,6 +240,7 @@ class LearningEngine:
                 db=db,
                 world_id=session.world_id,
                 session_id=session.id,
+                course_id=session.course_id,  # P0 Fix: 传递 course_id 给 CourseIntentModule
             )
 
             # 6. Get recent chat history (limit to last 30 messages to control token usage)

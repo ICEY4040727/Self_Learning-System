@@ -1,4 +1,5 @@
 from datetime import UTC, datetime
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile
 from pydantic import BaseModel, Field
@@ -49,19 +50,30 @@ PERSONA_TEMPLATES = {
 }
 
 
-def _create_default_persona(db: Session, character, template_name: str = "默认") -> TeacherPersona:
-    """自动创建与角色关联的 TeacherPersona"""
-    traits = PERSONA_TEMPLATES.get(template_name, PERSONA_TEMPLATES["默认"])
+def _create_default_persona(db: Session, character, template_name: str = "默认", traits: dict | None = None) -> TeacherPersona:
+    """自动创建与角色关联的 TeacherPersona
     
-    # 合并模板 traits 和用户选择的 tags
-    all_traits = list(traits)
-    if character.tags:
-        all_traits.extend(t for t in character.tags if t not in all_traits)
+    Args:
+        db: 数据库会话
+        character: Character 实例
+        template_name: 人格模板名称
+        traits: 前端传入的滑块值 dict，若提供则优先使用（Phase 1 新增）
+              格式: {"strictness": 5, "pace": 5, "questioning": 5, "warmth": 5, "humor": 5}
+    """
+    # 优先使用传入的 traits（Phase 1 新增），否则 fallback 到模板
+    if traits is not None:
+        persona_traits = traits
+    else:
+        template_traits = PERSONA_TEMPLATES.get(template_name, PERSONA_TEMPLATES["默认"])
+        # 合并模板 traits 和用户选择的 tags
+        persona_traits = list(template_traits)
+        if character.tags:
+            persona_traits.extend(t for t in character.tags if t not in persona_traits)
     
     persona = TeacherPersona(
         character_id=character.id,
         name=f"{character.name} - 默认人格",
-        traits=all_traits,
+        traits=persona_traits,
         is_active=True
     )
     db.add(persona)
@@ -81,6 +93,9 @@ class CharacterCreate(BaseModel):
     title: str | None = None
     sprites: dict | None = None
     template_name: str = "默认"  # 人格模板名称（用于生成 traits）
+    # 性格滑块值 (Phase 1 新增)
+    # 格式: {"strictness": 5, "pace": 5, "questioning": 5, "warmth": 5, "humor": 5}
+    traits: dict | None = None
 
 
 class CharacterResponse(CharacterCreate):
@@ -115,6 +130,7 @@ class SageInfo(BaseModel):
     symbol: str
     color: str
     accentColor: str
+    type: str  # "sage" or "traveler"
 
 
 class WorldCreate(BaseModel):
@@ -127,6 +143,7 @@ class WorldResponse(WorldCreate):
     id: int
     user_id: int
     sages: list[SageInfo] | None = None
+    travelers: list[SageInfo] | None = None
     stageLabel: str | None = None
     relationship: dict | None = None
     courses: list["CourseResponse"] | None = None
@@ -187,6 +204,11 @@ class CourseCreate(BaseModel):
     name: str
     description: str | None = None
     target_level: str | None = None
+    # meta JSON: 存储表单扩展字段 (Phase 1 新增)
+    # 见文档: docs/v1.0.0前后端联调修复/世界_课程_角色_表单设计.md 附录 A
+    # 格式: {"domain": "programming", "current_level": "none", "target_level": "applier",
+    #        "motivation": "work", "pace": "normal", "weekly_minutes": 90, "sage_ids": [12, 17]}
+    meta: dict | None = None
 
 
 class CourseResponse(CourseCreate):
@@ -202,6 +224,8 @@ class CourseInWorldCreate(BaseModel):
     name: str
     description: str | None = None
     target_level: str | None = None
+    # meta JSON: 存储表单扩展字段 (Phase 1 新增)
+    meta: dict | None = None
 
 
 class LessonPlanCreate(BaseModel):
@@ -254,19 +278,34 @@ def create_character(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    # 提取 template_name 用于创建 TeacherPersona
+    # 提取 template_name 和 traits 用于创建 TeacherPersona (不在 Character 模型中)
     template_name = character.template_name
+    traits = character.traits  # Phase 1 新增：传递滑块值
+    
+    # 只传递 Character 模型支持的字段
+    # sprites 不能是空列表，必须是 dict 或 None
+    sprites = character.sprites
+    if isinstance(sprites, list) and len(sprites) == 0:
+        sprites = None
     
     db_character = Character(
-        **character.model_dump(),
-        user_id=current_user.id
+        user_id=current_user.id,
+        name=character.name,
+        type=character.type,
+        avatar=character.avatar,
+        personality=character.personality,
+        background=character.background,
+        speech_style=character.speech_style,
+        sprites=sprites,
+        title=character.title,
+        tags=character.tags,
     )
     db.add(db_character)
     db.flush()
     
     # sage 类型必须创建 TeacherPersona
     if character.type == "sage":
-        _create_default_persona(db, db_character, template_name)
+        _create_default_persona(db, db_character, template_name, traits)
     
     db.commit()
     db.refresh(db_character)
@@ -343,8 +382,10 @@ def update_character(
     if not db_character:
         raise HTTPException(status_code=404, detail="Character not found")
 
+    # 只更新 Character 模型支持的字段，排除 template_name 和 traits
     for key, value in character.model_dump().items():
-        setattr(db_character, key, value)
+        if key not in ("template_name", "traits"):
+            setattr(db_character, key, value)
 
     db.commit()
     db.refresh(db_character)
@@ -482,13 +523,16 @@ def _ensure_world_knowledge(db: Session, world_id: int) -> None:
                 raise
 
 
-def _get_world_sages(db: Session, world_id: int) -> list[SageInfo]:
-    """Get all sage characters bound to a world."""
+def _get_world_characters_by_role(db: Session, world_id: int, role: str) -> list[SageInfo]:
+    """Get all characters of a given role bound to a world. Primary first."""
     links = db.query(WorldCharacter).filter(
         WorldCharacter.world_id == world_id,
-        WorldCharacter.role == "sage"
-    ).all()
-    
+        WorldCharacter.role == role,
+    ).order_by(WorldCharacter.is_primary.desc()).all()
+
+    default_color = "#ffd700" if role == "sage" else "#60a5fa"
+    default_symbol = "☉" if role == "sage" else "✦"
+
     result = []
     for link in links:
         char = db.query(Character).filter(Character.id == link.character_id).first()
@@ -496,17 +540,24 @@ def _get_world_sages(db: Session, world_id: int) -> list[SageInfo]:
             result.append(SageInfo(
                 id=char.id,
                 name=char.name,
-                title=char.personality or "",
-                symbol=char.avatar or "☉",
-                color=(char.sprites or {}).get("color", "#ffd700"),
+                title=char.title or char.personality or "",
+                symbol=char.avatar or default_symbol,
+                color=(char.sprites or {}).get("color", default_color),
                 accentColor=(char.sprites or {}).get("accentColor", "#fbbf24"),
+                type=char.type or role,  # 从 Character 对象获取类型，fallback 到 role
             ))
     return result
 
 
+def _get_world_sages(db: Session, world_id: int) -> list[SageInfo]:
+    """Backward-compat wrapper."""
+    return _get_world_characters_by_role(db, world_id, "sage")
+
+
 def _build_world_response(world: World, db: Session, current_user_id: int = None) -> WorldResponse:
     """Build WorldResponse with sages, stageLabel, relationship data and courses."""
-    sages = _get_world_sages(db, world.id)
+    sages = _get_world_characters_by_role(db, world.id, "sage")
+    travelers = _get_world_characters_by_role(db, world.id, "traveler")
     
     # Get courses for this world with progress and icon
     courses = db.query(Course).filter(Course.world_id == world.id).all()
@@ -531,6 +582,7 @@ def _build_world_response(world: World, db: Session, current_user_id: int = None
                 name=course.name,
                 description=course.description,
                 target_level=course.target_level,
+                meta=course.meta,  # Phase 1 新增
                 progress=progress,
                 icon=icon,
             ))
@@ -564,6 +616,7 @@ def _build_world_response(world: World, db: Session, current_user_id: int = None
         description=world.description,
         scenes=world.scenes,
         sages=sages if sages else None,
+        travelers=travelers if travelers else None,
         stageLabel=stage_label,
         relationship=relationship,
         courses=course_list,
@@ -587,7 +640,7 @@ def create_world(
     _ensure_world_knowledge(db, db_world.id)
     db.commit()
     db.refresh(db_world)
-    return db_world
+    return _build_world_response(db_world, db, current_user.id)
 
 
 @router.get("/worlds", response_model=list[WorldResponse])
@@ -638,7 +691,7 @@ def update_world(
     db_world.scenes = world.scenes or {}
     db.commit()
     db.refresh(db_world)
-    return db_world
+    return _build_world_response(db_world, db, current_user.id)
 
 
 @router.delete("/worlds/{world_id}")
@@ -686,6 +739,13 @@ def create_world_character(
     ).first()
     if existing:
         raise HTTPException(status_code=409, detail="Character already bound to this world")
+
+    if wc.is_primary:
+        db.query(WorldCharacter).filter(
+            WorldCharacter.world_id == world_id,
+            WorldCharacter.role == wc.role,
+            WorldCharacter.is_primary == True,  # noqa: E712
+        ).update({"is_primary": False})
 
     db_wc = WorldCharacter(
         world_id=world_id,
@@ -737,6 +797,73 @@ def get_world_characters(
             character_name=char.name if char else None,
         ))
     return result
+
+
+@router.put("/worlds/{world_id}/characters/{character_id}/set-primary", response_model=WorldCharacterResponse)
+def set_world_character_primary(
+    world_id: int,
+    character_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Mark a character as the primary one for its role in a world.
+
+    If the character is not yet bound to the world, the binding is created
+    on the fly (defaulting role from the character's own type).
+    """
+    world = db.query(World).filter(
+        World.id == world_id,
+        World.user_id == current_user.id,
+    ).first()
+    if not world:
+        raise HTTPException(status_code=404, detail="World not found")
+
+    character = db.query(Character).filter(
+        Character.id == character_id,
+        Character.user_id == current_user.id,
+    ).first()
+    if not character:
+        raise HTTPException(status_code=404, detail="Character not found")
+
+    link = db.query(WorldCharacter).filter(
+        WorldCharacter.world_id == world_id,
+        WorldCharacter.character_id == character_id,
+    ).first()
+
+    role = link.role if link else (character.type or "sage")
+    if role not in ("sage", "traveler"):
+        role = "sage"
+
+    # Demote any other primary of the same role.
+    db.query(WorldCharacter).filter(
+        WorldCharacter.world_id == world_id,
+        WorldCharacter.role == role,
+        WorldCharacter.is_primary == True,  # noqa: E712
+        WorldCharacter.character_id != character_id,
+    ).update({"is_primary": False})
+
+    if not link:
+        link = WorldCharacter(
+            world_id=world_id,
+            character_id=character_id,
+            role=role,
+            is_primary=True,
+        )
+        db.add(link)
+        _ensure_world_knowledge(db, world_id)
+    else:
+        link.is_primary = True
+
+    db.commit()
+    db.refresh(link)
+    return WorldCharacterResponse(
+        id=link.id,
+        world_id=link.world_id,
+        character_id=link.character_id,
+        role=link.role,
+        is_primary=link.is_primary,
+        character_name=character.name,
+    )
 
 
 @router.delete("/worlds/{world_id}/characters/{character_id}")
@@ -1017,6 +1144,7 @@ def create_world_course(
             name=course.name,
             description=course.description,
             target_level=course.target_level,
+            meta=course.meta,  # Phase 1 新增
         ),
         db,
         current_user,
@@ -1377,26 +1505,59 @@ def update_settings(
 
 # Persona generation endpoint
 class PersonaGenerateRequest(BaseModel):
-    description: str = Field(..., min_length=5, max_length=500)
+    description: str = Field(..., min_length=5, max_length=1000)  # P1 Fix: 扩到1000
+    inspiration_type: Literal["character", "freeform"] = "freeform"  # 新增：用户提到具体角色 vs 自由描述
+    world_id: int | None = None  # 新增：注入世界氛围让生成更契合
 
 
 class PersonaGenerateResponse(BaseModel):
-    system_prompt_template: str
-    traits: list[str]
     name_suggestion: str
+    title_suggestion: str | None = None  # 新增：知者名片头衔
+    background: str | None = None  # 新增：背景故事草稿
+    personality: str | None = None  # 新增：性格段落草稿
+    speech_style: str | None = None  # 新增：说话风格描述
+    traits: dict[str, int]  # 改类型：从 list[str] → 0-10 评分 dict，对齐滑块
+    system_prompt_template: str
+    greeting: str | None = None  # 新增：Step 5 预览用的初次见面台词
+    warnings: list[str] | None = None  # 新增：版权角色处理软警告
 
 
-PERSONA_GENERATE_PROMPT = """你是一个角色设计师。根据用户的描述，为一个教学系统中的"知者"（教师角色）生成人格设定。
+PERSONA_GENERATE_PROMPT = """你是角色设计师。根据用户的灵感来源，为 Galgame 风格学习系统生成一位"知者"（导师角色）。
 
-要求：
-- 输出 JSON：{{"system_prompt_template": "...", "traits": ["...", "..."], "name_suggestion": "..."}}
-- system_prompt_template：2-4 句话，只描述角色的身份背景、性格特征、说话风格
-- 不要写任何教学方法（系统会自动添加苏格拉底教学法指令）
-- 不要写"你是一位教师"这类泛化描述，要有具体的角色特色
-- traits：3-5 个性格标签，如 ["温和", "反问", "哲学思维"]
-- name_suggestion：根据描述推荐一个角色名
+{world_context}
 
-用户描述：{description}"""
+输入：{description}
+输入类型：{inspiration_type}（character=用户提到一个具体角色；freeform=自由描述）
+
+当输入类型为 character 时，遵循"风格借鉴"原则：
+- 可以提取的：性格倾向（温和/严厉/古怪）、说话风格（文白/简练/比喻）、教学态度、典型情绪反应模式
+- 禁止保留的：原作角色姓名、原作专有名词（霍格沃茨/呼吸法/查克拉等）、原作世界观背景、原作具体台词或口头禅、外貌细节复述
+- name_suggestion 必须是原创新名字，不得包含原角色名的任何字
+- background 必须放置在本系统的"知者"语境中（学院/书院/研究所等通用设定），不得提及原作世界
+- 历史人物（孔子、苏格拉底）或公共领域人物（莎士比亚），上述限制放宽，但 name_suggestion 仍略作调整避免完全重名
+
+输出严格 JSON（不要 markdown 代码块）：
+{{
+  "name_suggestion": "...",
+  "title_suggestion": "雾港学院首席研究员（10字以内头衔）",
+  "background": "100-180字背景故事",
+  "personality": "60-100字性格描述",
+  "speech_style": "20-40字说话风格（如：偏文白、爱用比喻）",
+  "traits": {{
+    "strictness": 0-10,
+    "pace": 0-10,
+    "questioning": 0-10,
+    "warmth": 0-10,
+    "humor": 0-10
+  }},
+  "system_prompt_template": "2-4句的角色身份+性格陈述，不要写教学方法",
+  "greeting": "初次见面对学生说的一句话（30字内）"
+}}
+
+规则：
+- 不要写教学方法（系统会自动注入苏格拉底教学法）
+- 必须输出合法 JSON，不要 markdown 代码块
+"""
 
 # Simple in-memory cooldown (user_id → last_generate_time)
 _generate_cooldowns: dict[int, float] = {}
@@ -1406,6 +1567,7 @@ _COOLDOWN_SECONDS = 30
 @router.post("/persona/generate", response_model=PersonaGenerateResponse)
 async def generate_persona(
     req: PersonaGenerateRequest,
+    db: Session = Depends(get_db),  # 新增：查询 world 上下文
     current_user: User = Depends(get_current_user),
 ):
     """Use LLM to generate a teacher persona from a natural language description."""
@@ -1433,12 +1595,28 @@ async def generate_persona(
         raise HTTPException(status_code=400, detail="请先在设置页配置 API Key")
 
     adapter = get_llm_adapter(provider)
-    prompt = PERSONA_GENERATE_PROMPT.format(description=req.description)
+
+    # 构建 world_context
+    world_context = ""
+    if req.world_id:
+        from backend.models.models import World
+        world = db.query(World).filter(World.id == req.world_id).first()
+        if world and world.scenes:
+            mood = world.scenes.get("mood", [])
+            if mood:
+                world_context = f"目标世界氛围：{', '.join(mood)}。"
+
+    prompt = PERSONA_GENERATE_PROMPT.format(
+        description=req.description,
+        inspiration_type=req.inspiration_type,
+        world_context=world_context,
+    )
 
     response = await adapter.chat(
         messages=[{"role": "user", "content": prompt}],
-        system_prompt="你是人格设计师，只输出 JSON。",
+        system_prompt="你是人格设计师，只输出合法 JSON。",
         user_api_key=user_api_key,
+        max_length=1000,  # 增大 max_length：角色描述可能更长
     )
 
     # Parse JSON from response
@@ -1447,10 +1625,34 @@ async def generate_persona(
         if not json_match:
             raise ValueError("No JSON found")
         data = json.loads(json_match.group())
+
+        # 版权角色处理：检测可能泄露的词汇
+        warnings = None
+        if req.inspiration_type == "character":
+            suspicious = re.findall(r"[\u4e00-\u9fa5]{2,4}", req.description)
+            leaked = [t for t in suspicious
+                      if t in data.get("name_suggestion", "")
+                      or t in (data.get("background") or "")]
+            if leaked:
+                warnings = [f"AI 输出可能包含原作词汇：{', '.join(leaked)}，建议手动调整"]
+
         return PersonaGenerateResponse(
-            system_prompt_template=data.get("system_prompt_template", ""),
-            traits=data.get("traits", []),
             name_suggestion=data.get("name_suggestion", "自定义人格"),
+            title_suggestion=data.get("title_suggestion"),
+            background=data.get("background"),
+            personality=data.get("personality"),
+            speech_style=data.get("speech_style"),
+            traits=data.get("traits", {
+                "strictness": 5,
+                "pace": 5,
+                "questioning": 5,
+                "warmth": 5,
+                "humor": 5
+            }),
+            system_prompt_template=data.get("system_prompt_template", ""),
+            greeting=data.get("greeting"),
+            warnings=warnings,
         )
     except (json.JSONDecodeError, ValueError) as e:
-        raise HTTPException(status_code=500, detail="AI 生成失败，请重试或使用预设模板") from e
+        # JSON 解析失败返回 422 而非 500，并把原始响应放进 detail 方便 debug
+        raise HTTPException(status_code=422, detail=f"AI 生成格式错误，请重试。原始响应：{response[:200]}") from e

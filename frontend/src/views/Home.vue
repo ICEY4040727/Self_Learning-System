@@ -5,7 +5,7 @@
     <div class="scene-overlay"></div>
 
     <!-- Main Menu - shown when no child route is active -->
-    <Transition name="menu-fade" mode="out-in">
+    <Transition name="menu-fade">
       <div v-if="!hasChildRoute" key="menu" class="menu-container">
         <!-- Title area with v-motion -->
         <div 
@@ -44,7 +44,7 @@
 
     <!-- Child routes -->
     <router-view v-slot="{ Component }">
-      <Transition name="page-fade" mode="out-in">
+      <Transition name="page-fade">
         <component :is="Component" />
       </Transition>
     </router-view>

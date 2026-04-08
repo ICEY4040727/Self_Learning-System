@@ -7,11 +7,28 @@
           <div class="modal-subtitle">NEW WORLD</div>
           <div class="modal-title">创 建 新 世 界</div>
           <div class="gold-line"></div>
+          
+          <!-- Step Indicator -->
+          <div class="step-indicator">
+            <div 
+              v-for="step in 3" 
+              :key="step"
+              class="step-dot"
+              :class="{ active: currentStep === step, completed: currentStep > step }"
+            >
+              <span v-if="currentStep > step">✓</span>
+              <span v-else>{{ step }}</span>
+            </div>
+          </div>
+          <div class="step-label">
+            <span v-if="currentStep === 1">命名你的世界</span>
+            <span v-else-if="currentStep === 2">设定世界氛围</span>
+            <span v-else>预览与创建</span>
+          </div>
         </div>
 
-        <!-- Form -->
-        <form class="modal-body" @submit.prevent="handleCreate">
-          <!-- World Name -->
+        <!-- Step 1: Name + Theme -->
+        <form v-if="currentStep === 1" class="modal-body step-content" @submit.prevent="goToStep2">
           <div class="field-group">
             <label class="field-label">世 界 名 称 <span class="required">*</span></label>
             <input
@@ -24,81 +41,124 @@
             />
           </div>
 
-          <!-- World Description -->
+          <div class="field-group">
+            <label class="field-label">主 题 风 格 <span class="required">*</span></label>
+            <div class="theme-grid">
+              <div
+                v-for="theme in WORLD_THEMES"
+                :key="theme.key"
+                class="theme-card"
+                :class="{ selected: form.themePreset === theme.key }"
+                :style="{
+                  '--theme-color': theme.themeColor,
+                  backgroundImage: theme.background ? `url(${theme.background})` : undefined
+                }"
+                @click="form.themePreset = theme.key"
+              >
+                <div class="theme-overlay">
+                  <span class="theme-icon">{{ theme.icon }}</span>
+                  <span class="theme-name">{{ theme.name }}</span>
+                  <span class="theme-desc">{{ theme.description }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <button type="submit" class="submit-btn" :disabled="!form.name.trim() || !form.themePreset">
+            下 一 步
+          </button>
+        </form>
+
+        <!-- Step 2: Atmosphere -->
+        <div v-else-if="currentStep === 2" class="modal-body step-content">
           <div class="field-group">
             <label class="field-label">世 界 简 介</label>
             <textarea
               v-model="form.description"
               class="galgame-input"
-              rows="2"
-              placeholder="描述这个学习世界的氛围与主题……"
-              maxlength="200"
+              rows="3"
+              placeholder="用一句话描述这里发生的故事……"
+              maxlength="140"
             ></textarea>
+            <div class="char-count">{{ form.description.length }}/140</div>
           </div>
 
-          <!-- Sage Selection -->
           <div class="field-group">
-            <label class="field-label">知  者</label>
-            <div class="character-section">
-              <!-- Horizontal scrollable list -->
-              <div class="character-scroll">
-                <!-- Available sages -->
-                <div
-                  v-for="sage in availableSages"
-                  :key="sage.id"
-                  class="character-chip"
-                  :class="{ selected: isSageSelected(sage.id) }"
-                  :style="isSageSelected(sage.id) ? { background: `${sage.color}22`, borderColor: sage.color } : {}"
-                  @click="toggleSage(sage)"
-                >
-                  <div class="chip-avatar" :style="{ background: sage.color }">
-                    {{ sage.symbol }}
-                  </div>
-                  <div class="chip-name">{{ sage.name }}</div>
+            <label class="field-label">氛 围 标 签</label>
+            <div class="mood-grid">
+              <button
+                v-for="mood in MOOD_TAGS"
+                :key="mood.key"
+                type="button"
+                class="mood-chip"
+                :class="{ selected: form.moodKeys.includes(mood.key) }"
+                @click="toggleMood(mood.key)"
+              >
+                <span class="mood-icon">{{ mood.icon }}</span>
+                <span class="mood-label">{{ mood.label }}</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="field-group">
+            <label class="field-label">背 景 音 乐</label>
+            <div class="bgm-grid">
+              <button
+                v-for="bgm in BGM_PRESETS"
+                :key="bgm.key"
+                type="button"
+                class="bgm-card"
+                :class="{ selected: form.bgmKey === bgm.key }"
+                @click="form.bgmKey = bgm.key"
+              >
+                <span class="bgm-icon">{{ bgm.icon }}</span>
+                <span class="bgm-label">{{ bgm.label }}</span>
+                <span class="bgm-desc">{{ bgm.description }}</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="btn-row">
+            <button type="button" class="back-btn" @click="currentStep = 1">上一步</button>
+            <button type="button" class="submit-btn" @click="currentStep = 3">预 览</button>
+          </div>
+        </div>
+
+        <!-- Step 3: Preview -->
+        <div v-else-if="currentStep === 3" class="modal-body step-content">
+          <div class="preview-section">
+            <div class="preview-card">
+              <div 
+                class="preview-bg"
+                :style="getPreviewBgStyle()"
+              >
+                <div class="preview-theme-tag" :style="{ background: selectedTheme?.themeColor }">
+                  {{ selectedTheme?.icon }} {{ selectedTheme?.name }}
                 </div>
               </div>
-              <!-- Add custom sage button -->
-              <div class="add-custom-btn" @click="goToCharacterPage()">
-                <span class="add-icon">+</span>
-                <span>自定义知者</span>
+              <div class="preview-body">
+                <div class="preview-name">{{ form.name || '未命名世界' }}</div>
+                <div class="preview-desc">{{ form.description || '这个世界还未被描述……' }}</div>
+                <div v-if="form.moodKeys.length > 0" class="preview-moods">
+                  <span 
+                    v-for="moodKey in form.moodKeys" 
+                    :key="moodKey"
+                    class="preview-mood-tag"
+                  >
+                    {{ getMoodLabel(moodKey) }}
+                  </span>
+                </div>
               </div>
             </div>
           </div>
 
-          <!-- Traveler Selection -->
-          <div class="field-group">
-            <label class="field-label">旅  者</label>
-            <div class="character-section">
-              <!-- Horizontal scrollable list -->
-              <div class="character-scroll">
-                <!-- Available travelers -->
-                <div
-                  v-for="traveler in availableTravelers"
-                  :key="traveler.id"
-                  class="character-chip"
-                  :class="{ selected: selectedTraveler?.id === traveler.id }"
-                  :style="selectedTraveler?.id === traveler.id ? { background: `${traveler.color}22`, borderColor: traveler.color } : {}"
-                  @click="toggleTraveler(traveler)"
-                >
-                  <div class="chip-avatar" :style="{ background: traveler.color }">
-                    {{ traveler.symbol }}
-                  </div>
-                  <div class="chip-name">{{ traveler.name }}</div>
-                </div>
-              </div>
-              <!-- Add custom traveler button -->
-              <div class="add-custom-btn" @click="goToCharacterPage()">
-                <span class="add-icon">+</span>
-                <span>自定义旅者</span>
-              </div>
-            </div>
+          <div class="btn-row">
+            <button type="button" class="back-btn" @click="currentStep = 2">上一步</button>
+            <button type="button" class="submit-btn" :disabled="creating" @click="handleCreate">
+              {{ creating ? '创建中…' : '进入这个世界' }}
+            </button>
           </div>
-
-          <!-- Submit -->
-          <button type="submit" class="submit-btn" :disabled="!form.name.trim() || selectedSageIds.length === 0">
-            创 建 世 界
-          </button>
-        </form>
+        </div>
 
         <!-- Close hint -->
         <button class="close-hint" @click="$emit('close')">取消</button>
@@ -108,17 +168,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
-
-interface Character {
-  id: number
-  name: string
-  title: string
-  symbol: string
-  color: string
-  type: 'sage' | 'traveler'
-}
+import { ref, computed, watch } from 'vue'
+import { WORLD_THEMES, MOOD_TAGS, BGM_PRESETS, getThemeByKey } from '@/constants/worldThemes'
 
 interface Props {
   show: boolean
@@ -129,81 +180,94 @@ interface Emits {
   (e: 'create', data: {
     name: string
     description: string
-    sageIds: number[]
-    travelerId?: number
+    scenes: Record<string, any>
   }): void
 }
 
 const props = defineProps<Props>()
 const emit = defineEmits<Emits>()
-const router = useRouter()
 
-// Form state
+const currentStep = ref(1)
+const creating = ref(false)
+
 const form = ref({
   name: '',
-  description: ''
+  description: '',
+  themePreset: '',
+  moodKeys: [] as string[],
+  bgmKey: 'silent',
 })
 
-const selectedSageIds = ref<number[]>([])
-const selectedTraveler = ref<Character | null>(null)
+const selectedTheme = computed(() => getThemeByKey(form.value.themePreset))
 
-// Mock available characters (replace with API call)
-const availableSages = ref<Character[]>([
-  { id: 1, name: '苏格拉底', title: '哲学之父', symbol: '☉', color: '#f59e0b', type: 'sage' },
-  { id: 2, name: '柏拉图', title: '理念论者', symbol: '◈', color: '#8b5cf6', type: 'sage' },
-  { id: 3, name: '亚里士多德', title: '百科全书', symbol: '◇', color: '#10b981', type: 'sage' },
-  { id: 4, name: '孙子', title: '兵圣', symbol: '兵', color: '#dc2626', type: 'sage' },
-])
+const getPreviewBgStyle = () => {
+  if (selectedTheme.value?.background) {
+    return {
+      backgroundImage: `url(${selectedTheme.value.background})`,
+      backgroundSize: 'cover',
+      backgroundPosition: 'center',
+    }
+  }
+  return {
+    background: `linear-gradient(135deg, ${selectedTheme.value?.themeColor}33, #1e1e3f)`,
+  }
+}
 
-const availableTravelers = ref<Character[]>([
-  { id: 101, name: '旅者', title: '求知者', symbol: '✦', color: '#3b82f6', type: 'traveler' },
-  { id: 102, name: '行者', title: '探索者', symbol: '◉', color: '#06b6d4', type: 'traveler' },
-  { id: 103, name: '学者', title: '研究者', symbol: '◎', color: '#8b5cf6', type: 'traveler' },
-])
+const getMoodLabel = (key: string) => {
+  return MOOD_TAGS.find((m) => m.key === key)?.label || key
+}
 
-// Reset form when modal opens
+const toggleMood = (key: string) => {
+  const idx = form.value.moodKeys.indexOf(key)
+  if (idx === -1) {
+    form.value.moodKeys.push(key)
+  } else {
+    form.value.moodKeys.splice(idx, 1)
+  }
+}
+
+const goToStep2 = () => {
+  if (form.value.name.trim() && form.value.themePreset) {
+    currentStep.value = 2
+  }
+}
+
+const handleCreate = async () => {
+  if (!form.value.name.trim()) return
+  
+  creating.value = true
+  try {
+    const theme = selectedTheme.value
+    const scenes = {
+      theme_preset: form.value.themePreset,
+      background: theme?.background || '',
+      theme_color: theme?.themeColor || '#6b7280',
+      mood: form.value.moodKeys,
+      bgm: form.value.bgmKey,
+    }
+    
+    emit('create', {
+      name: form.value.name.trim(),
+      description: form.value.description.trim(),
+      scenes,
+    })
+  } finally {
+    creating.value = false
+  }
+}
+
 watch(() => props.show, (newVal) => {
   if (newVal) {
-    form.value.name = ''
-    form.value.description = ''
-    selectedSageIds.value = []
-    selectedTraveler.value = null
+    currentStep.value = 1
+    form.value = {
+      name: '',
+      description: '',
+      themePreset: '',
+      moodKeys: [],
+      bgmKey: 'silent',
+    }
   }
 })
-
-const isSageSelected = (id: number) => selectedSageIds.value.includes(id)
-
-const toggleSage = (sage: Character) => {
-  const idx = selectedSageIds.value.indexOf(sage.id)
-  if (idx === -1) {
-    selectedSageIds.value.push(sage.id)
-  } else {
-    selectedSageIds.value.splice(idx, 1)
-  }
-}
-
-const toggleTraveler = (traveler: Character) => {
-  if (selectedTraveler.value?.id === traveler.id) {
-    selectedTraveler.value = null
-  } else {
-    selectedTraveler.value = traveler
-  }
-}
-
-const goToCharacterPage = () => {
-  router.push('/character')
-}
-
-const handleCreate = () => {
-  if (!form.value.name.trim() || selectedSageIds.value.length === 0) return
-  
-  emit('create', {
-    name: form.value.name.trim(),
-    description: form.value.description.trim(),
-    sageIds: selectedSageIds.value,
-    travelerId: selectedTraveler.value?.id
-  })
-}
 </script>
 
 <style scoped>
@@ -220,20 +284,18 @@ const handleCreate = () => {
 
 .modal-box {
   position: relative;
-  width: 640px;
+  width: 680px;
   max-width: 92vw;
   max-height: 90vh;
   overflow-y: auto;
   padding: 28px 40px 24px;
-  background: rgba(8, 8, 25, 0.09);
+  background: rgba(8, 8, 25, 0.98);
   border: 1px solid rgba(255, 215, 0, 0.15);
   border-top: none;
   backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
   border-radius: 12px;
 }
 
-/* Top gold gradient border - matching login-panel */
 .modal-box::before {
   content: '';
   position: absolute;
@@ -279,14 +341,65 @@ const handleCreate = () => {
   margin: 12px auto 0;
 }
 
-/* Form styles */
+/* Step Indicator */
+.step-indicator {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.step-dot {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 600;
+  border: 2px solid rgba(255, 215, 0, 0.2);
+  color: rgba(255, 255, 255, 0.3);
+  transition: all 0.3s ease;
+}
+
+.step-dot.active {
+  border-color: #ffd700;
+  color: #ffd700;
+  background: rgba(255, 215, 0, 0.1);
+}
+
+.step-dot.completed {
+  border-color: #10b981;
+  background: #10b981;
+  color: white;
+}
+
+.step-label {
+  font-family: "Noto Sans SC", sans-serif;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.5);
+  margin-top: 8px;
+  letter-spacing: 2px;
+}
+
+/* Step Content */
+.step-content {
+  animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 .modal-body {
   display: flex;
   flex-direction: column;
 }
 
-/* Override galgame-input to match Login.vue style */
-.modal-body .galgame-input {
+/* Form Elements */
+.galgame-input {
   background: rgba(0, 0, 0, 0.40) !important;
   border: 2px solid rgba(255, 215, 0, 0.40) !important;
   font-family: "Noto Sans SC", "Microsoft YaHei", "PingFang SC", sans-serif !important;
@@ -294,7 +407,7 @@ const handleCreate = () => {
   padding: 12px 14px;
 }
 
-.modal-body .galgame-input::placeholder {
+.galgame-input::placeholder {
   color: rgba(255, 255, 255, 0.25);
 }
 
@@ -302,9 +415,7 @@ const handleCreate = () => {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding-bottom: 24px;
-  padding-left: 0;
-  padding-right: 0;
+  padding-bottom: 20px;
 }
 
 .field-label {
@@ -318,118 +429,272 @@ const handleCreate = () => {
   color: #ef4444;
 }
 
-/* Character section with horizontal scroll */
-.character-section {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+.char-count {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.3);
+  text-align: right;
+  margin-top: -4px;
 }
 
-.character-scroll {
-  display: flex;
-  gap: 10px;
-  overflow-x: auto;
-  padding: 4px 0;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(255, 215, 0, 0.2) transparent;
+/* Theme Grid */
+.theme-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
 }
 
-.character-scroll::-webkit-scrollbar {
-  height: 4px;
-}
-
-.character-scroll::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.character-scroll::-webkit-scrollbar-thumb {
-  background: rgba(255, 215, 0, 0.2);
-  border-radius: 2px;
-}
-
-/* Character chip */
-.character-chip {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  padding: 10px 14px;
-  background: rgba(8, 8, 28, 0.8);
-  border: 1px solid rgba(255, 215, 0, 0.15);
+.theme-card {
+  position: relative;
+  height: 90px;
   border-radius: 10px;
+  overflow: hidden;
   cursor: pointer;
+  border: 2px solid rgba(255, 215, 0, 0.15);
   transition: all 0.25s ease;
-  flex-shrink: 0;
-  min-width: 72px;
 }
 
-.character-chip:hover {
+.theme-card:not(.selected) {
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.theme-card:hover {
   border-color: rgba(255, 215, 0, 0.4);
   transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
 }
 
-.character-chip.selected {
-  padding: 10px 14px;
+.theme-card.selected {
+  border-color: var(--theme-color, #ffd700);
+  box-shadow: 0 0 20px var(--theme-color, rgba(255, 215, 0, 0.3));
 }
 
-.chip-avatar {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
+.theme-overlay {
+  position: absolute;
+  inset: 0;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  font-size: 14px;
-  font-weight: 700;
-  color: white;
+  gap: 4px;
+  background: linear-gradient(to bottom, rgba(0,0,0,0.2), rgba(0,0,0,0.6));
+  padding: 8px;
 }
 
-.chip-name {
+.theme-icon {
+  font-size: 24px;
+}
+
+.theme-name {
   font-family: "Noto Sans SC", sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  color: white;
+  letter-spacing: 1px;
+}
+
+.theme-desc {
+  font-family: "Noto Sans SC", sans-serif;
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.theme-card.selected .theme-name {
+  color: var(--theme-color, #ffd700);
+}
+
+/* Mood Grid */
+.mood-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.mood-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 215, 0, 0.2);
+  border-radius: 20px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: "Noto Sans SC", sans-serif;
+}
+
+.mood-chip:hover {
+  border-color: rgba(255, 215, 0, 0.4);
+  background: rgba(255, 215, 0, 0.05);
+}
+
+.mood-chip.selected {
+  border-color: #ffd700;
+  background: rgba(255, 215, 0, 0.15);
+}
+
+.mood-icon {
+  font-size: 14px;
+}
+
+.mood-label {
   font-size: 12px;
   color: rgba(255, 255, 255, 0.7);
-  letter-spacing: 1px;
-  white-space: nowrap;
 }
 
-.character-chip.selected .chip-name {
+.mood-chip.selected .mood-label {
   color: #ffd700;
 }
 
-/* Add custom button */
-.add-custom-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 10px 16px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px dashed rgba(255, 215, 0, 0.3);
-  border-radius: 10px;
-  cursor: pointer;
-  transition: all 0.25s ease;
-  font-family: "Noto Sans SC", sans-serif;
-  font-size: 12px;
-  color: rgba(255, 215, 0, 0.5);
-  letter-spacing: 2px;
-  align-self: flex-start;
+/* BGM Grid */
+.bgm-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
 }
 
-.add-custom-btn:hover {
+.bgm-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 12px;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 215, 0, 0.15);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.bgm-card:hover {
+  border-color: rgba(255, 215, 0, 0.4);
   background: rgba(255, 215, 0, 0.05);
-  border-color: rgba(255, 215, 0, 0.5);
+}
+
+.bgm-card.selected {
+  border-color: #ffd700;
+  background: rgba(255, 215, 0, 0.1);
+}
+
+.bgm-icon {
+  font-size: 20px;
+}
+
+.bgm-label {
+  font-family: "Noto Sans SC", sans-serif;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.8);
+  letter-spacing: 1px;
+}
+
+.bgm-card.selected .bgm-label {
+  color: #ffd700;
+}
+
+.bgm-desc {
+  font-family: "Noto Sans SC", sans-serif;
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+/* Preview Section */
+.preview-section {
+  display: flex;
+  justify-content: center;
+  padding: 16px 0;
+}
+
+.preview-card {
+  width: 100%;
+  max-width: 320px;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 215, 0, 0.2);
+  background: rgba(0, 0, 0, 0.5);
+}
+
+.preview-bg {
+  height: 120px;
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+  padding: 8px;
+}
+
+.preview-theme-tag {
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-family: "Noto Sans SC", sans-serif;
+  font-size: 11px;
+  color: white;
+  letter-spacing: 1px;
+}
+
+.preview-body {
+  padding: 14px;
+}
+
+.preview-name {
+  font-family: "Noto Sans SC", sans-serif;
+  font-size: 16px;
+  font-weight: 600;
+  color: #ffd700;
+  letter-spacing: 2px;
+  margin-bottom: 6px;
+}
+
+.preview-desc {
+  font-family: "Noto Sans SC", sans-serif;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.5);
+  line-height: 1.5;
+  margin-bottom: 10px;
+}
+
+.preview-moods {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.preview-mood-tag {
+  padding: 3px 8px;
+  background: rgba(255, 215, 0, 0.1);
+  border: 1px solid rgba(255, 215, 0, 0.3);
+  border-radius: 10px;
+  font-family: "Noto Sans SC", sans-serif;
+  font-size: 10px;
   color: rgba(255, 215, 0, 0.8);
 }
 
-.add-custom-btn .add-icon {
-  font-size: 14px;
+/* Buttons */
+.btn-row {
+  display: flex;
+  gap: 12px;
+  margin-top: 8px;
 }
 
-/* Submit button */
-.submit-btn {
+.back-btn {
+  flex: 1;
   font-family: "Noto Sans SC", sans-serif;
-  width: 100%;
+  padding: 14px 24px;
+  font-size: 14px;
+  letter-spacing: 4px;
+  color: rgba(255, 255, 255, 0.5);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 215, 0, 0.2);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.back-btn:hover {
+  color: rgba(255, 255, 255, 0.8);
+  border-color: rgba(255, 215, 0, 0.4);
+}
+
+.submit-btn {
+  flex: 2;
+  font-family: "Noto Sans SC", sans-serif;
   padding: 14px 24px;
   font-size: 14px;
   letter-spacing: 6px;
@@ -440,7 +705,6 @@ const handleCreate = () => {
   border-radius: 8px;
   cursor: pointer;
   transition: all 0.3s ease;
-  margin-top: 8px;
 }
 
 .submit-btn:hover:not(:disabled) {

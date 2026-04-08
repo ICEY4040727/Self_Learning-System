@@ -106,6 +106,10 @@ class Character(Base):
     background = Column(Text, nullable=True)
     speech_style = Column(Text, nullable=True)
     sprites = Column(JSON, nullable=True)
+    title = Column(String(100), nullable=True)  # 知者名片头衔
+    tags = Column(JSON, nullable=True, default=list)  # 角色标签列表
+    experience_points = Column(Integer, nullable=False, default=0)  # 经验值
+    level = Column(Integer, nullable=False, default=1)  # 等级
     created_at = Column(DateTime, default=_utcnow)
 
     user = orm_relationship("User", back_populates="characters")
@@ -179,6 +183,9 @@ class Course(Base):
     name = Column(String(100), nullable=False)
     description = Column(Text, nullable=True)
     target_level = Column(String(50), nullable=True)
+    # meta JSON: 存储表单扩展字段 (current_level, motivation, pace, weekly_minutes, sage_ids 等)
+    # 见文档: docs/v1.0.0前后端联调修复/世界_课程_角色_表单设计.md 附录 A
+    meta = Column(JSON, nullable=True, default=dict)
     created_at = Column(DateTime, default=_utcnow)
 
     world = orm_relationship("World", back_populates="courses")
