@@ -39,6 +39,35 @@ router = APIRouter()
 #   - Session.learner_profile_id: 用户的学习档案
 # =============================================================================
 
+# TeacherPersona 模板（用于生成简洁的 traits）
+PERSONA_TEMPLATES = {
+    "苏格拉底型": ["耐心", "追问型", "启发型"],
+    "爱因斯坦型": ["鼓励型", "探索型", "启发型"],
+    "亚里士多德型": ["严谨", "体系化", "百科全书"],
+    "孙子型": ["策略性", "举一反三", "引导型"],
+    "默认": ["耐心", "启发型"],
+}
+
+
+def _create_default_persona(db: Session, character, template_name: str = "默认") -> TeacherPersona:
+    """自动创建与角色关联的 TeacherPersona"""
+    traits = PERSONA_TEMPLATES.get(template_name, PERSONA_TEMPLATES["默认"])
+    
+    # 合并模板 traits 和用户选择的 tags
+    all_traits = list(traits)
+    if character.tags:
+        all_traits.extend(t for t in character.tags if t not in all_traits)
+    
+    persona = TeacherPersona(
+        character_id=character.id,
+        name=f"{character.name} - 默认人格",
+        traits=all_traits,
+        is_active=True
+    )
+    db.add(persona)
+    return persona
+
+
 # Pydantic Schemas
 class CharacterCreate(BaseModel):
     name: str
@@ -48,7 +77,10 @@ class CharacterCreate(BaseModel):
     personality: str | None = None
     background: str | None = None
     speech_style: str | None = None
+    tags: list[str] | None = None
+    title: str | None = None
     sprites: dict | None = None
+    template_name: str = "默认"  # 人格模板名称（用于生成 traits）
 
 
 class CharacterResponse(CharacterCreate):
@@ -222,11 +254,20 @@ def create_character(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
+    # 提取 template_name 用于创建 TeacherPersona
+    template_name = character.template_name
+    
     db_character = Character(
         **character.model_dump(),
         user_id=current_user.id
     )
     db.add(db_character)
+    db.flush()
+    
+    # sage 类型必须创建 TeacherPersona
+    if character.type == "sage":
+        _create_default_persona(db, db_character, template_name)
+    
     db.commit()
     db.refresh(db_character)
     return db_character

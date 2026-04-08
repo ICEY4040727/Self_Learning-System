@@ -34,14 +34,44 @@ export interface Character {
   id: number
   name: string
   type: CharacterType
+  avatar?: string | null
   personality?: string
   background?: string
   speech_style?: string
+  tags?: string[]
   sprites?: Sprites
   // UI-side display helpers (from world-character binding)
   color?: string
   accentColor?: string
   symbol?: string
+  title?: string
+  level?: number
+  experience_points?: number
+}
+
+// Character 创建表单数据
+export interface CharacterFormData {
+  name: string
+  title?: string
+  type: 'sage' | 'traveler'
+  template_name: string  // 人格模板名称
+  tags: string[]         // 特质标签
+  background?: string    // 背景故事
+  personality?: string   // 性格特点
+  speech_style?: string  // 说话风格
+  avatar?: string
+}
+
+// Character API 请求类型
+export interface CharacterCreateRequest {
+  name: string
+  type: 'sage' | 'traveler'
+  template_name?: string
+  avatar?: string
+  personality?: string
+  background?: string
+  speech_style?: string
+  tags?: string[]
   title?: string
 }
 
@@ -223,6 +253,71 @@ export const ALLOWED_SPRITE_STEMS = ['default', 'happy', 'thinking', 'concerned'
 export const ALLOWED_SPRITE_MIMES = ['image/png', 'image/jpeg', 'image/webp'] as const
 export const MAX_SPRITE_SIZE_BYTES = 2 * 1024 * 1024  // 2 MB
 
+// ---- UserProfile (学习报告) ----
+
+// 元认知维度数值 (0-1)
+export type MetacognitionDimension = number
+
+export interface MetacognitionTrend {
+  current: 'weak' | 'moderate' | 'strong'
+  trend: 'improving' | 'stable' | 'unknown'
+  evidence_count: number
+  latest_evidence?: string
+}
+
+export interface PreferenceStability {
+  stable: boolean
+  consistency?: number  // 布尔值偏好 (0-1)
+  most_common?: string  // 枚举值偏好
+  display: string
+  status?: 'insufficient_data'  // 数据不足时
+}
+
+export interface LearningStats {
+  total_concepts_learned: number
+  total_sessions: number
+  average_mastery: number  // 0-1
+  worlds_explored: number
+}
+
+export interface UserProfile {
+  user_id: number
+  computed_at: string
+  metacognition_trend: Record<string, MetacognitionDimension>
+  preference_stability: Record<string, PreferenceStability>
+  learning_stats: LearningStats
+}
+
+// MSKT 维度中文映射
+export const MSKT_LABELS: Record<string, string> = {
+  planning: '规划',
+  monitoring: '监控',
+  regulating: '调节',
+  reflecting: '反思',
+}
+
+// 偏好维度中文映射
+export const PREFERENCE_LABELS: Record<string, string> = {
+  visual_examples: '视觉化学习',
+  analogy_based: '类比学习',
+  step_by_step: '步骤优先',
+  pace: '学习节奏',
+}
+
+// MSKT 等级颜色
+export const MSKT_VALUE_COLORS: Record<string, string> = {
+  weak: '#ef4444',     // 红色
+  moderate: '#fbbf24', // 黄色
+  strong: '#4ade80',  // 绿色
+}
+
+// 趋势方向颜色
+export const TREND_COLORS: Record<string, string> = {
+  improving: '#4ade80',  // 绿色
+  stable: '#fbbf24',    // 黄色
+  unknown: '#94a3b8',   // 灰色
+}
+
 // ---- UI Constants ----
 export const STAGE_LABELS: Record<RelationshipStage, string> = {
   stranger:     '陌生人',
@@ -274,10 +369,83 @@ export const EXPRESSION_SYMBOLS: Record<Expression, string> = {
   surprised: '( ꒪⌓꒪ )',
 }
 
-export const EXPRESSION_COLORS: Record<Expression, string> = {
-  default:   'rgba(255,255,255,0.7)',
-  happy:     'rgba(74,223,106,0.9)',
-  thinking:  'rgba(96,165,250,0.9)',
-  concerned: 'rgba(249,115,22,0.9)',
-  surprised: 'rgba(255,215,0,0.9)',
+// =============================================================================
+// Report Types - 学习报告相关类型
+// =============================================================================
+
+// 知识掌握度趋势
+export interface MasteryTrendItem {
+  concept_name: string
+  mastery_level: number
+  last_updated: string | null
+  world_id: number
+  world_name: string
 }
+
+export interface MasteryTrendResponse {
+  trends: MasteryTrendItem[]
+  average_mastery: number
+  improved_count: number
+  declined_count: number
+}
+
+// 关系进化历程
+export interface RelationshipEvent {
+  id: string
+  world_id: number
+  world_name: string
+  character_name: string
+  previous_stage: RelationshipStage
+  new_stage: RelationshipStage
+  timestamp: string | null
+  trigger_reason: string | null
+}
+
+export interface RelationshipHistoryResponse {
+  events: RelationshipEvent[]
+  current_stages: Record<number, RelationshipStage>
+}
+
+// 世界对比
+export interface WorldComparisonItem {
+  world_id: number
+  world_name: string
+  total_sessions: number
+  total_concepts: number
+  average_mastery: number
+  relationship_stage: RelationshipStage
+  last_active: string | null
+}
+
+// 里程碑事件
+export type MilestoneEventType = 'relationship_upgrade' | 'concept_mastered' | 'session_completed'
+
+export interface MilestoneEvent {
+  id: string
+  type: MilestoneEventType
+  title: string
+  description: string
+  timestamp: string | null
+  world_id: number | null
+}
+
+// 单世界掌握度趋势
+export interface WorldMasteryTrendItem {
+  date: string
+  average_mastery: number
+  concepts_learned: number
+}
+
+// 阶段升级类型映射
+export const MILESTONE_TYPE_LABELS: Record<MilestoneEventType, string> = {
+  relationship_upgrade: '关系进阶',
+  concept_mastered: '概念掌握',
+  session_completed: '会话完成',
+}
+
+export const MILESTONE_TYPE_ICONS: Record<MilestoneEventType, string> = {
+  relationship_upgrade: '🎭',
+  concept_mastered: '📚',
+  session_completed: '✅',
+}
+

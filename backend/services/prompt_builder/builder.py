@@ -3,7 +3,7 @@
 """
 
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from backend.services.prompt_builder.base import ContextProvider, MemoryModule
 from backend.services.prompt_builder.contexts.relationship import RelationshipContext
@@ -15,6 +15,9 @@ from backend.services.prompt_builder.modules.memory_retrieval import MemoryRetri
 from backend.services.prompt_builder.modules.metacognition import MetacognitionModule
 from backend.services.prompt_builder.modules.misconception import MisconceptionModule
 from backend.services.prompt_builder.modules.preference import PreferenceModule
+
+if TYPE_CHECKING:
+    from backend.models.models import Character
 
 logger = logging.getLogger(__name__)
 
@@ -80,30 +83,82 @@ class PromptBuilder:
         self.knowledge = knowledge_svc
         self.relationship = relationship_svc
     
+    def _get_character_from_persona(self, teacher_persona, db=None) -> "Character | None":
+        """从 TeacherPersona 获取关联的 Character"""
+        from backend.models.models import Character
+        
+        if not teacher_persona:
+            return None
+        
+        character_id = getattr(teacher_persona, 'character_id', None)
+        if not character_id:
+            return None
+        
+        # 如果有 db session，直接查询
+        if db is not None:
+            return db.query(Character).filter(Character.id == character_id).first()
+        
+        # 否则通过 self.knowledge 获取（如果它是 db session）
+        if hasattr(self, 'knowledge') and self.knowledge is not None:
+            # 检查是否是 db session
+            if hasattr(self.knowledge, 'query'):
+                return self.knowledge.query(Character).filter(Character.id == character_id).first()
+        
+        return None
+    
     def build_static_layer(
         self,
         teacher_persona,
         traveler_character=None,
+        db=None,
     ) -> str:
         """构建静态层
         
         静态层包含不随对话变化的内容：
-        - Teacher Persona
+        - Teacher Persona（从 Character 表注入信息）
         - Socratic Method Rules
         - Mermaid Rules
         - Traveler 角色信息（可选）
         """
         parts = []
         
-        # 1. Teacher Persona
-        persona = getattr(teacher_persona, "system_prompt_template", None) or ""
-        if not persona:
-            name = getattr(teacher_persona, "name", "老师")
-            persona = (
-                f"你是 {name}，一位富有耐心的教师，"
-                f"运用苏格拉底教学法帮助学生自主思考和探索知识。"
-            )
-        parts.append(persona)
+        # 1. Teacher Persona - 从 Character 表获取信息
+        character = self._get_character_from_persona(teacher_persona, db)
+        
+        if character:
+            # 角色身份（必填）
+            parts.append(f"你是 {character.name}")
+            
+            # 注入 background（角色背景故事）
+            background = getattr(character, 'background', None)
+            if background:
+                parts.append(background)
+            
+            # 注入 personality（性格特点）
+            personality = getattr(character, 'personality', None)
+            if personality:
+                parts.append(f"性格特点: {personality}")
+            
+            # 注入 speech_style（说话风格）
+            speech_style = getattr(character, 'speech_style', None)
+            if speech_style:
+                parts.append(f"说话风格: {speech_style}")
+            
+            # 注入 tags（特质）
+            tags = getattr(character, 'tags', None)
+            if tags and isinstance(tags, (list, tuple)):
+                parts.append(f"角色特质: {', '.join(str(t) for t in tags)}")
+        else:
+            # 降级方案：使用 teacher_persona 的 system_prompt_template 或 name
+            persona = getattr(teacher_persona, "system_prompt_template", None) or ""
+            if persona:
+                parts.append(persona)
+            else:
+                name = getattr(teacher_persona, "name", "老师")
+                parts.append(
+                    f"你是 {name}，一位富有耐心的教师，"
+                    f"运用苏格拉底教学法帮助学生自主思考和探索知识。"
+                )
         
         # 2. Socratic Method Rules
         parts.append("""【教学方法——苏格拉底式提问】
@@ -231,7 +286,9 @@ class PromptBuilder:
         
         合并静态层和动态层。
         """
-        static = self.build_static_layer(teacher_persona, traveler_character)
+        # 从 context 中获取 db session
+        db = context.get("db")
+        static = self.build_static_layer(teacher_persona, traveler_character, db)
         dynamic = self.build_with_fallback(scene, context)
         return f"{static}\n\n---\n\n{dynamic}"
 

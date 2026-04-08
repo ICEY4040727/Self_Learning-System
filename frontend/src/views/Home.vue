@@ -76,6 +76,7 @@ const logout = () => {
 
 const MENU_ITEMS = [
   { label: '开 始 学 习', action: () => router.push('/home/worlds') },
+  { label: '学 习 报 告', action: () => router.push('/home/report') },
   { label: '角 色 管 理', action: () => router.push('/character') },
   { label: '档 案 管 理', action: () => router.push('/archive') },
   { label: '系 统 设 置', action: () => router.push('/settings') },

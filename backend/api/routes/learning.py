@@ -434,10 +434,8 @@ def get_user_profile(
     
     profile = compute_user_profile(db, user.id)
     
-    return {
-        "success": True,
-        "data": profile
-    }
+    # 直接返回 profile，不包装 { success, data }
+    return profile
 
 
 @router.post("/user/profile/refresh", tags=["user"])
