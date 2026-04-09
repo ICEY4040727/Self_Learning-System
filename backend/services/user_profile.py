@@ -19,7 +19,7 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from backend.models.models import Knowledge, LearnerProfile, UserProfile
+from backend.models.models import LearnerProfile, MemoryFact, UserProfile
 
 
 # MSKT 元认知四维度
@@ -146,20 +146,24 @@ def compute_learning_stats(db: Session, world_profiles: list[dict]) -> dict[str,
     for profile in world_profiles:
         world_id = profile.get("world_id")
 
-        # 从知识图谱获取概念数
-        knowledge = db.query(Knowledge).filter(Knowledge.world_id == world_id).first()
-        if knowledge and knowledge.graph:
-            concepts = knowledge.graph.get("concepts", {})
+        # 从记忆事实获取概念数 (P1 #183: 使用 MemoryFact 替代 Knowledge)
+        memory_facts = db.query(MemoryFact).filter(MemoryFact.world_id == world_id).all()
+        if memory_facts:
+            # 统计概念
+            concepts = set()
+            for fact in memory_facts:
+                if fact.concept_tags:
+                    concepts.update(fact.concept_tags)
             total_concepts += len(concepts)
 
             # 计算该世界的平均掌握度
             if concepts:
                 mastery_sum = sum(
-                    c.get("mastery", 0)
-                    for c in concepts.values()
-                    if isinstance(c, dict)
+                    int(fact.salience * 100)
+                    for fact in memory_facts
+                    if fact.concept_tags
                 )
-                avg_mastery = mastery_sum / len(concepts)
+                avg_mastery = mastery_sum / len(concepts) if concepts else 0
                 mastery_scores.append(avg_mastery)
 
         # 从 profile 获取会话数
