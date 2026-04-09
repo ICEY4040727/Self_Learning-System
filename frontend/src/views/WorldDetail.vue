@@ -548,9 +548,10 @@ const handleCreateCourse = async (data: {
 
 // Start learning
 const startLearning = (courseId: number) => {
+  // Navigate to CoursePage (issue #189)
   router.push({
-    path: `/home/worlds/${worldId.value}/courses/${courseId}`,
-    query: { from: 'new' }
+    name: 'CoursePage',
+    params: { worldId: worldId.value, courseId }
   })
 }
 
