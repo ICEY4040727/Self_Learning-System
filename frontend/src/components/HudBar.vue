@@ -54,9 +54,7 @@ const stageLabel = computed(() => STAGE_LABELS[props.relationshipStage])
       <button class="galgame-hud-btn flex items-center gap-1" @click="emit('backlog')">
         📖<span>回忆</span>
       </button>
-      <button class="galgame-hud-btn flex items-center gap-1" @click="emit('knowledgeGraph')">
-        🗺<span>知识图谱</span>
-      </button>
+      <!-- <button class="galgame-hud-btn flex items-center gap-1" @click="emit('knowledgeGraph')">🗺<span>知识图谱</span></button> P1 #185 -->
       <button class="galgame-hud-btn flex items-center gap-1" @click="emit('settings')">
         ⚙<span>设置</span>
       </button>

@@ -280,10 +280,8 @@ async function handleDeleteCheckpoint(id: number) {
   checkpoints.value = checkpoints.value.filter(c => c.id !== id)
 }
 
-async function openKnowledge() {
-  knowledgeOpen.value = true
-  await store.fetchKnowledgeGraph()
-}
+// Knowledge graph disabled - P1 #185 will redesign based on memory_facts
+// async function openKnowledge() { knowledgeOpen.value = true }
 
 function handleSceneClick() {
   if (anyPanelOpen.value) return

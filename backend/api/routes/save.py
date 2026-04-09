@@ -371,26 +371,6 @@ async def get_world_timelines(
         ],
     }
 
-
-@router.get("/worlds/{world_id}/knowledge-graph")
-async def get_world_knowledge_graph(
-    world_id: int,
-    checkpoint_time: str | None = None,
-    session_id: int | None = None,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """
-    获取世界的知识图谱
-    
-    注意: 此端点已弃用，知识图谱功能已迁移到 memory_facts。
-    当前返回空图谱，待前端适配后移除。
-    """
-    _get_owned_world(db, current_user, world_id)
-    # TODO: P1 #183 - 知识图谱已迁移到 memory_facts，需重新实现或移除此端点
-    return {"nodes": [], "edges": [], "links": []}
-
-
 @router.get("/checkpoints/{checkpoint_id}")
 async def get_checkpoint(
     checkpoint_id: int,
