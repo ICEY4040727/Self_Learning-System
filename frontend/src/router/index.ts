@@ -25,14 +25,12 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'worlds/:worldId',
         name: 'WorldDetail',
-        component: () => import('@/views/WorldDetail.vue'),
-        children: [
-          {
-            path: 'courses/:courseId',
-            name: 'CoursePage',
-            component: () => import('@/views/CoursePage.vue')
-          }
-        ]
+        component: () => import('@/views/WorldDetail.vue')
+      },
+      {
+        path: 'worlds/:worldId/courses/:courseId',
+        name: 'CoursePage',
+        component: () => import('@/views/CoursePage.vue')
       }
     ]
   },

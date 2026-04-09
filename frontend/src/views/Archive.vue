@@ -332,9 +332,9 @@ onMounted(async () => {
 .archive-page {
   position: relative;
   width: 100vw;
-  height: 100vh;
-  overflow: hidden;
-  background: #0a0a1e;
+  min-height: 100vh;
+  overflow-y: auto;
+  padding-bottom: 48px;
 }
 
 .bg-image {
@@ -343,16 +343,18 @@ onMounted(async () => {
   background-size: cover;
   background-position: center;
   opacity: 0.08;
+  z-index: -2;
 }
 
 .bg-gradient {
   position: absolute;
   inset: 0;
   background: linear-gradient(to bottom, rgba(10,10,30,0.95) 0%, rgba(10,10,30,0.98) 100%);
+  z-index: -1;
 }
 
 .archive-header {
-  position: absolute;
+  position: relative;
   top: 0;
   left: 0;
   right: 0;

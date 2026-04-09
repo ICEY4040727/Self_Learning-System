@@ -1,8 +1,7 @@
 <template>
   <div class="world-detail-page">
     <!-- Background -->
-    <div class="scene-bg" :style="getWorldBgStyle(selectedWorld)"></div>
-    <div class="scene-overlay"></div>
+    <div class="scene-bg"></div>
 
     <!-- Header -->
     <div class="char-header">
@@ -593,28 +592,15 @@ onMounted(async () => {
   position: relative;
   width: 100vw;
   min-height: 100vh;
-  background: #0a0a1e;
   overflow-y: auto;
-  padding-bottom: 48px;
+  padding-bottom: 80px;
 }
 
 .scene-bg {
   position: fixed;
   inset: 0;
-  background-size: cover;
-  background-position: center;
-  opacity: 0.6;
-  transition: background-image 0.8s ease;
-}
-
-.scene-overlay {
-  position: fixed;
-  inset: 0;
-  background: 
-    radial-gradient(ellipse at 50% 0%, rgba(10,10,30,0.15) 0%, transparent 60%),
-    radial-gradient(ellipse at 30% 55%, rgba(255,215,0,0.05) 0%, transparent 55%),
-    linear-gradient(to bottom, rgba(10,10,30,0.25) 0%, rgba(0,0,0,0.45) 100%);
-  z-index: 0;
+  background: linear-gradient(135deg, #1e3a5f 0%, #4c1d95 100%);
+  z-index: -1;
 }
 
 /* Header - matching Character.vue */
@@ -697,16 +683,12 @@ onMounted(async () => {
   padding: 32px;
 }
 
-/* World Info Card */
+/* World Info */
 .world-info-card {
   display: flex;
   align-items: center;
   gap: 20px;
-  padding: 24px;
-  background: rgba(0, 0, 0, 0.3);
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 215, 0, 0.2);
-  border-radius: 16px;
+  padding: 24px 0;
   margin-bottom: 40px;
 }
 
@@ -784,18 +766,14 @@ onMounted(async () => {
 .traveler-card {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 16px 20px;
-  background: rgba(96, 165, 250, 0.1);
-  border: 1px solid rgba(96, 165, 250, 0.3);
-  border-radius: 12px;
+  gap: 16px;
+  padding: 20px 0;
   cursor: pointer;
   transition: all 0.2s ease;
 }
 
 .traveler-card:hover {
-  background: rgba(96, 165, 250, 0.15);
-  border-color: rgba(96, 165, 250, 0.5);
+  padding-left: 12px;
 }
 
 .traveler-avatar {
@@ -863,9 +841,6 @@ onMounted(async () => {
   align-items: center;
   gap: 10px;
   padding: 20px 16px;
-  background: rgba(8, 8, 28, 0.9);
-  border: 1px solid rgba(255, 215, 0, 0.15);
-  border-radius: 12px;
   cursor: pointer;
   transition: all 0.3s ease;
   position: relative;
@@ -873,7 +848,6 @@ onMounted(async () => {
 }
 
 .sage-card:hover {
-  border-color: rgba(255, 215, 0, 0.5);
   transform: translateY(-2px);
 }
 
@@ -952,9 +926,7 @@ onMounted(async () => {
   justify-content: center;
   width: 140px;
   height: 160px;
-  background: rgba(255, 255, 255, 0.02);
-  border: 1px dashed rgba(255, 215, 0, 0.25);
-  border-radius: 12px;
+  border: 1px dashed rgba(255, 215, 0, 0.3);
   cursor: pointer;
   transition: all 0.25s ease;
   animation: cardEntry 0.4s ease backwards;
@@ -962,9 +934,8 @@ onMounted(async () => {
 }
 
 .add-card:hover {
-  background: rgba(255, 215, 0, 0.05);
-  border-color: rgba(255, 215, 0, 0.5);
-  transform: translateY(-2px);
+  border-color: rgba(255, 215, 0, 0.6);
+  background: rgba(255, 215, 0, 0.03);
 }
 
 .add-card-course {
@@ -1003,18 +974,19 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   gap: 16px;
-  padding: 16px 20px;
-  background: rgba(8, 8, 28, 0.9);
-  border: 1px solid rgba(255, 215, 0, 0.15);
-  border-radius: 12px;
+  padding: 16px 0;
+  border-bottom: 1px solid rgba(255, 215, 0, 0.1);
   cursor: pointer;
   transition: all 0.3s ease;
   animation: cardEntry 0.4s ease backwards;
 }
 
+.course-item:last-child {
+  border-bottom: none;
+}
+
 .course-item:hover {
-  border-color: rgba(255, 215, 0, 0.5);
-  transform: translateX(8px);
+  padding-left: 12px;
 }
 
 .course-icon {

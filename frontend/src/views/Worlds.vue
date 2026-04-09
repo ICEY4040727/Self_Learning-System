@@ -3,75 +3,57 @@
     <div class="scene-bg" :style="{ backgroundImage: `url(${homeBg})` }"></div>
     <div class="scene-overlay"></div>
 
-    <button class="back-button galgame-hud-btn" @click="$router.push('/home')">
-      <ArrowLeft :size="14" /> 返回
-    </button>
-
-    <!-- Section header -->
-    <div 
-      class="section-header text-center"
-      v-motion
-      :initial="{ opacity: 0, y: -20 }"
-      :enter="{ opacity: 1, y: 0 }"
-    >
-      <div class="font-ui section-label">选择你的学习世界</div>
-      <div class="font-ui section-title">世 界 选 择</div>
+    <!-- Header -->
+    <div class="char-header">
+      <button class="back-btn" @click="$router.push('/home')">
+        <span>←</span> 返回
+      </button>
+      <h1 class="header-title">世 界 选 择</h1>
+      <div style="width: 80px;"></div>
     </div>
 
-    <div v-if="loading" class="loading-text">加载中…</div>
-    <div v-else class="world-grid">
-      <div
-        v-for="(world, i) in worlds"
-        :key="world.id"
-        class="world-card"
-        v-motion
-        :initial="{ opacity: 0, y: 30 }"
-        :enter="{ opacity: 1, y: 0 }"
-        :transition="{ delay: i * 0.12, duration: 500 }"
-        @click="selectWorld(world)"
-      >
-        <div class="world-card-image" :style="getWorldBgStyle(world)"></div>
-        <div class="world-card-sages">
-          <div
-            v-for="sage in (world.sages || [])"
-            :key="sage.id"
-            class="sage-avatar"
-            :style="{ background: sage.color, borderColor: 'rgba(255,215,0,0.4)' }"
-          >
-            {{ sage.symbol }}
+    <!-- Content -->
+    <div class="char-content">
+      <div v-if="loading" class="loading-text">加载中…</div>
+      <div v-else>
+        <!-- Worlds List -->
+        <div class="section-group">
+          <div class="section-header">
+            <span class="section-label">我 的 世 界</span>
+            <span class="section-sublabel">MY WORLDS</span>
           </div>
-        </div>
-        <div class="world-card-stage">
-          <span class="stage-badge">{{ world.stageLabel || '初识' }}</span>
-        </div>
-        <div class="world-card-body">
-          <div class="font-ui world-name">{{ world.name }}</div>
-          <p class="font-ui world-desc">{{ world.description }}</p>
-          <div class="font-ui world-meta">
-            <span>📖 {{ world.courses?.length || 0 }} 门课程</span>
+          <div class="section-line"></div>
+          <div class="worlds-list">
+            <div
+              v-for="world in worlds"
+              :key="world.id"
+              class="world-item"
+              @click="selectWorld(world)"
+            >
+              <div class="world-info">
+                <div class="world-name">{{ world.name }}</div>
+                <div class="world-meta">
+                  <span>{{ world.courses?.length || 0 }} 门课程</span>
+                  <span class="separator">·</span>
+                  <span>{{ world.sages?.length || 0 }} 位知者</span>
+                </div>
+              </div>
+              <div class="world-arrow">▸</div>
+            </div>
+            <!-- Create world -->
+            <div class="world-item world-item-create" @click="showCreateWorld = true">
+              <div class="world-info">
+                <div class="world-name">创建新世界</div>
+                <div class="world-meta">添加一个新的学习空间</div>
+              </div>
+              <div class="world-add-icon">+</div>
+            </div>
           </div>
         </div>
       </div>
 
-      <!-- Create world card -->
-      <div
-        class="world-card world-card-create"
-        v-motion
-        :initial="{ opacity: 0, y: 30 }"
-        :enter="{ opacity: 1, y: 0 }"
-        :transition="{ delay: worlds.length * 0.12 + 0.1, duration: 500 }"
-        @click="showCreateWorld = true"
-      >
-        <div class="create-content">
-          <div class="create-icon">
-            <Plus :size="20" />
-          </div>
-          <div class="font-ui create-text">创 建 新 世 界</div>
-        </div>
-      </div>
+      <p v-if="errorMessage" class="error-toast">{{ errorMessage }}</p>
     </div>
-
-    <p v-if="errorMessage" class="error-toast font-ui">{{ errorMessage }}</p>
 
     <!-- Create World Modal -->
     <CreateWorldModal
@@ -85,7 +67,6 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { ArrowLeft, Plus } from 'lucide-vue-next'
 import client from '@/api/client'
 
 import homeBg from '@/assets/home-bg.png'
@@ -113,7 +94,6 @@ const errorMessage = ref('')
 const loading = ref(false)
 const showCreateWorld = ref(false)
 
-
 const getWorldBgStyle = (world: World) => {
   const url = world.scenes?.background
   return url
@@ -126,28 +106,13 @@ const showError = (error: unknown) => {
   setTimeout(() => (errorMessage.value = ''), 4000)
 }
 
-// Mock world for UI preview (when API is unavailable)
-const MOCK_WORLDS: World[] = [
-  {
-    id: 1,
-    user_id: 1,
-    name: '幕府学堂',
-    description: '战国烽火中的智慧殿堂，以古代兵法洞察现代战略与领导力',
-    scenes: { background: 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=400' },
-    sages: [
-      { id: 1, name: '孙子', title: '兵圣', symbol: '兵', color: '#dc2626', accentColor: '#f87171' }
-    ],
-    courses: [
-      { id: 1, name: '孙子兵法', description: '知己知彼，百战不殆' }
-    ],
-    stageLabel: '初识',
-  }
-]
-
 const fetchWorlds = async () => {
+  console.log('[DEBUG] fetchWorlds called')
   loading.value = true
   try {
+    console.log('[DEBUG] calling client.get("worlds")')
     const { data } = await client.get('worlds')
+    console.log('[DEBUG] response data:', data)
     worlds.value = data.map((world: any) => ({
       ...world,
       sages: world.sages || [],
@@ -155,11 +120,11 @@ const fetchWorlds = async () => {
       stageLabel: world.stageLabel || '初识',
     }))
     if (worlds.value.length === 0) {
-      worlds.value = MOCK_WORLDS
+      worlds.value = []
     }
   } catch (error) {
-    worlds.value = MOCK_WORLDS
-    console.warn('API unavailable, using mock data for preview')
+    worlds.value = []
+    console.error('[DEBUG] fetchWorlds error:', error)
   } finally {
     loading.value = false
   }
@@ -178,7 +143,6 @@ const handleCreateWorld = async (data: { name: string; description: string; scen
     })
     worlds.value = [...worlds.value, { ...newWorld, sages: [], courses: [], stageLabel: '初识' }]
     showCreateWorld.value = false
-    // 跳转到世界详情页，引导添加成员
     router.push(`/home/worlds/${newWorld.id}`)
   } catch (error) {
     showError(error)
@@ -193,9 +157,8 @@ onMounted(async () => { await fetchWorlds() })
   position: relative;
   width: 100vw;
   min-height: 100vh;
-  overflow-y: auto;
   background: #0a0a1e;
-  padding-top: 48px;
+  overflow-y: auto;
   padding-bottom: 48px;
 }
 
@@ -204,191 +167,170 @@ onMounted(async () => { await fetchWorlds() })
   inset: 0;
   background-size: cover;
   background-position: center;
-  opacity: 0.60;
+  opacity: 0.6;
 }
 
 .scene-overlay {
   position: fixed;
   inset: 0;
-  background: 
+  background:
     radial-gradient(ellipse at 50% 0%, rgba(10,10,30,0.15) 0%, transparent 60%),
     radial-gradient(ellipse at 30% 55%, rgba(255,215,0,0.05) 0%, transparent 55%),
-    radial-gradient(ellipse at 70% 35%, rgba(96,165,250,0.04) 0%, transparent 55%),
     linear-gradient(to bottom, rgba(10,10,30,0.25) 0%, rgba(0,0,0,0.45) 100%);
   z-index: 0;
 }
 
-.section-header {
-  text-align: center;
+.char-header {
   position: relative;
   z-index: 1;
-  margin-bottom: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 24px 32px;
+  background: rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(10px);
+}
+
+.back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: "Noto Sans SC", sans-serif;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.7);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 8px 12px;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+}
+
+.back-btn:hover {
+  color: #ffd700;
+  background: rgba(255, 215, 0, 0.1);
+}
+
+.header-title {
+  font-family: "Noto Sans SC", sans-serif;
+  font-size: 18px;
+  color: #ffd700;
+  letter-spacing: 6px;
+  margin: 0;
+}
+
+.char-content {
+  position: relative;
+  z-index: 1;
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 32px;
+}
+
+.section-group {
+  margin-bottom: 48px;
+}
+
+.section-header {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 12px;
 }
 
 .section-label {
-  color: rgba(255,255,255,0.35);
-  font-size: 12px;
+  font-family: "Noto Sans SC", sans-serif;
+  font-size: 18px;
+  color: #ffd700;
   letter-spacing: 4px;
-  margin-bottom: 8px;
 }
 
-.section-title {
-  color: #ffd700;
-  font-size: 22px;
-  letter-spacing: 6px;
+.section-sublabel {
+  font-family: "Noto Sans SC", sans-serif;
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.3);
+  letter-spacing: 3px;
+}
+
+.section-line {
+  width: 100%;
+  height: 1px;
+  background: linear-gradient(to right, rgba(255, 215, 0, 0.3), transparent);
+  margin-bottom: 20px;
 }
 
 .loading-text {
   color: rgba(255,255,255,0.5);
   text-align: center;
-  margin-top: 60px;
+  padding: 60px 0;
+  font-family: "Noto Sans SC", sans-serif;
+  letter-spacing: 2px;
 }
 
-.world-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 20px;
-  max-width: 860px;
-  width: 100%;
-  margin: 0 auto;
-  padding: 0 32px;
-  position: relative;
-  z-index: 1;
-}
-
-.world-card {
-  cursor: pointer;
-  border-radius: 12px;
-  overflow: hidden;
-  border: 1px solid rgba(255, 215, 0, 0.15);
-  background: rgba(8,8,28,0.97);
-  transition: all 0.3s ease;
-  position: relative;
-}
-
-.world-card:hover {
-  border-color: rgba(255, 215, 0, 0.55);
-  transform: translateY(-4px) scale(1.02);
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5), 0 0 20px rgba(255, 215, 0, 0.15);
-}
-
-.world-card-image {
-  height: 130px;
-  position: relative;
-}
-
-.world-card-image::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(to bottom, transparent 30%, rgba(8,8,28,0.95) 100%);
-}
-
-.world-card-sages {
-  position: absolute;
-  top: 8px;
-  left: 12px;
+/* Worlds List */
+.worlds-list {
   display: flex;
-  gap: 6px;
-  z-index: 2;
+  flex-direction: column;
 }
 
-.sage-avatar {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  border: 1px solid;
+.world-item {
   display: flex;
   align-items: center;
-  justify-content: center;
-  font-size: 12px;
-  color: rgba(255,255,255,0.9);
-  font-weight: 600;
+  justify-content: space-between;
+  padding: 20px 24px;
+  border-bottom: 1px solid rgba(255, 215, 0, 0.1);
+  cursor: pointer;
+  transition: all 0.2s ease;
 }
 
-.world-card-stage {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  z-index: 2;
+.world-item:last-child {
+  border-bottom: none;
 }
 
-.stage-badge {
-  background: rgba(0,0,0,0.7);
-  border: 1px solid rgba(255,215,0,0.3);
-  border-radius: 4px;
-  padding: 2px 7px;
-  font-size: 10px;
-  color: #ffd700;
-  font-family: 'Noto Sans SC', sans-serif;
+.world-item:hover {
+  background: rgba(255, 215, 0, 0.05);
+  padding-left: 32px;
 }
 
-.world-card-body {
-  padding: 12px 14px 14px;
+.world-item-create:hover {
+  padding-left: 24px;
+}
+
+.world-info {
+  flex: 1;
 }
 
 .world-name {
-  font-size: 15px;
-  letter-spacing: 2px;
-  color: #ffd700;
-  margin-bottom: 5px;
-}
-
-.world-desc {
-  font-size: 11px;
-  line-height: 1.6;
-  color: rgba(255,255,255,0.45);
-  margin-bottom: 8px;
+  font-family: "Noto Sans SC", sans-serif;
+  font-size: 16px;
+  color: rgba(255, 255, 255, 0.9);
+  margin-bottom: 6px;
+  letter-spacing: 1px;
 }
 
 .world-meta {
-  font-size: 11px;
-  color: rgba(255,255,255,0.3);
-}
-
-.world-card-create {
-  min-height: 234px;
-  background: rgba(255,255,255,0.02);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.create-content {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 12px;
-}
-
-.create-icon {
-  width: 44px;
-  height: 44px;
-  border-radius: 50%;
-  border: 1px dashed rgba(255,215,0,0.3);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: rgba(255,215,0,0.4);
-}
-
-.create-text {
-  color: rgba(255,215,0,0.35);
   font-size: 12px;
-  letter-spacing: 2px;
+  color: rgba(255, 255, 255, 0.4);
+  font-family: "Noto Sans SC", sans-serif;
 }
 
-.back-button {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  font-family: 'Noto Sans SC', sans-serif;
-  font-size: 13px;
-  padding: 6px 14px;
-  cursor: pointer;
-  margin-bottom: 24px;
-  position: relative;
-  z-index: 1;
+.separator {
+  margin: 0 8px;
+  color: rgba(255, 215, 0, 0.3);
+}
+
+.world-arrow {
+  font-size: 18px;
+  color: rgba(255, 215, 0, 0.4);
+}
+
+.world-add-icon {
+  font-size: 28px;
+  color: rgba(255, 215, 0, 0.3);
+}
+
+.world-item-create:hover .world-add-icon {
+  color: rgba(255, 215, 0, 0.6);
 }
 
 .error-toast {
@@ -402,5 +344,6 @@ onMounted(async () => { await fetchWorlds() })
   font-size: 13px;
   z-index: 9999;
   letter-spacing: 1px;
+  font-family: "Noto Sans SC", sans-serif;
 }
 </style>
