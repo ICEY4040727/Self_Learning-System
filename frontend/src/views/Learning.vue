@@ -97,7 +97,6 @@
           @skip="skipSignal++"
           @auto-toggle="autoMode = !autoMode"
           @backlog="backlogOpen = true"
-          @knowledge-graph="openKnowledge"
           @settings="router.push('/settings')"
           @home="router.push('/home')"
           @open-memory-drawer="openMemoryDrawer"
@@ -156,7 +155,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount, watch, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useLearningStore } from '@/stores/learning'
 import { useSettingsStore } from '@/stores/settings'

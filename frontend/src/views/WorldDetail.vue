@@ -373,13 +373,6 @@ const availableSages = computed(() => {
   return allCharacters.value.filter(c => c.type === 'sage' && !linkedIds.has(c.id))
 })
 
-// Background style
-const getWorldBgStyle = (world: World | null) => {
-  if (!world) return { background: 'linear-gradient(135deg, #1e3a5f, #4c1d95)' }
-  const url = world.scenes?.background
-  return url ? { backgroundImage: `url(${url})` } : { background: 'linear-gradient(135deg, #1e3a5f, #4c1d95)' }
-}
-
 // Error handler
 const showError = (error: unknown) => {
   errorMessage.value = parseApiError(error)

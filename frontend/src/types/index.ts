@@ -168,6 +168,7 @@ export interface ChatResponse {
     special_dialogue?: string
   }> | null
   expression_hint?: Expression | null
+  memory_extracted_count?: number   // 本次会话提取的记忆数量 (#192)
 }
 
 // §2 adaptation #4: start endpoint returns teacher_persona as string (name), not object

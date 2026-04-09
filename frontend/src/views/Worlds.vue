@@ -94,13 +94,6 @@ const errorMessage = ref('')
 const loading = ref(false)
 const showCreateWorld = ref(false)
 
-const getWorldBgStyle = (world: World) => {
-  const url = world.scenes?.background
-  return url
-    ? { backgroundImage: `url(${url})`, backgroundSize: 'cover', backgroundPosition: 'center' }
-    : { background: 'linear-gradient(135deg, #1e3a5f, #4c1d95)' }
-}
-
 const showError = (error: unknown) => {
   errorMessage.value = parseApiError(error)
   setTimeout(() => (errorMessage.value = ''), 4000)
