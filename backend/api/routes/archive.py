@@ -12,9 +12,9 @@ from backend.models.models import (
     Character,
     Course,
     FSRSState,
-    Knowledge,
     LearnerProfile,
     LearningDiary,
+    MemoryFact,
     ProgressTracking,
     TeacherPersona,
     User,
@@ -506,21 +506,8 @@ def character_levelup(
 
 # World endpoints
 def _ensure_world_knowledge(db: Session, world_id: int) -> None:
-    knowledge = db.query(Knowledge).filter(Knowledge.world_id == world_id).first()
-    if knowledge is None:
-        try:
-            with db.begin_nested():
-                db.add(
-                    Knowledge(
-                        world_id=world_id,
-                        graph={},
-                    )
-                )
-                db.flush()
-        except IntegrityError:
-            existing = db.query(Knowledge).filter(Knowledge.world_id == world_id).first()
-            if existing is None:
-                raise
+    """Knowledge graph is deprecated in P1 #183. This function is a no-op."""
+    pass
 
 
 def _get_world_characters_by_role(db: Session, world_id: int, role: str) -> list[SageInfo]:
@@ -1256,6 +1243,198 @@ def delete_course(
     db.delete(course)
     db.commit()
     return {"message": "Course deleted"}
+
+
+# Issue #188: Course related APIs
+# ============================================
+
+class CourseSessionResponse(BaseModel):
+    id: int
+    started_at: datetime
+    ended_at: datetime | None
+    relationship_stage: str | None
+    course_name: str | None = None
+
+    class Config:
+        from_attributes = True
+
+
+class MemoryFactStatsResponse(BaseModel):
+    total: int
+    by_type: dict[str, int]
+    avg_salience: float
+
+
+class MemoryFactResponse(BaseModel):
+    id: int
+    fact_type: str
+    content: str
+    concept_tags: list[str] | None
+    salience: float
+    created_at: datetime
+    recall_count: int
+
+    class Config:
+        from_attributes = True
+
+
+def _get_course_with_auth(course_id: int, db: Session, current_user: User) -> Course:
+    """Verify course exists and user has access."""
+    course = db.query(Course).join(World, Course.world_id == World.id).filter(
+        Course.id == course_id,
+        World.user_id == current_user.id,
+    ).first()
+    if not course:
+        raise HTTPException(status_code=404, detail="Course not found")
+    return course
+
+
+@router.get("/courses/{course_id}/sages")
+def get_course_sages(
+    course_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    获取课程关联的 Sage 角色列表。
+    
+    通过 Course.meta.sage_ids 获取，如果没有则返回世界级别的 Sage。
+    """
+    course = _get_course_with_auth(course_id, db, current_user)
+    
+    # 优先从 meta.sage_ids 获取
+    sage_ids = course.meta.get("sage_ids", []) if course.meta else []
+    
+    if sage_ids:
+        # 从指定 sage_ids 获取
+        sages = db.query(Character).filter(
+            Character.id.in_(sage_ids),
+            Character.user_id == current_user.id,
+        ).all()
+    else:
+        # Fallback: 获取世界级别的 Sage
+        sage_links = db.query(WorldCharacter).filter(
+            WorldCharacter.world_id == course.world_id,
+            WorldCharacter.role == "sage",
+        ).order_by(WorldCharacter.is_primary.desc()).all()
+        sage_ids = [link.character_id for link in sage_links]
+        sages = db.query(Character).filter(Character.id.in_(sage_ids)).all() if sage_ids else []
+    
+    return [
+        {
+            "id": s.id,
+            "name": s.name,
+            "title": s.title,
+            "personality": s.personality,
+            "avatar": s.avatar,
+        }
+        for s in sages
+    ]
+
+
+@router.get("/courses/{course_id}/sessions", response_model=list[CourseSessionResponse])
+def get_course_sessions(
+    course_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    获取课程的所有学习会话。
+    """
+    course = _get_course_with_auth(course_id, db, current_user)
+    
+    from backend.models.models import Session as SessionModel
+    sessions = db.query(SessionModel).filter(
+        SessionModel.course_id == course_id,
+        SessionModel.user_id == current_user.id,
+    ).order_by(SessionModel.started_at.desc()).all()
+    
+    return [
+        CourseSessionResponse(
+            id=s.id,
+            started_at=s.started_at,
+            ended_at=s.ended_at,
+            relationship_stage=(s.relationship or {}).get("stage") if s.relationship else None,
+            course_name=course.name,
+        )
+        for s in sessions
+    ]
+
+
+@router.get("/courses/{course_id}/memory-facts")
+def get_course_memory_facts(
+    course_id: int,
+    stats_only: bool = False,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    获取课程关联的记忆事实。
+    
+    - stats_only=true: 只返回统计信息
+    - stats_only=false: 返回统计 + 记忆列表
+    
+    关联方式: 通过 course 的 world_id 查询 world 级别的记忆，
+    或者通过 session 关联的 character_id 查询。
+    """
+    course = _get_course_with_auth(course_id, db, current_user)
+    
+    # 获取该课程世界的所有 sage characters
+    sage_links = db.query(WorldCharacter).filter(
+        WorldCharacter.world_id == course.world_id,
+        WorldCharacter.role == "sage",
+    ).all()
+    sage_character_ids = [link.character_id for link in sage_links]
+    
+    if not sage_character_ids:
+        if stats_only:
+            return MemoryFactStatsResponse(total=0, by_type={}, avg_salience=0.0)
+        return {"stats": MemoryFactStatsResponse(total=0, by_type={}, avg_salience=0.0), "facts": []}
+    
+    # 查询记忆事实
+    facts_query = db.query(MemoryFact).filter(
+        MemoryFact.character_id.in_(sage_character_ids),
+        # 包含世界级别或跨世界记忆
+        (MemoryFact.world_id == course.world_id) | (MemoryFact.world_id.is_(None))
+    )
+    
+    facts = facts_query.all()
+    
+    # 计算统计
+    total = len(facts)
+    by_type: dict[str, int] = {}
+    total_salience = 0.0
+    
+    for fact in facts:
+        by_type[fact.fact_type] = by_type.get(fact.fact_type, 0) + 1
+        total_salience += fact.salience
+    
+    avg_salience = total_salience / total if total > 0 else 0.0
+    
+    stats = MemoryFactStatsResponse(
+        total=total,
+        by_type=by_type,
+        avg_salience=round(avg_salience, 3),
+    )
+    
+    if stats_only:
+        return stats
+    
+    return {
+        "stats": stats,
+        "facts": [
+            MemoryFactResponse(
+                id=f.id,
+                fact_type=f.fact_type,
+                content=f.content[:200],  # 限制内容长度
+                concept_tags=f.concept_tags,
+                salience=f.salience,
+                created_at=f.created_at,
+                recall_count=f.recall_count,
+            )
+            for f in facts[:50]  # 最多返回50条
+        ],
+    }
 
 
 # Learning Diary endpoints
