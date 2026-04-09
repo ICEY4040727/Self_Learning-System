@@ -1,0 +1,6 @@
+
+Running 2 tests using 1 worker
+
+[1A[2K[1/2] e2e/settings-migration.spec.mjs:24:1 › settings page only persists backend fields via /api/settings
+[1A[2K[2/2] e2e/settings-migration.spec.mjs:69:1 › local preference toggles persist via localStorage without backend PUT
+[1A[2K  2 passed (10.4s)

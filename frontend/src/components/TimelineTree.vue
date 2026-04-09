@@ -19,6 +19,10 @@
         <div class="session-meta">
           课程 {{ session.course_id }} · 阶段 {{ session.relationship_stage }}
         </div>
+        <div class="session-meta secondary">
+          开始于 {{ formatDate(session.started_at) }}
+          <span v-if="session.parent_checkpoint_id != null"> · 来源存档 #{{ session.parent_checkpoint_id }}</span>
+        </div>
       </div>
 
       <div v-if="checkpointsBySession.get(session.id)?.length" class="checkpoint-list">
@@ -28,7 +32,7 @@
           class="checkpoint-pill"
           @click="$emit('branch', { id: checkpoint.id, save_name: checkpoint.save_name })"
         >
-          {{ checkpoint.save_name }} · {{ formatDate(checkpoint.created_at) }}
+          {{ checkpoint.save_name }} · #{{ checkpoint.message_index }} · {{ formatDate(checkpoint.created_at) }}
         </button>
       </div>
     </div>
@@ -117,7 +121,7 @@ const orderedSessions = computed(() =>
   [...sessions.value].sort((a, b) => new Date(a.started_at).getTime() - new Date(b.started_at).getTime()),
 )
 
-const sessionDepth = (sessionId: number): number => {
+const sessionDepthMap = computed(() => {
   const depthMemo = new Map<number, number>()
   const sessionById = new Map(sessions.value.map((session) => [session.id, session]))
 
@@ -143,8 +147,16 @@ const sessionDepth = (sessionId: number): number => {
     return depth
   }
 
-  return computeDepth(sessionId, new Set<number>())
-}
+  for (const session of sessions.value) {
+    if (!depthMemo.has(session.id)) {
+      computeDepth(session.id, new Set<number>())
+    }
+  }
+
+  return depthMemo
+})
+
+const sessionDepth = (sessionId: number): number => sessionDepthMap.value.get(sessionId) || 0
 
 const formatDate = (value: string): string => {
   const date = new Date(value)
@@ -180,7 +192,7 @@ onMounted(() => {
 .session-card {
   background: rgba(0, 0, 0, 0.45);
   border: 1px solid var(--border-subtle);
-  border-radius: 8px;
+  border-radius: var(--radius-world-card);
   padding: 10px 12px;
 }
 
@@ -197,6 +209,11 @@ onMounted(() => {
   font-size: 12px;
 }
 
+.session-meta.secondary {
+  margin-top: 2px;
+  color: rgba(170, 170, 170, 0.7);
+}
+
 .checkpoint-list {
   display: flex;
   flex-wrap: wrap;
@@ -208,7 +225,7 @@ onMounted(() => {
   background: rgba(42, 42, 74, 0.65);
   color: var(--text-secondary);
   border-radius: 999px;
-  padding: 4px 10px;
+  padding: 4px 12px;
   font-size: 12px;
   cursor: pointer;
 }

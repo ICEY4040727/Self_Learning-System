@@ -1,0 +1,33 @@
+
+> socratic-learning-frontend@1.0.0 build
+> vue-tsc && vite build
+
+vite v5.4.21 building for production...
+transforming...
+✓ 1244 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                       0.78 kB │ gzip:   0.45 kB
+dist/assets/Settings-imtslKaO.css     2.05 kB │ gzip:   0.66 kB
+dist/assets/Login-JZQd5DgF.css        3.41 kB │ gzip:   1.13 kB
+dist/assets/Home-BqcnY454.css         3.56 kB │ gzip:   1.12 kB
+dist/assets/index-C3lZPFe8.css        5.22 kB │ gzip:   1.51 kB
+dist/assets/Archive-udJpvY-7.css      5.66 kB │ gzip:   1.54 kB
+dist/assets/Character-BijTEiwh.css    6.56 kB │ gzip:   1.59 kB
+dist/assets/Learning-C3ZswTaU.css    10.95 kB │ gzip:   2.69 kB
+dist/assets/navigation-DwaIo-uk.js    0.37 kB │ gzip:   0.25 kB
+dist/assets/error-mGhgK-a2.js         1.07 kB │ gzip:   0.86 kB
+dist/assets/Settings-BhyaSEqe.js      3.18 kB │ gzip:   1.64 kB
+dist/assets/Login-DmcfPYU1.js         4.25 kB │ gzip:   2.14 kB
+dist/assets/Home-CM6biQ2a.js          7.92 kB │ gzip:   3.32 kB
+dist/assets/Character-BL1BI7n2.js    15.32 kB │ gzip:   6.57 kB
+dist/assets/Learning-CkkQWB2_.js     70.70 kB │ gzip:  25.83 kB
+dist/assets/index-wNd3l-5j.js       144.48 kB │ gzip:  56.44 kB
+dist/assets/Archive-DukGz3iy.js     532.58 kB │ gzip: 180.14 kB
+✓ built in 2.43s
+
+> socratic-learning-frontend@1.0.0 preview
+> vite preview --host 127.0.0.1 --port 4173
+
+  ➜  Local:   http://127.0.0.1:4173/
+  ➜  press h + enter to show help
