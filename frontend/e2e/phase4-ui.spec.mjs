@@ -4,7 +4,10 @@ import { fileURLToPath } from 'node:url'
 import { expect, test } from '@playwright/test'
 
 const TEST_DIR = path.dirname(fileURLToPath(import.meta.url))
-const EVIDENCE_DIR = path.resolve(TEST_DIR, '../../docs/evidence/issue-127')
+const EVIDENCE_DIR = process.env.E2E_EVIDENCE_DIR
+  ? path.resolve(TEST_DIR, process.env.E2E_EVIDENCE_DIR)
+  : path.resolve(TEST_DIR, '../../docs/evidence/issue-127')
+const BASE_URL = process.env.E2E_BASE_URL ?? 'http://127.0.0.1:5173'
 
 if (!fs.existsSync(EVIDENCE_DIR)) {
   fs.mkdirSync(EVIDENCE_DIR, { recursive: true })
@@ -106,7 +109,7 @@ test('knowledge graph renders and node click reveals detail', async ({ page }) =
   })
   await mockLearningApis(page)
 
-  await page.goto('http://127.0.0.1:5173/learning/1?worldId=1')
+  await page.goto(`${BASE_URL}/learning/1?worldId=1`)
   await page.getByRole('button', { name: '📊 图谱' }).click()
   await expect(page.locator('.graph-svg')).toBeVisible()
   await expect(page.locator('.graph-svg circle').first()).toBeVisible()
@@ -127,7 +130,7 @@ test.describe('mobile viewport adaptation', () => {
     })
     await mockLearningApis(page)
 
-    await page.goto('http://127.0.0.1:5173/learning/1?worldId=1')
+    await page.goto(`${BASE_URL}/learning/1?worldId=1`)
     await expect(page.locator('.character-layer')).toBeVisible()
     const transform = await page.locator('.character-layer').evaluate((el) => getComputedStyle(el).transform)
     expect(transform).not.toBe('none')

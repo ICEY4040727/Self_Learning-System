@@ -1,0 +1,111 @@
+{
+  "world_first": {
+    "world": {
+      "status_code": 200,
+      "body": {
+        "name": "Regression World 1775372412",
+        "description": "issue-149",
+        "scenes": {},
+        "id": 1,
+        "user_id": 1
+      }
+    },
+    "course": {
+      "status_code": 200,
+      "body": {
+        "world_id": 1,
+        "name": "Regression Course",
+        "description": "flow",
+        "target_level": "beginner",
+        "id": 1
+      }
+    }
+  },
+  "checkpoint_commit_branch": {
+    "checkpoint": {
+      "status_code": 200,
+      "body": {
+        "id": 1,
+        "world_id": 1,
+        "session_id": 1,
+        "save_name": "cp-1775372412",
+        "message_index": 2,
+        "thumbnail_path": null,
+        "created_at": "2026-04-05T07:00:13.048697"
+      }
+    },
+    "branch": {
+      "status_code": 200,
+      "body": {
+        "session_id": 2,
+        "course_id": 1,
+        "world_id": 1,
+        "parent_checkpoint_id": 1,
+        "branch_name": "branch-1775372412"
+      }
+    }
+  },
+  "relationship_emotion_expression": {
+    "chat": {
+      "status_code": 200,
+      "body": {
+        "relationship_stage": "mentor",
+        "relationship_events": [
+          {
+            "type": "stage_change",
+            "from": "friend",
+            "to": "mentor"
+          },
+          {
+            "type": "dimension_breakthrough",
+            "dimension": "trust",
+            "value": 0.62
+          },
+          {
+            "type": "dimension_breakthrough",
+            "dimension": "familiarity",
+            "value": 0.63
+          }
+        ],
+        "emotion": {
+          "valence": 0.7,
+          "arousal": 0.7,
+          "emotion_type": "curiosity",
+          "confidence": 0.55
+        },
+        "expression_hint": "thinking"
+      }
+    }
+  },
+  "knowledge_graph": {
+    "status_code": 200,
+    "node_count": 2,
+    "edge_count": 0,
+    "sample_nodes": [
+      "我很好奇这个概念之间的联系",
+      "请先在设置中配置"
+    ]
+  },
+  "settings_api": {
+    "put": {
+      "status_code": 200,
+      "body": {
+        "message": "Settings updated"
+      }
+    },
+    "get": {
+      "status_code": 200,
+      "body": {
+        "default_provider": "claude"
+      }
+    }
+  },
+  "user_scoped_isolation": {
+    "status_code": 200,
+    "owner_character_names": [
+      "Regression Sage 1775372412",
+      "Regression Traveler 1775372412"
+    ],
+    "contains_other_user_character": false
+  }
+}
