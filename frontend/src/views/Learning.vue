@@ -100,7 +100,7 @@
           @knowledge-graph="openKnowledge"
           @settings="router.push('/settings')"
           @home="router.push('/home')"
-          @open-memory-drawer="memoryDrawerOpen = true"
+          @open-memory-drawer="openMemoryDrawer"
         />
       </div>
     </Transition>
@@ -156,7 +156,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useLearningStore } from '@/stores/learning'
 import { useSettingsStore } from '@/stores/settings'
@@ -168,6 +168,7 @@ import SaveLoadPanel from '@/components/SaveLoadPanel.vue'
 import KnowledgeGraphModal from '@/components/KnowledgeGraphModal.vue'
 import RelationshipStageOverlay from '@/components/RelationshipStageOverlay.vue'
 import MemoryFactsDrawer from '@/components/course/MemoryFactsDrawer.vue'
+import { memoryApi } from '@/api/memory'
 import type { Checkpoint } from '@/types'
 
 const router = useRouter()
@@ -194,6 +195,33 @@ const memoryDrawerOpen = ref(false)
 const memoryFacts = ref<any[]>([])
 const memoryStats = ref({ total: 0, by_type: {} as Record<string, number> })
 const memoryLoading = ref(false)
+
+// v1.0 #192 fetch memory facts
+async function fetchMemoryFacts() {
+  const cid = store.courseId
+  if (!cid) return
+  memoryLoading.value = true
+  try {
+    const res = await memoryApi.getMemoryFacts(cid)
+    memoryFacts.value = res.facts
+    memoryStats.value = { total: res.stats.total, by_type: res.stats.by_type }
+  } catch (e) {
+    console.error('Failed to fetch memory facts:', e)
+  } finally {
+    memoryLoading.value = false
+  }
+}
+
+// Listen for memory:fresh event from store (Issue #192)
+function onMemoryFresh() {
+  fetchMemoryFacts()
+}
+
+// v1.0 #191 open memory drawer
+async function openMemoryDrawer() {
+  await fetchMemoryFacts()
+  memoryDrawerOpen.value = true
+}
 
 const anyPanelOpen = computed(() =>
   backlogOpen.value || saveOpen.value || loadOpen.value ||
@@ -222,11 +250,14 @@ function clearAutoTimer() {
 onMounted(async () => {
   await store.startSession(courseId, worldId, checkpointId)
   checkpoints.value = await store.fetchCheckpoints()
+  // v1.0 #192: listen for memory:fresh event
+  window.addEventListener('memory:fresh', onMemoryFresh)
 })
 
 onBeforeUnmount(() => {
   clearAutoTimer()
   store.reset()
+  window.removeEventListener('memory:fresh', onMemoryFresh)
 })
 
 const sageCharacter = computed(() => ({
