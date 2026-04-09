@@ -8,8 +8,8 @@ Create Date: 2026-04-08
 (current_level, motivation, pace, weekly_minutes, sage_ids 等)
 见文档: docs/v1.0.0前后端联调修复/世界_课程_角色_表单设计.md 附录 A
 """
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 
 
 # revision identifiers, used by Alembic.

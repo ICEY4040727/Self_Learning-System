@@ -7,8 +7,8 @@ Create Date: 2026-04-06
 NOTE: experience_points and level columns are now created in 2026_04_06_000 (base tables).
 This migration is kept for downgrade compatibility only.
 """
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = '2026_04_06_002'
