@@ -65,6 +65,33 @@ class BranchRequest(BaseModel):
     branch_name: str | None = None
 
 
+# v1.0 #193 存档导入/导出模型
+class CheckpointExportData(BaseModel):
+    """导出存档数据结构"""
+    version: str = "1.0"  # 存档版本，用于未来兼容性
+    save_name: str
+    world_id: int
+    session_id: int | None = None
+    message_index: int
+    created_at: str  # ISO 格式
+    stage: str | None = None
+    mastery_percent: float | None = None
+    preview_text: str | None = None
+    # 可选：包含会话快照数据
+    session_snapshot: dict | None = None
+
+
+class CheckpointImportData(BaseModel):
+    """导入存档数据结构"""
+    version: str = "1.0"
+    save_name: str = Field(..., max_length=100)
+    world_id: int
+    session_id: int | None = None
+    message_index: int = 0
+    stage: str | None = None
+    mastery_percent: float | None = None
+    preview_text: str | None = None
+    session_snapshot: dict | None = None
 @router.post("/checkpoints", response_model=CheckpointResponse)
 async def create_checkpoint(
     payload: CheckpointCreate,
@@ -554,3 +581,108 @@ async def delete_save_legacy(
     current_user: User = Depends(get_current_user),
 ):
     return await delete_checkpoint(save_id, db, current_user)
+
+
+# v1.0 #193 存档导入/导出接口
+@router.get("/checkpoints/{checkpoint_id}/export")
+async def export_checkpoint(
+    checkpoint_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """导出存档为 JSON 文件"""
+    checkpoint = db.query(Checkpoint).filter(
+        Checkpoint.id == checkpoint_id,
+        Checkpoint.user_id == current_user.id,
+    ).first()
+    if not checkpoint:
+        raise HTTPException(status_code=404, detail="Checkpoint not found")
+
+    # 获取会话快照
+    session_snapshot = None
+    if checkpoint.session_id:
+        session = db.query(SessionModel).filter(
+            SessionModel.id == checkpoint.session_id
+        ).first()
+        if session:
+            # 获取聊天历史
+            messages = db.query(ChatMessage).filter(
+                ChatMessage.session_id == checkpoint.session_id
+            ).order_by(ChatMessage.id.asc()).limit(checkpoint.message_index).all()
+            session_snapshot = {
+                "relationship": session.relationship,
+                "course_id": session.course_id,
+                "sage_character_id": session.sage_character_id,
+                "traveler_character_id": session.traveler_character_id,
+                "messages": [
+                    {
+                        "sender_type": m.sender_type,
+                        "content": m.content,
+                        "emotion_analysis": m.emotion_analysis,
+                    }
+                    for m in messages
+                ],
+            }
+
+    export_data = CheckpointExportData(
+        version="1.0",
+        save_name=checkpoint.save_name,
+        world_id=checkpoint.world_id,
+        session_id=checkpoint.session_id,
+        message_index=checkpoint.message_index,
+        created_at=checkpoint.created_at.isoformat(),
+        stage=(checkpoint.state or {}).get("relationship", {}).get("stage"),
+        mastery_percent=None,  # 客户端可自行计算
+        preview_text=None,
+        session_snapshot=session_snapshot,
+    )
+    return export_data
+
+
+@router.post("/checkpoints/import")
+async def import_checkpoint(
+    payload: CheckpointImportData,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """从 JSON 导入存档"""
+    # 验证世界存在
+    world = db.query(World).filter(
+        World.id == payload.world_id,
+        World.user_id == current_user.id,
+    ).first()
+    if not world:
+        raise HTTPException(status_code=404, detail="World not found")
+
+    # 构建 state
+    state = {
+        "relationship": {
+            "stage": payload.stage or "stranger",
+            "dimensions": {},
+        },
+    }
+    if payload.session_snapshot:
+        state.update({
+            "course_id": payload.session_snapshot.get("course_id"),
+            "sage_character_id": payload.session_snapshot.get("sage_character_id"),
+            "traveler_character_id": payload.session_snapshot.get("traveler_character_id"),
+        })
+
+    # 创建新存档
+    checkpoint = Checkpoint(
+        user_id=current_user.id,
+        world_id=payload.world_id,
+        session_id=payload.session_id,
+        save_name=payload.save_name,
+        message_index=payload.message_index,
+        state=state,
+    )
+    db.add(checkpoint)
+    db.commit()
+    db.refresh(checkpoint)
+
+    return {
+        "id": checkpoint.id,
+        "save_name": checkpoint.save_name,
+        "created_at": checkpoint.created_at,
+    }
