@@ -1,5 +1,10 @@
 """Prompt Builder
 模块化提示词构建器
+
+P1 #183 存储结构重设计:
+- 移除 KnowledgeModule（使用 memory_facts 表）
+- 移除 MemoryRetrievalModule（使用 MemoryFactsModule）
+- 添加 MemoryFactsModule（从 memory_facts 检索记忆）
 """
 
 import logging
@@ -11,8 +16,7 @@ from backend.services.prompt_builder.contexts.scaffold import ScaffoldContext
 from backend.services.prompt_builder.modules.affect import AffectModule
 from backend.services.prompt_builder.modules.course_intent import CourseIntentModule
 from backend.services.prompt_builder.modules.episode import EpisodeModule
-from backend.services.prompt_builder.modules.knowledge import KnowledgeModule
-from backend.services.prompt_builder.modules.memory_retrieval import MemoryRetrievalModule
+from backend.services.prompt_builder.modules.memory_facts import MemoryFactsModule
 from backend.services.prompt_builder.modules.metacognition import MetacognitionModule
 from backend.services.prompt_builder.modules.misconception import MisconceptionModule
 from backend.services.prompt_builder.modules.preference import PreferenceModule
@@ -32,23 +36,21 @@ class SceneConfig:
     ASSESSMENT = "assessment"
     
     # 场景配置：定义每个场景使用的模块
-    # 优先级顺序：Knowledge(10) → Misconception(30) → Episode(40) → Preference(50) → Affect(60) → Metacognition(70) → MemoryRetrieval(80)
+    # 优先级顺序：Misconception(30) → Episode(40) → Preference(50) → Affect(60) → MemoryFacts(70) → Metacognition(80)
     MODULE_CONFIGS = {
         LEARNING: [
-            KnowledgeModule,
             MisconceptionModule,
             EpisodeModule,
             PreferenceModule,
             AffectModule,
+            MemoryFactsModule,
             MetacognitionModule,
-            MemoryRetrievalModule,
         ],
         REVIEW: [
-            KnowledgeModule,
-            MemoryRetrievalModule,
+            MemoryFactsModule,
         ],
         ASSESSMENT: [
-            KnowledgeModule,
+            # 评估场景暂不添加特定模块
         ],
     }
     
@@ -198,22 +200,6 @@ class PromptBuilder:
             tags = getattr(traveler_character, "tags", None)
             if tags and isinstance(tags, (list, tuple)):
                 parts.append(f"学习风格: {', '.join(str(t) for t in tags)}")
-        
-        # 5. World Setting Module（Phase 3 新增）- 世界氛围
-        if db:
-            world_module = WorldSettingModule()
-            if world_module.is_applicable({"world_id": context.get("world_id")} if context else {}):
-                world_content = world_module.assemble({"db": db, "world_id": context.get("world_id")} if context else {"db": db})
-                if world_content:
-                    parts.append(world_content)
-        
-        # 6. Course Intent Module（Phase 3 新增）- 课程学习意图
-        if db and context.get("course_id"):
-            course_module = CourseIntentModule()
-            if course_module.is_applicable({"course_id": context.get("course_id")}):
-                course_content = course_module.assemble({"db": db, "course_id": context.get("course_id")})
-                if course_content:
-                    parts.append(course_content)
         
         return "\n\n".join(parts)
     

@@ -54,6 +54,7 @@ class User(Base):
     sessions = orm_relationship("Session", back_populates="user", cascade="all, delete-orphan")
     checkpoints = orm_relationship("Checkpoint", back_populates="user", cascade="all, delete-orphan")
     user_profile = orm_relationship("UserProfile", back_populates="user", uselist=False, cascade="all, delete-orphan")
+    save_snapshots = orm_relationship("SaveSnapshot", back_populates="user", cascade="all, delete-orphan")
 
 
 class UserProfile(Base):
@@ -68,6 +69,59 @@ class UserProfile(Base):
     updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow)
 
     user = orm_relationship("User", back_populates="user_profile")
+
+
+# =============================================================================
+# 记忆事实表 (MemoryFact)
+# 用于存储 AI 从对话中提取的关于学生的认知事实
+# 
+# 设计说明:
+# - character_id: 指向 sage character（AI 老师），记录该老师对学生的认知
+# - world_id: 可为 NULL，表示跨世界事实（如学生名字、性格特点）
+# - subject_id: 可选，用于关联特定课程/主题
+# - fact_type: 事实类型（student_state/concept_struggle/concept_mastered/preference/event/commitment）
+# - source_message_id: 溯源，指向产生该记忆的 AI 回复
+# =============================================================================
+class MemoryFact(Base):
+    __tablename__ = "memory_facts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    character_id = Column(Integer, ForeignKey("characters.id"), nullable=False)
+    world_id = Column(Integer, ForeignKey("worlds.id", ondelete="CASCADE"), nullable=True)  # nullable: 跨世界事实
+    subject_id = Column(String(50), nullable=True)
+    fact_type = Column(String(30), nullable=False)  # student_state/concept_struggle/concept_mastered/preference/event/commitment
+    content = Column(Text, nullable=False)
+    concept_tags = Column(JSON, nullable=True, default=list)
+    source_message_id = Column(Integer, nullable=True)  # 指向 ChatMessage.id（AI 回复）
+    salience = Column(Float, default=0.5)  # 重要度 0.1-1.0
+    created_at = Column(DateTime, default=_utcnow)
+    last_recalled_at = Column(DateTime, default=_utcnow)
+    recall_count = Column(Integer, default=0)
+    expires_at = Column(DateTime, nullable=True)
+
+    character = orm_relationship("Character", back_populates="memory_facts")
+
+
+# =============================================================================
+# 存档快照表 (SaveSnapshot)
+# 用于存储用户学习会话的完整存档
+# 
+# 设计说明:
+# - payload: JSON 包含会话状态、聊天记录、角色状态等
+# - session_id: 可选，关联的学习会话
+# =============================================================================
+class SaveSnapshot(Base):
+    __tablename__ = "save_snapshots"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    session_id = Column(Integer, ForeignKey("sessions.id"), nullable=True)
+    name = Column(String(100), nullable=False)
+    payload = Column(JSON, nullable=False)
+    created_at = Column(DateTime, default=_utcnow)
+
+    user = orm_relationship("User", back_populates="save_snapshots")
+    session = orm_relationship("Session", back_populates="save_snapshots")
 
 
 class World(Base):
@@ -86,7 +140,7 @@ class World(Base):
     sessions = orm_relationship("Session", back_populates="world", cascade="all, delete-orphan")
     checkpoints = orm_relationship("Checkpoint", back_populates="world", cascade="all, delete-orphan")
     learner_profiles = orm_relationship("LearnerProfile", back_populates="world", cascade="all, delete-orphan")
-    knowledge = orm_relationship("Knowledge", back_populates="world", uselist=False, cascade="all, delete-orphan")
+    memory_facts = orm_relationship("MemoryFact", back_populates="world", cascade="all, delete-orphan")
     fsrs_states = orm_relationship("FSRSState", back_populates="world", cascade="all, delete-orphan")
 
 
@@ -115,6 +169,7 @@ class Character(Base):
     user = orm_relationship("User", back_populates="characters")
     teacher_personas = orm_relationship("TeacherPersona", back_populates="character", cascade="all, delete-orphan")
     world_links = orm_relationship("WorldCharacter", back_populates="character", cascade="all, delete-orphan")
+    memory_facts = orm_relationship("MemoryFact", back_populates="character", cascade="all, delete-orphan")
 
 
 class WorldCharacter(Base):
@@ -129,15 +184,6 @@ class WorldCharacter(Base):
 
     world = orm_relationship("World", back_populates="world_characters")
     character = orm_relationship("Character", back_populates="world_links")
-
-
-class Knowledge(Base):
-    __tablename__ = "knowledge"
-
-    world_id = Column(Integer, ForeignKey("worlds.id", ondelete="CASCADE"), primary_key=True)
-    graph = Column(JSON, nullable=False, default=dict)
-
-    world = orm_relationship("World", back_populates="knowledge")
 
 
 class TeacherPersona(Base):
@@ -289,6 +335,7 @@ class Session(Base):
     chat_messages = orm_relationship("ChatMessage", back_populates="session", cascade="all, delete-orphan")
     relationship_stage_records = orm_relationship("RelationshipStageRecord", back_populates="session", cascade="all, delete-orphan")
     parent_checkpoint = orm_relationship("Checkpoint", foreign_keys=[parent_checkpoint_id], post_update=True)
+    save_snapshots = orm_relationship("SaveSnapshot", back_populates="session", cascade="all, delete-orphan")
 
     @property
     def relationship_stage(self):
