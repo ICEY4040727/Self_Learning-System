@@ -13,8 +13,8 @@ from backend.models.models import (
     Character,
     Course,
     FSRSState,
-    Knowledge,
     LearnerProfile,
+    MemoryFact,
     RelationshipStageRecord,
     Session as SessionModel,
     User,
@@ -56,13 +56,19 @@ def get_mastery_trends_by_user(db: Session, user_id: int) -> dict[str, Any]:
     declined_count = 0
     
     for world in worlds:
-        # 获取该世界的知识图谱
-        knowledge = db.query(Knowledge).filter(Knowledge.world_id == world.id).first()
+        # 获取该世界的记忆事实 (P1 #183: 使用 MemoryFact 替代 Knowledge)
+        memory_facts = db.query(MemoryFact).filter(MemoryFact.world_id == world.id).all()
         
-        if not knowledge or not knowledge.graph:
+        if not memory_facts:
             continue
             
-        concepts = knowledge.graph.get("concepts", {})
+        # 从 memory_facts 提取概念掌握情况
+        concepts = {}
+        for fact in memory_facts:
+            if fact.fact_type == "concept_mastered":
+                tags = fact.concept_tags or []
+                for tag in tags:
+                    concepts[tag] = {"name": tag, "mastery": int(fact.salience * 100)}
         
         for concept_id, concept_data in concepts.items():
             if not isinstance(concept_data, dict):
@@ -105,13 +111,18 @@ def get_world_mastery_trends(db: Session, world_id: int, user_id: int) -> list[d
         {"date": "2026-04-02", "average_mastery": 0.35, "concepts_learned": 8},
     ]
     """
-    # 获取该世界的知识图谱
-    knowledge = db.query(Knowledge).filter(Knowledge.world_id == world_id).first()
+    # 获取该世界的记忆事实 (P1 #183: 使用 MemoryFact 替代 Knowledge)
+    memory_facts = db.query(MemoryFact).filter(MemoryFact.world_id == world_id).all()
     
-    if not knowledge or not knowledge.graph:
+    if not memory_facts:
         return []
     
-    concepts = knowledge.graph.get("concepts", {})
+    # 从 memory_facts 提取概念
+    concepts = {}
+    for fact in memory_facts:
+        if fact.concept_tags:
+            for tag in fact.concept_tags:
+                concepts[tag] = {"name": tag, "mastery": int(fact.salience * 100)}
     
     # 按日期分组计算平均掌握度
     mastery_by_date: dict[str, list[float]] = {}
@@ -297,22 +308,21 @@ def build_world_comparison(db: Session, user_id: int) -> list[dict[str, Any]]:
             .count()
         )
         
-        # 获取知识图谱统计
-        knowledge = db.query(Knowledge).filter(Knowledge.world_id == world.id).first()
+        # 获取记忆事实统计 (P1 #183: 使用 MemoryFact 替代 Knowledge)
+        memory_facts = db.query(MemoryFact).filter(MemoryFact.world_id == world.id).all()
         total_concepts = 0
         average_mastery = 0.0
         
-        if knowledge and knowledge.graph:
-            concepts = knowledge.graph.get("concepts", {})
-            total_concepts = len(concepts)
-            
-            if concepts:
-                mastery_sum = sum(
-                    c.get("mastery", 0) 
-                    for c in concepts.values() 
-                    if isinstance(c, dict)
-                )
-                average_mastery = mastery_sum / total_concepts
+        if memory_facts:
+            # 统计概念数量和平均掌握度
+            concept_mastery = {}
+            for fact in memory_facts:
+                if fact.concept_tags:
+                    for tag in fact.concept_tags:
+                        concept_mastery[tag] = int(fact.salience * 100)
+            total_concepts = len(concept_mastery)
+            if concept_mastery:
+                average_mastery = sum(concept_mastery.values()) / total_concepts
         
         # 获取当前关系阶段
         latest_session = (
