@@ -53,6 +53,21 @@ class User(Base):
     progress_trackings = orm_relationship("ProgressTracking", back_populates="user", cascade="all, delete-orphan")
     sessions = orm_relationship("Session", back_populates="user", cascade="all, delete-orphan")
     checkpoints = orm_relationship("Checkpoint", back_populates="user", cascade="all, delete-orphan")
+    user_profile = orm_relationship("UserProfile", back_populates="user", uselist=False, cascade="all, delete-orphan")
+
+
+class UserProfile(Base):
+    """用户全局画像 - 跨世界特征聚合（仅用于展示，不注入提示词）"""
+    __tablename__ = "user_profiles"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), unique=True, nullable=False)
+    profile = Column(JSON, nullable=False, default=dict)  # 跨世界汇总数据
+    computed_at = Column(DateTime, default=_utcnow)
+    created_at = Column(DateTime, default=_utcnow)
+    updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow)
+
+    user = orm_relationship("User", back_populates="user_profile")
 
 
 class World(Base):
@@ -75,18 +90,26 @@ class World(Base):
     fsrs_states = orm_relationship("FSRSState", back_populates="world", cascade="all, delete-orphan")
 
 
+# 角色类型说明 (Character.type):
+#   - "sage": 导师角色 (AI教师)
+#   - "traveler": 旅人角色 (玩家在游戏世界中的化身)
 class Character(Base):
     __tablename__ = "characters"
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     name = Column(String(100), nullable=False)
+    # type: "sage" | "traveler" - 区分导师角色和学习者角色
     type = Column(String(20), nullable=False, default="sage")
     avatar = Column(String(255), nullable=True)
     personality = Column(Text, nullable=True)
     background = Column(Text, nullable=True)
     speech_style = Column(Text, nullable=True)
     sprites = Column(JSON, nullable=True)
+    title = Column(String(100), nullable=True)  # 知者名片头衔
+    tags = Column(JSON, nullable=True, default=list)  # 角色标签列表
+    experience_points = Column(Integer, nullable=False, default=0)  # 经验值
+    level = Column(Integer, nullable=False, default=1)  # 等级
     created_at = Column(DateTime, default=_utcnow)
 
     user = orm_relationship("User", back_populates="characters")
@@ -134,6 +157,9 @@ class TeacherPersona(Base):
     sessions = orm_relationship("Session", back_populates="teacher_persona")
 
 
+# 学习者档案 (LearnerProfile):
+# 存储用户在特定世界中的学习状态、偏好、元认知等信息
+# 注意：这是"学习追踪层"，与游戏角色层(traveler)是不同概念
 class LearnerProfile(Base):
     __tablename__ = "learner_profiles"
 
@@ -157,6 +183,9 @@ class Course(Base):
     name = Column(String(100), nullable=False)
     description = Column(Text, nullable=True)
     target_level = Column(String(50), nullable=True)
+    # meta JSON: 存储表单扩展字段 (current_level, motivation, pace, weekly_minutes, sage_ids 等)
+    # 见文档: docs/v1.0.0前后端联调修复/世界_课程_角色_表单设计.md 附录 A
+    meta = Column(JSON, nullable=True, default=dict)
     created_at = Column(DateTime, default=_utcnow)
 
     world = orm_relationship("World", back_populates="courses")
@@ -222,6 +251,16 @@ class FSRSState(Base):
     world = orm_relationship("World", back_populates="fsrs_states")
 
 
+# 会话模型 (Session):
+# 一个学习会话关联多个角色和档案:
+#   - sage_character_id: 导师角色 (Character.type="sage") - AI教师角色
+#   - traveler_character_id: 旅人角色 (Character.type="traveler") - 玩家游戏化身
+#   - teacher_persona_id: 教师人格 - 导师的具体人格设定
+#   - learner_profile_id: 学习者档案 - 记录用户学习状态
+#
+# 层级区分:
+#   - traveler: 游戏角色层 (故事/游戏中玩家扮演的角色)
+#   - learner_profile: 学习追踪层 (记录用户学习状态、偏好)
 class Session(Base):
     __tablename__ = "sessions"
 
@@ -229,7 +268,7 @@ class Session(Base):
     course_id = Column(Integer, ForeignKey("courses.id", ondelete="CASCADE"), nullable=False)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     world_id = Column(Integer, ForeignKey("worlds.id", ondelete="CASCADE"), nullable=False)
-    # Optional until a world binds explicit sage/traveler entries.
+    # 角色关联 (游戏角色层)
     sage_character_id = Column(Integer, ForeignKey("characters.id"), nullable=True)
     traveler_character_id = Column(Integer, ForeignKey("characters.id"), nullable=True)
     started_at = Column(DateTime, default=_utcnow)

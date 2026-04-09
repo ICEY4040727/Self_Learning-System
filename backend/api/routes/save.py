@@ -41,6 +41,10 @@ class CheckpointResponse(BaseModel):
     message_index: int
     thumbnail_path: str | None = None
     created_at: datetime
+    date: str | None = None  # 格式化日期
+    stage: str | None = None  # 关系阶段
+    masteryPercent: float | None = None  # 掌握度
+    previewText: str | None = None  # 预览文本
 
     class Config:
         from_attributes = True
@@ -122,6 +126,64 @@ async def create_checkpoint(
     return checkpoint
 
 
+def _build_checkpoint_response(cp: Checkpoint, db: Session, user_id: int) -> CheckpointResponse:
+    """Build CheckpointResponse with extended fields."""
+    state = cp.state or {}
+    relationship = state.get("relationship", {})
+    
+    # Extract relationship stage
+    stage = None
+    if relationship:
+        stage_map = {
+            "stranger": "初识",
+            "acquaintance": "相识",
+            "friend": "朋友",
+            "mentor": "导师",
+            "partner": "伙伴",
+        }
+        stage = stage_map.get(relationship.get("stage", ""), relationship.get("stage"))
+    
+    # Format date
+    date = cp.created_at.strftime("%Y-%m-%d %H:%M") if cp.created_at else None
+    
+    # Calculate mastery from progress tracking
+    mastery = None
+    course_id = state.get("course_id")
+    if course_id:
+        from backend.models.models import ProgressTracking
+        progress_list = db.query(ProgressTracking).filter(
+            ProgressTracking.course_id == course_id,
+            ProgressTracking.user_id == user_id
+        ).all()
+        if progress_list:
+            total = sum(p.mastery_level for p in progress_list)
+            mastery = total / len(progress_list) / 100.0  # Convert to 0-1 range
+    
+    # Get preview text from chat history
+    preview = None
+    if cp.session_id:
+        from backend.models.models import ChatMessage
+        last_msgs = db.query(ChatMessage).filter(
+            ChatMessage.session_id == cp.session_id
+        ).order_by(ChatMessage.id.desc()).limit(2).all()
+        if last_msgs:
+            preview = last_msgs[0].content[:100] if last_msgs else None
+    
+    return CheckpointResponse(
+        id=cp.id,
+        world_id=cp.world_id,
+        session_id=cp.session_id,
+        save_name=cp.save_name,
+        message_index=cp.message_index,
+        thumbnail_path=cp.thumbnail_path,
+        created_at=cp.created_at,
+        date=date,
+        stage=stage,
+        masteryPercent=mastery,
+        previewText=preview,
+    )
+
+
 @router.get("/checkpoints", response_model=list[CheckpointResponse])
 async def list_checkpoints(
     world_id: int | None = None,
@@ -131,7 +193,8 @@ async def list_checkpoints(
     query = db.query(Checkpoint).filter(Checkpoint.user_id == current_user.id)
     if world_id is not None:
         query = query.filter(Checkpoint.world_id == world_id)
-    return query.order_by(Checkpoint.created_at.desc()).all()
+    checkpoints = query.order_by(Checkpoint.created_at.desc()).all()
+    return [_build_checkpoint_response(cp, db, current_user.id) for cp in checkpoints]
 
 
 def _get_owned_world(db: Session, current_user: User, world_id: int) -> World:

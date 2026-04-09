@@ -1,442 +1,537 @@
 <template>
   <div class="login-page">
-    <div class="scene-layer"></div>
-    <div class="particle-layer" aria-hidden="true">
-      <span
-        v-for="particle in particles"
-        :key="particle.id"
-        class="particle"
-        :class="particle.tone"
-        :style="particle.style"
-      ></span>
+    <!-- Scene background -->
+    <div class="scene-bg" :style="{ backgroundImage: `url(${loginBg})` }"></div>
+    
+    <!-- Combined overlay layer -->
+    <div class="scene-overlay"></div>
+    
+    <!-- Title area - v-motion animation -->
+    <div 
+      class="title-area"
+      v-motion
+      :initial="{ opacity: 0, y: -28 }"
+      :enter="{ opacity: 1, y: 0 }"
+      :transition="{ duration: 900, delay: 150 }"
+    >
+      <div class="top-rune">✦ &nbsp; ZHĪ YÙ · 愿求知者皆得其道 &nbsp; ✦</div>
+      <h1 class="title-text-hover title-text">知遇</h1>
+      <div class="subtitle-text">Zhī Yù</div>
+      <div class="gold-divider"></div>
     </div>
 
-    <div class="login-container galgame-login-panel">
-      <h1 class="title">苏 格 拉 底 学 习 系 统</h1>
-      <p class="subtitle">基于苏格拉底教学法的个性化学习系统</p>
+    <!-- Login panel -->
+    <div class="login-panel">
+      <!-- Mode tabs -->
+      <div class="mode-tabs">
+        <button
+          v-for="m in (['login', 'register'] as const)"
+          :key="m"
+          class="mode-tab"
+          :class="{ active: mode === m }"
+          @click="mode = m; error = ''"
+        >
+          {{ m === 'login' ? '登 入' : '注 册' }}
+        </button>
+      </div>
 
-      <div class="form">
+      <!-- Form -->
+      <form @submit.prevent="handleSubmit" class="form-stack">
         <!-- Username -->
-        <div class="field">
+        <div class="field-group">
+          <label class="field-label">用 户 名</label>
           <input
             v-model="username"
             type="text"
-            :placeholder="isRegisterMode ? '用户名（3-50 字符，字母数字下划线）' : '用户名'"
-            class="input galgame-input"
-            :class="{ 'input-error': usernameError }"
-            @blur="validateUsername"
+            class="galgame-input"
+            placeholder="请输入用户名"
+            autocomplete="username"
+            required
           />
-          <p v-if="usernameError" class="field-error">{{ usernameError }}</p>
         </div>
 
         <!-- Password -->
-        <div class="field">
-          <input
-            v-model="password"
-            type="password"
-            :placeholder="isRegisterMode ? '密码（至少 8 位）' : '密码'"
-            class="input galgame-input"
-            :class="{ 'input-error': passwordError }"
-            @input="validatePassword"
-            @keyup.enter="isRegisterMode ? handleRegister() : handleLogin()"
-          />
-          <p v-if="passwordError" class="field-error">{{ passwordError }}</p>
-          <div v-if="isRegisterMode && password" class="password-strength">
-            <div class="strength-bar">
-              <div class="strength-fill" :class="strengthClass" :style="{ width: passwordStrength + '%' }"></div>
-            </div>
-            <span class="strength-label">{{ strengthLabel }}</span>
+        <div class="field-group">
+          <label class="field-label">密 码</label>
+          <div class="pw-wrapper">
+            <input
+              v-model="password"
+              :type="showPw ? 'text' : 'password'"
+              class="galgame-input pw-input"
+              placeholder="请输入密码"
+              :autocomplete="mode === 'login' ? 'current-password' : 'new-password'"
+              required
+            />
+            <button
+              type="button"
+              class="pw-toggle"
+              @click="showPw = !showPw"
+            >
+              <component :is="showPw ? EyeOff : Eye" :size="15" />
+            </button>
           </div>
         </div>
 
-        <!-- Buttons -->
-        <div class="buttons" v-if="!isRegisterMode">
-          <button class="btn primary galgame-btn" @click="handleLogin" :disabled="isLoading">
-            {{ isLoading ? '登录中...' : '登录' }}
-          </button>
+        <!-- Confirm password (register only) -->
+        <div class="field-group confirm-field">
+          <Transition name="confirm-fast">
+            <div v-if="mode === 'register'" class="field-group-inner">
+              <label class="field-label">确 认 密 码</label>
+              <input
+                v-model="confirmPw"
+                :type="showPw ? 'text' : 'password'"
+                class="galgame-input"
+                placeholder="再次输入密码"
+                autocomplete="new-password"
+              />
+            </div>
+          </Transition>
         </div>
-        <div class="buttons" v-else>
-          <button class="btn primary galgame-btn" @click="handleRegister" :disabled="isLoading || !isFormValid">
-            {{ isLoading ? '注册中...' : '注册' }}
-          </button>
-        </div>
 
-        <!-- Toggle -->
-        <p class="toggle-text">
-          <template v-if="!isRegisterMode">
-            没有账号？<a class="toggle-link" @click="switchMode">注册新账号</a>
-          </template>
-          <template v-else>
-            已有账号？<a class="toggle-link" @click="switchMode">返回登录</a>
-          </template>
-        </p>
+        <!-- Submit button -->
+        <button type="submit" class="submit-btn" :disabled="loading">
+          <span v-if="loading" class="loading-dots">
+            <span v-for="i in 3" :key="i" :style="{ animationDelay: `${(i-1) * 0.2}s` }">·</span>
+          </span>
+          <span v-else>{{ mode === 'login' ? '进 入 学 堂' : '创 建 账 号' }}</span>
+        </button>
 
-        <!-- Error -->
-        <p v-if="error" class="error">{{ error }}</p>
+        <!-- Error message -->
+        <div v-if="error" class="error-box font-ui">{{ error }}</div>
+      </form>
 
-        <!-- Toast -->
-        <Transition name="toast">
-          <div v-if="toast" class="toast-success">{{ toast }}</div>
-        </Transition>
-      </div>
+      <!-- Demo hint -->
+      <div class="demo-hint font-ui">演示模式：输入任意用户名密码即可进入</div>
+    </div>
+
+    <!-- Bottom signature - v-motion delayed animation -->
+    <div 
+      class="bottom-sig font-ui"
+      v-motion
+      :initial="{ opacity: 0 }"
+      :enter="{ opacity: 1 }"
+      :transition="{ delay: 1200, duration: 1000 }"
+    >
+      ✦ &nbsp; ZHĪ YÙ v{{ version }} &nbsp; ✦
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { ref } from 'vue'
+import loginBg from '@/assets/login-bg.jpg'
+import { useRouter } from 'vue-router'
+import { Eye, EyeOff } from 'lucide-vue-next'
+import client from '@/api/client'
 import { useAuthStore } from '@/stores/auth'
 import { parseApiError } from '@/utils/error'
 
-const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
 
+const version = '1.0.0'
+
+const mode = ref<'login' | 'register'>('login')
 const username = ref('')
 const password = ref('')
+const confirmPw = ref('')
+const showPw = ref(false)
 const error = ref('')
-const isLoading = ref(false)
-const isRegisterMode = ref(false)
-const toast = ref('')
-const usernameError = ref('')
-const passwordError = ref('')
+const loading = ref(false)
 
-type ParticleTone = 'gold' | 'blue'
-interface LoginParticle {
-  id: number
-  tone: ParticleTone
-  style: Record<string, string>
-}
-
-const particles: LoginParticle[] = Array.from({ length: 28 }, (_value, index) => {
-  const tone: ParticleTone = index < 17 ? 'gold' : 'blue' // ~60% gold
-  const left = (index * 37) % 100
-  const top = (index * 19) % 100
-  return {
-    id: index,
-    tone,
-    style: {
-      left: `${left}%`,
-      top: `${top}%`,
-      animationDuration: `${8 + (index % 5) * 1.4}s`,
-      animationDelay: `${(index % 7) * 0.45}s`,
-      opacity: `${0.18 + (index % 4) * 0.08}`,
-      width: `${2 + (index % 3)}px`,
-      height: `${2 + (index % 3)}px`,
-    },
-  }
-})
-
-const validateUsername = () => {
-  if (!isRegisterMode.value) { usernameError.value = ''; return }
-  if (!username.value) { usernameError.value = ''; return }
-  if (username.value.length < 3) {
-    usernameError.value = '用户名至少 3 个字符'
-  } else if (username.value.length > 50) {
-    usernameError.value = '用户名不能超过 50 个字符'
-  } else if (!/^[a-zA-Z0-9_-]+$/.test(username.value)) {
-    usernameError.value = '只能包含字母、数字、下划线和横杠'
-  } else {
-    usernameError.value = ''
-  }
-}
-
-const validatePassword = () => {
-  if (!isRegisterMode.value) { passwordError.value = ''; return }
-  if (!password.value) { passwordError.value = ''; return }
-  if (password.value.length < 8) {
-    passwordError.value = `还需要 ${8 - password.value.length} 个字符`
-  } else {
-    passwordError.value = ''
-  }
-}
-
-const passwordStrength = computed(() => {
-  const p = password.value
-  if (!p) return 0
-  let score = 0
-  if (p.length >= 8) score += 30
-  if (p.length >= 12) score += 20
-  if (/[A-Z]/.test(p)) score += 15
-  if (/[0-9]/.test(p)) score += 15
-  if (/[^a-zA-Z0-9]/.test(p)) score += 20
-  return Math.min(100, score)
-})
-
-const strengthClass = computed(() => {
-  if (passwordStrength.value < 40) return 'weak'
-  if (passwordStrength.value < 70) return 'medium'
-  return 'strong'
-})
-
-const strengthLabel = computed(() => {
-  if (passwordStrength.value < 40) return '弱'
-  if (passwordStrength.value < 70) return '中'
-  return '强'
-})
-
-const isFormValid = computed(() => {
-  return username.value.length >= 3
-    && password.value.length >= 8
-    && !usernameError.value
-    && !passwordError.value
-})
-
-const switchMode = () => {
-  isRegisterMode.value = !isRegisterMode.value
+const handleSubmit = async () => {
   error.value = ''
-  usernameError.value = ''
-  passwordError.value = ''
-  password.value = ''
-}
-
-const showToast = (msg: string) => {
-  toast.value = msg
-  setTimeout(() => { toast.value = '' }, 3000)
-}
-
-const getPostLoginRedirect = () => {
-  const redirect = route.query.redirect
-  if (typeof redirect === 'string' && redirect.startsWith('/') && !redirect.startsWith('//')) {
-    return redirect
+  if (!username.value.trim() || !password.value.trim()) {
+    error.value = '请填写用户名和密码'
+    return
   }
-  return '/home'
-}
-
-const handleLogin = async () => {
-  error.value = ''
-  isLoading.value = true
+  if (mode.value === 'register' && password.value !== confirmPw.value) {
+    error.value = '两次密码不一致'
+    return
+  }
+  loading.value = true
   try {
-    await authStore.login(username.value, password.value)
-    password.value = ''
-    router.replace(getPostLoginRedirect())
+    if (mode.value === 'login') {
+      // OAuth2 password flow — requires FormData
+      const formData = new FormData()
+      formData.append('username', username.value.trim())
+      formData.append('password', password.value)
+      const { data } = await client.post('/auth/login', formData)
+      authStore.token = data.access_token
+      authStore.user = data
+      // Persist token
+      localStorage.setItem('token', authStore.token!)
+      router.push('/home')
+    } else {
+      // Register — JSON payload
+      await client.post('/auth/register', {
+        username: username.value.trim(),
+        password: password.value
+      })
+      error.value = '注册成功，请登录'
+      mode.value = 'login'
+    }
   } catch (e: any) {
     error.value = parseApiError(e)
   } finally {
-    isLoading.value = false
-  }
-}
-
-const handleRegister = async () => {
-  validateUsername()
-  validatePassword()
-  if (usernameError.value || passwordError.value) return
-
-  error.value = ''
-  isLoading.value = true
-  try {
-    await authStore.register(username.value, password.value)
-    isRegisterMode.value = false
-    password.value = ''
-    showToast('注册成功，请登录')
-  } catch (e: any) {
-    error.value = parseApiError(e)
-  } finally {
-    isLoading.value = false
+    loading.value = false
   }
 }
 </script>
 
 <style scoped>
 .login-page {
-  min-height: 100vh;
   position: relative;
+  width: 100vw;
+  height: 100vh;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: #0a0a1e;
+}
+
+.scene-bg {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center 25%;
+}
+
+/* Combined overlay - merges gradient, radial, and glow into one layer */
+.scene-overlay {
+  position: absolute;
+  inset: 0;
+  background: 
+    radial-gradient(ellipse at 50% 0%, rgba(10,10,30,0.15) 0%, transparent 60%),
+    radial-gradient(ellipse at 30% 55%, rgba(255,215,0,0.05) 0%, transparent 55%),
+    radial-gradient(ellipse at 70% 35%, rgba(96,165,250,0.04) 0%, transparent 55%),
+    linear-gradient(to bottom, rgba(10,10,30,0.25) 0%, rgba(0,0,0,0.45) 100%);
+}
+
+.title-area {
+  position: relative;
+  z-index: 10;
+  text-align: center;
+  margin-bottom: 40px;
+}
+
+.top-rune {
+  color: rgba(255,215,0,0.65);
+  font-size: 11px;
+  letter-spacing: 6px;
+  margin-bottom: 12px;
+}
+
+.title-text {
+  font-family: "Noto Serif SC", "Source Han Serif SC", "SimSun", serif;
+  font-size: 38px;
+  letter-spacing: 12px;
+  color: #ffd700;
+  margin-bottom: 12px;
+  transition: text-shadow 0.6s ease;
+  text-align: center;
+}
+
+.title-text-hover:hover {
+  text-shadow: 
+    0 0 8px rgba(255,215,0,0.6),
+    0 0 16px rgba(255,215,0,0.35);
+}
+
+.subtitle-text {
+  font-family: "Noto Sans SC", "Microsoft YaHei", sans-serif;
+  color: rgba(255,255,255,0.70);
+  font-size: 14px;
+  letter-spacing: 4px;
+}
+
+.gold-divider {
+  width: 200px;
+  height: 1px;
+  background: linear-gradient(to right, transparent, rgba(255,215,0,0.5), transparent);
+  margin: 14px auto 0;
+}
+
+.login-panel {
+  position: relative;
+  z-index: 10;
+  width: 420px;
+  max-width: 92vw;
+  min-height: 320px;
+  padding: 28px 32px 26px;
+  background: rgba(8, 8, 25, 0.35);
+  border: 1px solid rgba(255, 215, 0, 0.15);
+  border-top: none;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  text-align: center;
+}
+
+/* Elegant top border with gradient */
+.login-panel::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(
+    to right,
+    transparent 0%,
+    rgba(255, 215, 0, 0.6) 20%,
+    rgba(255, 215, 0, 0.9) 50%,
+    rgba(255, 215, 0, 0.6) 80%,
+    transparent 100%
+  );
+}
+
+/* Elegant fonts for login panel content */
+.login-panel .mode-tabs,
+.login-panel .mode-tab,
+.login-panel .field-label,
+.login-panel .galgame-input,
+.login-panel .submit-btn,
+.login-panel .demo-hint,
+.login-panel .error-box {
+  font-family: "Noto Sans SC", "Microsoft YaHei", "PingFang SC", sans-serif;
+}
+
+.mode-tabs {
+  display: flex;
+  margin-bottom: 28px;
+  border-bottom: 1px solid rgba(255,215,0,0.25);
+}
+
+.mode-tab {
+  flex: 1;
+  padding-bottom: 10px;
+  font-size: 14px;
+  letter-spacing: 5px;
+  cursor: pointer;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: rgba(255,255,255,0.50);
+  transition: all 0.25s ease;
+  margin-bottom: -1px;
+}
+
+.mode-tab.active {
+  color: #ffd700;
+  border-bottom-color: #ffd700;
+}
+
+.form-stack {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0;
+}
+
+.field-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-bottom: 16px;
+}
+
+/* Confirm field wrapper for transitions */
+.confirm-field {
+  /* No special positioning needed */
+}
+
+.field-group-inner {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.field-label {
+  color: rgba(255,255,255,0.60);
+  font-size: 12px;
+  letter-spacing: 4px;
+}
+
+/* Override galgame-input to use gold border instead of dark */
+.galgame-input {
+  background: rgba(0, 0, 0, 0.40) !important;
+  border: 2px solid rgba(255, 215, 0, 0.40) !important;
+  border-radius: 0 !important;
+  color: rgba(255,255,255,0.90) !important;
+  transition: border-color 0.25s ease, box-shadow 0.25s ease !important;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 14px 16px !important;
+}
+
+.galgame-input:focus {
+  border-color: rgba(255, 215, 0, 0.75) !important;
+  box-shadow: 0 0 8px rgba(255, 215, 0, 0.20) !important;
+  outline: none !important;
+}
+
+.galgame-input::placeholder {
+  color: rgba(255,255,255,0.35) !important;
+}
+
+/* Password wrapper for proper alignment */
+.pw-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.pw-input {
+  padding-right: 44px !important;
+}
+
+.pw-toggle {
+  position: absolute;
+  right: 12px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: rgba(255,255,255,0.45);
   display: flex;
   align-items: center;
   justify-content: center;
-}
-
-.scene-layer {
-  position: absolute;
-  inset: 0;
-  background:
-    radial-gradient(ellipse at 50% 25%, rgba(67, 57, 123, 0.26) 0%, rgba(10, 10, 30, 0.94) 62%),
-    linear-gradient(180deg, #09091a 0%, #070714 100%);
-}
-
-.particle-layer {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-}
-
-.particle {
-  position: absolute;
-  border-radius: 50%;
-  animation: floatParticle linear infinite;
-}
-
-.particle.gold {
-  background: rgba(255, 215, 0, 0.95);
-  box-shadow: 0 0 8px rgba(255, 215, 0, 0.42);
-}
-
-.particle.blue {
-  background: rgba(96, 165, 250, 0.95);
-  box-shadow: 0 0 8px rgba(96, 165, 250, 0.36);
-}
-
-.login-container {
-  position: relative;
-  z-index: 1;
-  text-align: center;
-  padding: 42px 36px;
-  width: min(92vw, 420px);
-}
-
-.title {
-  font-family: var(--font-dialogue);
-  font-size: 24px;
-  color: var(--accent-gold);
-  letter-spacing: 6px;
-  margin-bottom: 8px;
-  animation: titleGlow 3s ease-in-out infinite;
-}
-
-@keyframes titleGlow {
-  0%, 100% { text-shadow: 0 0 10px rgba(255, 215, 0, 0.3); }
-  50% { text-shadow: 0 0 25px rgba(255, 215, 0, 0.5); }
-}
-
-.subtitle {
-  color: var(--text-muted);
-  font-size: 13px;
-  margin-bottom: 30px;
-}
-
-.form {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-
-.field {
-  text-align: left;
-}
-
-.input {
-  width: 100%;
-  padding: 14px;
-  color: var(--text-primary);
-  font-size: 15px;
-  font-family: var(--font-ui);
-  box-sizing: border-box;
-}
-
-.input::placeholder {
-  color: var(--text-muted);
-}
-
-.input-error {
-  border-color: var(--emotion-negative);
-}
-
-.field-error {
-  color: var(--emotion-negative);
-  font-size: 12px;
-  margin-top: 4px;
-}
-
-/* Password strength */
-.password-strength {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 6px;
-}
-
-.strength-bar {
-  flex: 1;
-  height: 4px;
-  background: var(--bg-secondary);
-  border-radius: 2px;
-  overflow: hidden;
-}
-
-.strength-fill {
+  transition: color 0.2s ease;
+  padding: 0;
   height: 100%;
-  border-radius: 2px;
-  transition: all var(--transition-normal);
 }
 
-.strength-fill.weak { background: var(--emotion-negative); }
-.strength-fill.medium { background: var(--accent-orange); }
-.strength-fill.strong { background: var(--emotion-positive); }
-
-.strength-label {
-  font-size: 11px;
-  color: var(--text-muted);
-  min-width: 16px;
+.pw-toggle:hover {
+  color: rgba(255, 215, 0, 0.75);
 }
 
-/* Buttons */
-.buttons {
-  margin-top: 6px;
+.error-box {
+  color: #ff6b6b;
+  font-size: 12px;
+  background: rgba(255, 80, 80, 0.12);
+  border: 1px solid rgba(255, 80, 80, 0.35);
+  padding: 8px 12px;
+  letter-spacing: 1px;
 }
 
-.btn {
+/* Submit button matching learning interface style */
+.submit-btn {
   width: 100%;
-  padding: 14px;
-  font-size: 16px;
-  font-family: var(--font-ui);
-  transition: all var(--transition-normal);
+  padding: 14px 20px;
+  font-size: 14px;
+  letter-spacing: 6px;
+  margin-top: 4px;
+  background: rgba(255,215,0,0.12);
+  border: 2px solid rgba(255, 215, 0, 0.50);
+  color: #ffd700;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  font-family: inherit;
 }
 
-.btn.primary {
-  background: linear-gradient(135deg, var(--accent-gold), var(--accent-orange));
-  color: var(--bg-primary);
-  font-weight: bold;
+.submit-btn:hover:not(:disabled) {
+  background: rgba(255,215,0,0.22);
+  border-color: rgba(255, 215, 0, 0.75);
+  box-shadow: 0 0 16px rgba(255, 215, 0, 0.18);
 }
 
-.btn.primary:hover:not(:disabled) {
-  transform: translateY(-1px);
-  box-shadow: 0 0 20px rgba(255, 215, 0, 0.3);
+.submit-btn:active:not(:disabled) {
+  transform: scale(0.98);
 }
 
-.btn:disabled {
+.submit-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
-  transform: none;
 }
 
-/* Toggle */
-.toggle-text {
-  font-size: 13px;
-  color: var(--text-muted);
+.loading-dots span {
+  animation: dotFlash 1.2s ease-in-out infinite;
 }
 
-.toggle-link {
-  color: var(--accent-gold);
-  cursor: pointer;
-  text-decoration: none;
-  transition: opacity var(--transition-fast);
+.loading-dots {
+  opacity: 0.7;
+  letter-spacing: 2px;
 }
 
-.toggle-link:hover {
-  opacity: 0.8;
+@keyframes dotFlash {
+  0%, 80%, 100% { opacity: 0.3; }
+  40% { opacity: 1; }
 }
 
-/* Error + Toast */
-.error {
-  color: var(--emotion-negative);
-  font-size: 13px;
+.demo-hint {
+  text-align: center;
+  margin-top: 20px;
+  color: rgba(255,255,255,0.35);
+  font-size: 11px;
+  letter-spacing: 1px;
 }
 
-.toast-success {
-  background: rgba(74, 138, 74, 0.9);
-  color: #fff;
-  padding: 10px 20px;
-  border-radius: 6px;
-  font-size: 13px;
+.bottom-sig {
+  position: absolute;
+  bottom: 28px;
+  color: rgba(255,215,0,0.55);
+  font-size: 12px;
+  letter-spacing: 4px;
+  text-shadow: 0 0 16px rgba(255,215,0,0.25);
 }
 
-.toast-enter-active, .toast-leave-active {
-  transition: all 0.3s ease;
-}
-.toast-enter-from, .toast-leave-to {
+.error-fade-enter-from,
+.error-fade-leave-to {
   opacity: 0;
-  transform: translateY(8px);
+  transform: translateY(-6px);
+}
+
+.error-fade-enter-active,
+.error-fade-leave-active {
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+/* Confirm password field slide transition */
+.field-slide-enter-from,
+.field-slide-leave-to {
+  opacity: 0;
+  transform: translateY(-8px);
+}
+
+.field-slide-enter-active,
+.field-slide-leave-active {
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+/* TransitionGroup animations for all form fields */
+.field-list-move {
+  transition: transform 0.7s ease;
+}
+
+.field-list-enter-from {
+  opacity: 0;
+  transform: translateY(12px);
+}
+
+.field-list-leave-to {
+  opacity: 0;
+  transform: translateY(12px);
+}
+
+.field-list-enter-active {
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+
+.field-list-leave-active {
+  transition: opacity 0.25s ease;
+}
+
+/* Fast fade for confirm password field - with delayed leave */
+.confirm-fast-enter-active {
+  transition: opacity 0.05s ease;
+}
+
+.confirm-fast-leave-active {
+  transition: opacity 0.05s ease 0.25s;
+}
+
+.confirm-fast-enter-from,
+.confirm-fast-leave-to {
+  opacity: 0;
 }
 </style>

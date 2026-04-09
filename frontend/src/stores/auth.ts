@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import axios from 'axios'
+import client from '@/api/client'
 
 interface User {
   id: number
@@ -12,14 +12,6 @@ interface User {
 interface AuthState {
   token: string | null
   user: User | null
-}
-
-const syncAxiosAuthHeader = (token: string | null) => {
-  if (token) {
-    axios.defaults.headers.common['Authorization'] = `Bearer ${token}`
-  } else {
-    delete axios.defaults.headers.common['Authorization']
-  }
 }
 
 export const useAuthStore = defineStore('auth', {
@@ -38,20 +30,15 @@ export const useAuthStore = defineStore('auth', {
       formData.append('username', username)
       formData.append('password', password)
 
-      const response = await axios.post('/api/auth/login', formData)
-      const accessToken = response.data.access_token as string | undefined
-      if (!accessToken) {
-        throw new Error('登录响应缺少 access_token')
-      }
+      const { data } = await client.post('/auth/login', formData)
+      this.token = data.access_token
+      localStorage.setItem('token', this.token!)
 
-      this.token = accessToken
-      localStorage.setItem('token', accessToken)
-      syncAxiosAuthHeader(accessToken)
       await this.fetchUser()
     },
 
     async register(username: string, password: string) {
-      await axios.post('/api/auth/register', {
+      await client.post('/auth/register', {
         username,
         password,
         tenant_name: 'default'
@@ -59,20 +46,13 @@ export const useAuthStore = defineStore('auth', {
     },
 
     async fetchUser() {
-      if (!this.token) {
-        this.user = null
-        syncAxiosAuthHeader(null)
-        return null
-      }
-      syncAxiosAuthHeader(this.token)
+      if (!this.token) return
 
       try {
-        const response = await axios.get('/api/auth/me')
-        this.user = response.data
-        return this.user
+        const { data } = await client.get('/auth/me')
+        this.user = data
       } catch (error) {
         this.logout()
-        throw error
       }
     },
 
@@ -80,17 +60,11 @@ export const useAuthStore = defineStore('auth', {
       this.token = null
       this.user = null
       localStorage.removeItem('token')
-      syncAxiosAuthHeader(null)
     },
 
     async initAuth() {
       if (this.token) {
-        syncAxiosAuthHeader(this.token)
-        try {
-          await this.fetchUser()
-        } catch {
-          // token is stale/invalid, fetchUser already called logout()
-        }
+        await this.fetchUser()
       }
     }
   }

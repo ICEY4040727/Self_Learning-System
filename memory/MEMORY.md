@@ -1,0 +1,5 @@
+- [My Role](user_role_reviewer.md) — I am the Creator: implement features, fix bugs, write code — output is branches/commits/PRs
+- [Project Overview](project_overview.md) — Socratic-method AI learning platform with Galgame UI
+- [Creator Workflow](feedback_reviewer_workflow.md) — PR conventions, review dialogue flow, collaboration boundaries with Reviewer
+- [Communication Protocol](reference_tmux_comms.md) — tmux send-keys for cross-session notifications with Reviewer
+- [Actual Codebase State](project_actual_state.md) — Main still uses old schema; World system in WIP branch; memory.py is stub; #130 is P0

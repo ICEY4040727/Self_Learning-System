@@ -1,533 +1,588 @@
 <template>
   <div class="settings-page">
-    <div class="settings-bg-image"></div>
-    <div class="settings-bg-overlay"></div>
+    <!-- Background -->
+    <div class="bg-image" :style="{ backgroundImage: `url(${BG_URL})` }"></div>
+    <div class="bg-gradient"></div>
+    <ParticleBackground :count="16" :gold-ratio="0.5" />
 
-    <header class="header">
-      <button class="back-btn" @click="router.push('/home')">← 返回</button>
-      <h1>设置</h1>
-    </header>
+    <!-- Header -->
+    <div class="settings-header font-ui">
+      <button class="galgame-hud-btn" @click="router.push('/home')">
+        <span>←</span> 返回
+      </button>
+      <span class="header-title">系 统 设 置</span>
+      <div style="width:80px;"></div>
+    </div>
 
-    <main class="main galgame-scrollbar">
-      <section class="settings-section galgame-panel">
-        <div class="section-head">
-          <h2>后端设置（持久化）</h2>
-          <span :class="['state-pill', saveState]">{{ saveStateText }}</span>
+    <!-- Content -->
+    <div class="settings-content galgame-scrollbar">
+      <div class="settings-inner">
+
+        <!-- API Settings -->
+        <div class="panel">
+          <div class="section-header">
+            <span class="section-icon">🔑</span>
+            <div>
+              <div class="section-title font-ui">API 设置</div>
+              <div class="section-hint font-ui">使用哪个模型驱动对话</div>
+            </div>
+          </div>
+
+          <!-- Provider toggle -->
+          <div class="field-group">
+            <label class="font-ui field-label">模型 Provider</label>
+            <div class="provider-row">
+              <button
+                v-for="p in providers"
+                :key="p.value"
+                class="provider-btn"
+                :class="{ active: settings.provider === p.value }"
+                @click="settings.provider = p.value"
+              >
+                {{ p.label }}
+              </button>
+            </div>
+          </div>
+
+          <!-- API Key -->
+          <div class="field-group">
+            <label class="font-ui field-label">API Key</label>
+            <div class="relative">
+              <input
+                v-model="settings.apiKey"
+                class="galgame-input settings-api-input"
+                :type="showApiKey ? 'text' : 'password'"
+                placeholder="sk-..."
+              />
+              <button
+                type="button"
+                class="toggle-vis-btn"
+                @click="showApiKey = !showApiKey"
+              >
+                {{ showApiKey ? '🙈' : '👁' }}
+              </button>
+            </div>
+            <p class="field-hint font-ui">密钥将安全存储于后端，不会明文传输</p>
+          </div>
+
+          <!-- Error & save -->
+          <Transition name="error-fade">
+            <p v-if="error" class="error-text font-ui">{{ error }}</p>
+          </Transition>
+          <div class="save-row">
+            <button
+              class="galgame-send-btn settings-save-btn"
+              :disabled="saving"
+              @click="saveSettings"
+            >
+              {{ saving ? '保存中…' : '保存设置' }}
+            </button>
+            <Transition name="saved-fade">
+              <span v-if="saved" class="saved-indicator font-ui">✓ 已保存</span>
+            </Transition>
+          </div>
         </div>
 
-        <p class="section-desc">将写入 <code>/api/settings</code>：仅保存 default_provider 与 api_key。</p>
+        <!-- LLM Settings -->
+        <div class="panel">
+          <div class="section-header">
+            <span class="section-icon">⚙️</span>
+            <div>
+              <div class="section-title font-ui">LLM 参数</div>
+              <div class="section-hint font-ui">调整对话生成行为</div>
+            </div>
+          </div>
 
-        <div class="provider-grid">
-          <label
-            v-for="option in providerOptions"
-            :key="option.value"
-            :class="['provider-option', { active: backendSettings.provider === option.value }]"
-          >
+          <!-- Temperature -->
+          <div class="field-group">
+            <label class="font-ui field-label">
+              Temperature
+              <span class="field-value">{{ settings.temperature }}</span>
+            </label>
             <input
-              v-model="backendSettings.provider"
-              type="radio"
-              name="provider"
-              :value="option.value"
-              :data-testid="`provider-${option.value}`"
+              type="range"
+              v-model.number="settings.temperature"
+              min="0"
+              max="2"
+              step="0.1"
+              class="range-slider"
             />
-            <span>{{ option.label }}</span>
-          </label>
+            <p class="field-hint font-ui">控制回答的随机性 (0=确定性, 2=创造性)</p>
+          </div>
+
+          <!-- Max Tokens -->
+          <div class="field-group">
+            <label class="font-ui field-label">
+              Max Tokens
+              <span class="field-value">{{ settings.maxTokens }}</span>
+            </label>
+            <input
+              type="range"
+              v-model.number="settings.maxTokens"
+              min="256"
+              max="8192"
+              step="256"
+              class="range-slider"
+            />
+            <p class="field-hint font-ui">单次回复最大 token 数</p>
+          </div>
         </div>
 
-        <div class="form-group">
-          <label>API Key</label>
-          <div class="api-key-row">
+        <!-- Learning Settings -->
+        <div class="panel">
+          <div class="section-header">
+            <span class="section-icon">📖</span>
+            <div>
+              <div class="section-title font-ui">学习设置</div>
+              <div class="section-hint font-ui">个性化学习体验</div>
+            </div>
+          </div>
+
+          <!-- Auto Mode Delay -->
+          <div class="field-group">
+            <label class="font-ui field-label">
+              自动播放延迟
+              <span class="field-value">{{ settings.autoModeDelay }}ms</span>
+            </label>
             <input
-              v-model="backendSettings.apiKey"
-              :type="showApiKey ? 'text' : 'password'"
-              placeholder="输入你的 API Key（留空则不更新）"
+              type="range"
+              v-model.number="settings.autoModeDelay"
+              min="1000"
+              max="5000"
+              step="500"
+              class="range-slider"
             />
-            <button class="toggle-btn" type="button" @click="showApiKey = !showApiKey">
-              {{ showApiKey ? '隐藏' : '显示' }}
+            <p class="field-hint font-ui">自动播放时每句话之间的间隔</p>
+          </div>
+
+          <!-- Notification Toggle -->
+          <div class="toggle-row">
+            <span class="font-ui toggle-label">复习提醒通知</span>
+            <button
+              class="toggle-switch"
+              :class="{ on: settings.notificationEnabled }"
+              @click="settings.notificationEnabled = !settings.notificationEnabled"
+            >
+              <span class="toggle-knob"></span>
             </button>
           </div>
-          <p class="hint">API Key 会在后端加密保存。</p>
         </div>
 
-        <div class="save-row">
-          <button
-            class="save-btn"
-            data-testid="save-backend-settings"
-            @click="saveBackendSettings"
-            :disabled="saveState === 'saving'"
-          >
-            {{ saveButtonText }}
-          </button>
-          <p v-if="saveMessage" :class="['message', saveState === 'error' ? 'error' : 'success']">
-            {{ saveMessage }}
-          </p>
-        </div>
-      </section>
-
-      <section class="settings-section galgame-panel">
-        <div class="section-head">
-          <h2>本地偏好（仅浏览器）</h2>
-          <span class="state-pill local">自动保存</span>
-        </div>
-        <p class="section-desc">以下偏好使用 localStorage 保存，不会调用后端接口。</p>
-
-        <div class="toggle-list">
-          <label class="toggle-item">
+        <!-- Danger Zone -->
+        <div class="panel danger-zone">
+          <div class="section-header">
+            <span class="section-icon danger-icon">⚠️</span>
             <div>
-              <span class="toggle-title">打字机效果</span>
-              <p class="hint">控制 Learning 页面文字逐字显示动画。</p>
+              <div class="section-title danger-title font-ui">危险区域</div>
+              <div class="section-hint font-ui">以下操作不可逆</div>
             </div>
-            <input v-model="displaySettings.typewriterEffect" data-testid="pref-typewriter" type="checkbox" />
-          </label>
-          <label class="toggle-item">
-            <div>
-              <span class="toggle-title">自动滚动</span>
-              <p class="hint">聊天内容更新后自动滚动到最新位置。</p>
-            </div>
-            <input v-model="displaySettings.autoScroll" data-testid="pref-autoscroll" type="checkbox" />
-          </label>
+          </div>
+          <div class="danger-actions">
+            <button class="danger-btn" @click="handleExport">
+              导出数据
+            </button>
+            <button class="danger-btn danger-btn-red" @click="handleLogout">
+              退出登录
+            </button>
+          </div>
         </div>
-      </section>
 
-      <section class="settings-section galgame-panel">
-        <h2>关于</h2>
-        <p class="about-text">
-          苏格拉底学习系统 v1.0<br />
-          基于苏格拉底教学法的个性化学习平台
-        </p>
-      </section>
-    </main>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import axios from 'axios'
 import { useAuthStore } from '@/stores/auth'
-import { parseApiError } from '@/utils/error'
-
-interface DisplaySettings {
-  typewriterEffect: boolean
-  autoScroll: boolean
-}
-
-type SaveState = 'idle' | 'saving' | 'success' | 'error'
-type Provider = 'claude' | 'openai' | 'local'
-
-const DISPLAY_SETTINGS_KEY = 'display_settings'
-const providerOptions: Array<{ value: Provider; label: string }> = [
-  { value: 'claude', label: 'Claude (Anthropic)' },
-  { value: 'openai', label: 'OpenAI GPT' },
-  { value: 'local', label: '本地模型 (Ollama)' },
-]
+import { useSettingsStore } from '@/stores/settings'
+import type { LLMProvider } from '@/types'
+import ParticleBackground from '@/components/ParticleBackground.vue'
 
 const router = useRouter()
 const authStore = useAuthStore()
-const showApiKey = ref(false)
-const saveState = ref<SaveState>('idle')
-const saveMessage = ref('')
-let messageTimer: ReturnType<typeof setTimeout> | null = null
+const settingsStore = useSettingsStore()
 
-const loadDisplaySettings = (): DisplaySettings => {
-  const raw = localStorage.getItem(DISPLAY_SETTINGS_KEY)
-  if (!raw) {
-    return { typewriterEffect: true, autoScroll: true }
-  }
+const BG_URL = 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=1920&q=80'
 
-  try {
-    const parsed = JSON.parse(raw) as Partial<DisplaySettings>
-    return {
-      typewriterEffect: typeof parsed.typewriterEffect === 'boolean' ? parsed.typewriterEffect : true,
-      autoScroll: typeof parsed.autoScroll === 'boolean' ? parsed.autoScroll : true,
-    }
-  } catch (error) {
-    console.warn('Failed to parse local display settings:', parseApiError(error))
-    return { typewriterEffect: true, autoScroll: true }
-  }
-}
+const providers: Array<{ value: LLMProvider; label: string }> = [
+  { value: 'claude', label: 'Claude' },
+  { value: 'openai', label: 'OpenAI' },
+  { value: 'deepseek', label: 'DeepSeek' },
+  { value: 'local', label: '本地模型 (Ollama)' },
+]
 
-const backendSettings = ref<{ provider: Provider; apiKey: string }>({
-  provider: 'claude',
+const settings = reactive({
+  provider: settingsStore.provider || 'claude',
   apiKey: '',
-})
-const displaySettings = ref<DisplaySettings>(loadDisplaySettings())
-
-watch(
-  displaySettings,
-  (next) => {
-    localStorage.setItem(DISPLAY_SETTINGS_KEY, JSON.stringify(next))
-  },
-  { deep: true },
-)
-
-const saveStateText = computed(() => {
-  if (saveState.value === 'saving') return '保存中'
-  if (saveState.value === 'success') return '已保存'
-  if (saveState.value === 'error') return '保存失败'
-  return '未保存'
+  temperature: settingsStore.temperature,
+  maxTokens: settingsStore.maxTokens,
+  autoModeDelay: settingsStore.autoModeDelay ?? 2800,
+  notificationEnabled: true,
 })
 
-const saveButtonText = computed(() => {
-  if (saveState.value === 'saving') return '保存中...'
-  if (saveState.value === 'success') return '✓ 已保存'
-  return '保存后端设置'
+const showApiKey = ref(false)
+const error = ref('')
+const saving = ref(false)
+const saved = ref(false)
+
+onMounted(async () => {
+  await settingsStore.fetchSettings()
+  settings.provider = settingsStore.provider
+  settings.temperature = settingsStore.temperature
+  settings.maxTokens = settingsStore.maxTokens
+  settings.autoModeDelay = settingsStore.autoModeDelay ?? 2800
 })
 
-const resetMessageLater = () => {
-  if (messageTimer) {
-    clearTimeout(messageTimer)
-  }
-  messageTimer = setTimeout(() => {
-    saveMessage.value = ''
-    if (saveState.value !== 'saving') {
-      saveState.value = 'idle'
-    }
-  }, 2500)
-}
-
-const saveBackendSettings = async () => {
-  saveState.value = 'saving'
-  saveMessage.value = ''
-
+const saveSettings = async () => {
+  error.value = ''
+  saving.value = true
+  saved.value = false
   try {
-    const payload: { default_provider: Provider; api_key?: string } = {
-      default_provider: backendSettings.value.provider,
+    settingsStore.provider = settings.provider as LLMProvider
+    settingsStore.temperature = settings.temperature
+    settingsStore.maxTokens = settings.maxTokens
+    settingsStore.autoModeDelay = settings.autoModeDelay
+    if (settings.apiKey.trim()) {
+      settingsStore.apiKey = settings.apiKey.trim()
     }
-    const trimmedApiKey = backendSettings.value.apiKey.trim()
-    if (trimmedApiKey) {
-      payload.api_key = trimmedApiKey
-    }
-
-    await axios.put('/api/settings', payload, {
-      headers: { Authorization: `Bearer ${authStore.token}` },
-    })
-
-    saveState.value = 'success'
-    saveMessage.value = '后端设置保存成功。'
-    backendSettings.value.apiKey = ''
-  } catch (error) {
-    saveState.value = 'error'
-    saveMessage.value = parseApiError(error)
+    await settingsStore.saveSettings()
+    saved.value = true
+    settings.apiKey = ''
+    setTimeout(() => (saved.value = false), 3000)
+  } catch (e: any) {
+    error.value = e?.message ?? '保存失败'
   } finally {
-    resetMessageLater()
+    saving.value = false
   }
 }
 
-const fetchBackendSettings = async () => {
-  try {
-    const response = await axios.get('/api/settings', {
-      headers: { Authorization: `Bearer ${authStore.token}` },
-    })
-    const provider = response.data?.default_provider as Provider | undefined
-    if (provider && providerOptions.some((option) => option.value === provider)) {
-      backendSettings.value.provider = provider
-    }
-  } catch (error) {
-    saveState.value = 'error'
-    saveMessage.value = `读取后端设置失败：${parseApiError(error)}`
-    resetMessageLater()
-  }
+const handleExport = () => {
+  alert('数据导出功能开发中')
 }
 
-onMounted(() => {
-  fetchBackendSettings()
-})
-
-onUnmounted(() => {
-  if (messageTimer) {
-    clearTimeout(messageTimer)
+const handleLogout = () => {
+  if (confirm('确定退出登录？')) {
+    authStore.logout()
+    router.push('/login')
   }
-})
+}
 </script>
 
 <style scoped>
 .settings-page {
   position: relative;
-  min-height: 100vh;
-  padding: 24px;
-  background: linear-gradient(180deg, #0f172a 0%, #111827 58%, #0b1220 100%);
+  width: 100vw;
+  height: 100vh;
   overflow: hidden;
+  background: #0a0a1e;
 }
 
-.settings-bg-image {
+.bg-image {
   position: absolute;
   inset: 0;
-  background:
-    linear-gradient(120deg, rgba(56, 189, 248, 0.1), transparent 38%),
-    linear-gradient(320deg, rgba(167, 139, 250, 0.1), transparent 45%);
-  pointer-events: none;
+  background-size: cover;
+  background-position: center;
+  opacity: 0.08;
 }
 
-.settings-bg-overlay {
+.bg-gradient {
   position: absolute;
   inset: 0;
-  background:
-    radial-gradient(circle at 8% 10%, rgba(255, 215, 0, 0.12), transparent 40%),
-    radial-gradient(circle at 92% 12%, rgba(99, 102, 241, 0.2), transparent 44%);
-  pointer-events: none;
+  background: linear-gradient(to bottom, rgba(10,10,30,0.95) 0%, rgba(10,10,30,0.98) 100%);
 }
 
-.header,
-.main {
-  position: relative;
-  z-index: 2;
-}
-
-.header {
+.settings-header {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
   display: flex;
   align-items: center;
-  gap: 14px;
+  justify-content: space-between;
+  padding: 16px 24px;
+  border-bottom: 1px solid rgba(255,215,0,0.1);
+  z-index: 10;
+}
+
+.settings-header button {
+  font-size: 13px;
+  padding: 6px 14px;
+}
+
+.header-title {
+  color: #ffd700;
+  font-size: 16px;
+  letter-spacing: 4px;
+}
+
+.settings-content {
+  position: absolute;
+  inset: 0;
+  overflow-y: auto;
+  padding-top: 72px;
+  padding-bottom: 32px;
+  padding-left: 24px;
+  padding-right: 24px;
+}
+
+.settings-inner {
+  max-width: 600px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.panel {
+  padding: 22px 26px;
+  background: rgba(8, 8, 28, 0.85);
+  border: 1px solid rgba(255,215,0,0.12);
+  border-radius: 14px;
+}
+
+.section-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
   margin-bottom: 20px;
 }
 
-.header h1 {
-  margin: 0;
-  color: var(--accent-gold, #ffd700);
+.section-icon {
+  font-size: 18px;
+  margin-top: 2px;
 }
 
-.back-btn,
-.save-btn,
-.toggle-btn {
-  border-radius: 10px;
-  border: 1px solid var(--border-subtle, #4b5563);
-  background: rgba(17, 24, 39, 0.8);
-  color: var(--text-primary, #e5e7eb);
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s ease;
+.section-title {
+  color: #ffd700;
+  font-size: 14px;
+  letter-spacing: 2px;
 }
 
-.back-btn {
-  padding: 10px 14px;
+.section-hint {
+  font-size: 11px;
+  color: rgba(255,255,255,0.3);
+  margin-top: 2px;
 }
 
-.back-btn:hover,
-.toggle-btn:hover {
-  border-color: var(--accent-gold, #ffd700);
+.danger-title {
+  color: #ef4444;
 }
 
-.main {
-  max-width: 760px;
-  margin: 0 auto;
-  max-height: calc(100vh - 120px);
-  overflow-y: auto;
-  padding-right: 8px;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
+.danger-icon {
+  color: #ef4444;
 }
 
-.settings-section {
-  border: 1px solid var(--border-subtle, #4b5563);
-  border-radius: 16px;
-  padding: 18px;
-  background: rgba(17, 24, 39, 0.84);
+.field-group {
+  margin-bottom: 18px;
 }
 
-.settings-section h2 {
-  margin: 0;
-  color: var(--accent-gold, #ffd700);
-}
-
-.section-head {
+.field-label {
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  gap: 10px;
+  font-size: 12px;
+  color: rgba(255,255,255,0.5);
+  letter-spacing: 1px;
   margin-bottom: 10px;
 }
 
-.section-desc {
-  margin: 0 0 14px;
-  color: var(--text-secondary, #9ca3af);
+.field-value {
+  color: rgba(255,215,0,0.6);
+}
+
+.provider-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.provider-btn {
+  padding: 8px 18px;
+  font-size: 13px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,215,0,0.15);
+  border-radius: 6px;
+  color: rgba(255,255,255,0.6);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: 'Noto Sans SC', sans-serif;
+}
+
+.provider-btn.active {
+  background: rgba(255,215,0,0.12);
+  border-color: rgba(255,215,0,0.5);
+  color: #ffd700;
+}
+
+.settings-api-input {
+  width: 100%;
+  padding: 10px 44px 10px 14px;
   font-size: 13px;
 }
 
-.section-desc code {
-  font-family: monospace;
-  color: #fde68a;
+.relative {
+  position: relative;
 }
 
-.state-pill {
-  font-size: 12px;
-  border-radius: 999px;
-  padding: 4px 10px;
-  border: 1px solid rgba(107, 114, 128, 0.5);
-  color: #d1d5db;
+.toggle-vis-btn {
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  opacity: 0.5;
 }
 
-.state-pill.saving {
-  border-color: rgba(96, 165, 250, 0.5);
-  color: #93c5fd;
+.field-hint {
+  font-size: 11px;
+  color: rgba(255,255,255,0.25);
+  margin-top: 6px;
 }
 
-.state-pill.success {
-  border-color: rgba(74, 223, 106, 0.55);
-  color: #86efac;
+.range-slider {
+  width: 100%;
+  -webkit-appearance: none;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(255,255,255,0.1);
+  outline: none;
 }
 
-.state-pill.error {
-  border-color: rgba(248, 113, 113, 0.6);
-  color: #fecaca;
-}
-
-.state-pill.local {
-  border-color: rgba(99, 102, 241, 0.5);
-  color: #c7d2fe;
-}
-
-.provider-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 10px;
-  margin-bottom: 14px;
-}
-
-.provider-option {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  border: 1px solid var(--border-subtle, #4b5563);
-  border-radius: 12px;
-  padding: 10px;
-  color: var(--text-secondary, #d1d5db);
+.range-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #ffd700;
   cursor: pointer;
 }
 
-.provider-option.active {
-  border-color: rgba(255, 215, 0, 0.7);
-  background: rgba(255, 215, 0, 0.1);
-  color: #fef3c7;
-}
-
-.provider-option input {
-  margin: 0;
-}
-
-.form-group {
-  margin-bottom: 10px;
-}
-
-.form-group label {
-  display: block;
-  color: var(--text-primary, #f3f4f6);
-  margin-bottom: 6px;
-}
-
-.api-key-row {
+.toggle-row {
   display: flex;
-  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 8px;
 }
 
-.api-key-row input {
-  flex: 1;
-  border: 1px solid var(--border-subtle, #4b5563);
-  border-radius: 10px;
-  background: rgba(3, 7, 18, 0.7);
-  color: var(--text-primary, #f3f4f6);
-  padding: 10px 12px;
-}
-
-.api-key-row input:focus {
-  outline: none;
-  border-color: rgba(255, 215, 0, 0.75);
-}
-
-.toggle-btn {
-  padding: 10px 12px;
-}
-
-.hint {
-  margin: 6px 0 0;
-  color: var(--text-muted, #9ca3af);
+.toggle-label {
   font-size: 12px;
+  color: rgba(255,255,255,0.5);
+  letter-spacing: 1px;
+}
+
+.toggle-switch {
+  width: 44px;
+  height: 24px;
+  border-radius: 12px;
+  background: rgba(255,255,255,0.1);
+  border: 1px solid rgba(255,255,255,0.15);
+  cursor: pointer;
+  position: relative;
+  transition: all 0.2s ease;
+}
+
+.toggle-switch.on {
+  background: rgba(255,215,0,0.3);
+  border-color: rgba(255,215,0,0.5);
+}
+
+.toggle-knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.4);
+  transition: all 0.2s ease;
+}
+
+.toggle-switch.on .toggle-knob {
+  left: 22px;
+  background: #ffd700;
+}
+
+.error-text {
+  font-size: 12px;
+  color: #ef4444;
+  margin-bottom: 12px;
 }
 
 .save-row {
   display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.save-btn {
-  align-self: flex-start;
-  padding: 10px 16px;
-}
-
-.save-btn:hover:not(:disabled) {
-  border-color: rgba(74, 223, 106, 0.6);
-  color: #dcfce7;
-}
-
-.save-btn:disabled {
-  opacity: 0.7;
-  cursor: not-allowed;
-}
-
-.message {
-  margin: 0;
-  font-size: 13px;
-  border-radius: 10px;
-  padding: 8px 10px;
-  border: 1px solid rgba(74, 223, 106, 0.4);
-  background: rgba(74, 223, 106, 0.14);
-  color: #86efac;
-}
-
-.message.error {
-  border-color: rgba(248, 113, 113, 0.6);
-  background: rgba(248, 113, 113, 0.12);
-  color: #fecaca;
-}
-
-.toggle-list {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.toggle-item {
-  border: 1px solid var(--border-subtle, #4b5563);
-  border-radius: 12px;
-  background: rgba(31, 41, 55, 0.6);
-  padding: 12px;
-  display: flex;
-  justify-content: space-between;
-  gap: 10px;
   align-items: center;
+  gap: 12px;
 }
 
-.toggle-item input[type='checkbox'] {
-  width: 18px;
-  height: 18px;
-  accent-color: #ffd700;
+.settings-save-btn {
+  padding: 10px 32px;
+  font-size: 13px;
+  letter-spacing: 2px;
 }
 
-.toggle-title {
-  color: var(--text-primary, #f3f4f6);
-  font-weight: 600;
+.saved-indicator {
+  font-size: 12px;
+  color: #4adf6a;
 }
 
-.about-text {
-  margin: 8px 0 0;
-  color: var(--text-secondary, #cbd5e1);
-  line-height: 1.8;
+.danger-zone {
+  border-color: rgba(239,68,68,0.2);
 }
 
-@media (max-width: 700px) {
-  .settings-page {
-    padding: 14px;
-  }
+.danger-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
 
-  .main {
-    max-height: none;
-    overflow-y: visible;
-    padding-right: 0;
-  }
+.danger-btn {
+  padding: 8px 20px;
+  font-size: 13px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 6px;
+  color: rgba(255,255,255,0.6);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: 'Noto Sans SC', sans-serif;
+}
 
-  .api-key-row {
-    flex-direction: column;
-  }
+.danger-btn:hover {
+  background: rgba(255,255,255,0.08);
+}
+
+.danger-btn-red {
+  color: rgba(255,100,100,0.7);
+  border-color: rgba(255,100,100,0.3);
+}
+
+.danger-btn-red:hover {
+  background: rgba(255,100,100,0.1);
+}
+
+/* Transitions */
+.error-fade-enter-from,
+.error-fade-leave-to {
+  opacity: 0;
+  transform: translateY(-6px);
+}
+
+.error-fade-enter-active,
+.error-fade-leave-active {
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.saved-fade-enter-from,
+.saved-fade-leave-to {
+  opacity: 0;
+}
+
+.saved-fade-enter-active,
+.saved-fade-leave-active {
+  transition: opacity 0.3s ease;
 }
 </style>

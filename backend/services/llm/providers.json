@@ -1,0 +1,27 @@
+{
+  "list": [
+    {"value": "claude", "label": "Claude (Anthropic)", "api_format": "anthropic"},
+    {"value": "openai", "label": "OpenAI", "api_format": "openai"},
+    {"value": "deepseek", "label": "DeepSeek", "api_format": "openai-compatible"},
+    {"value": "qwen", "label": "Alibaba Qwen", "api_format": "openai-compatible"},
+    {"value": "qwen-code", "label": "Alibaba Qwen Coder", "api_format": "openai-compatible"},
+    {"value": "moonshot", "label": "Moonshot AI", "api_format": "openai-compatible"},
+    {"value": "minimax", "label": "MiniMax", "api_format": "openai-compatible"},
+    {"value": "doubao", "label": "Bytedance Doubao", "api_format": "openai-compatible"},
+    {"value": "ollama", "label": "Ollama (Local)", "api_format": "openai-compatible"},
+    {"value": "lmstudio", "label": "LM Studio", "api_format": "openai-compatible"},
+    {"value": "groq", "label": "Groq", "api_format": "openai-compatible"},
+    {"value": "together", "label": "Together AI", "api_format": "openai-compatible"},
+    {"value": "fireworks", "label": "Fireworks AI", "api_format": "openai-compatible"},
+    {"value": "mistral", "label": "Mistral AI", "api_format": "openai-compatible"},
+    {"value": "cerebras", "label": "Cerebras", "api_format": "openai-compatible"},
+    {"value": "nebius", "label": "Nebius AI Studio", "api_format": "openai-compatible"},
+    {"value": "xai", "label": "xAI (Grok)", "api_format": "openai-compatible"},
+    {"value": "sambanova", "label": "SambaNova", "api_format": "openai-compatible"},
+    {"value": "huggingface", "label": "Hugging Face", "api_format": "openai-compatible"},
+    {"value": "gemini", "label": "Google Gemini", "api_format": "gemini"},
+    {"value": "openrouter", "label": "OpenRouter", "api_format": "openai-compatible"},
+    {"value": "litellm", "label": "LiteLLM", "api_format": "openai-compatible"},
+    {"value": "custom", "label": "Custom Endpoint", "api_format": "openai-compatible"}
+  ]
+}

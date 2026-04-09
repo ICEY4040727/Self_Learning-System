@@ -336,5 +336,84 @@ class KnowledgeService:
 
         return {"nodes": nodes, "edges": edges, "links": edges}
 
+    def retrieve_memories(
+        self,
+        db: Session,
+        world_id: int,
+        current_topic: str,
+        checkpoint_time: str | None = None,
+        limit: int = 5
+    ) -> list[dict[str, Any]]:
+        """
+        检索相关的学习记忆/情节
+        
+        从知识图谱的 episodes 中检索与当前话题相关的记忆。
+        这些记忆会注入到提示词中，为 AI 提供上下文。
+        
+        Args:
+            db: 数据库会话
+            world_id: 世界ID
+            current_topic: 当前讨论的话题（用于相关性过滤）
+            checkpoint_time: 检查点时间（只返回该时间之前的记忆）
+            limit: 返回的记忆数量上限
+        
+        Returns:
+            相关记忆列表，每个记忆包含：
+            - type: significance 标记（breakthrough/normal/blocked）
+            - content: 记忆摘要
+            - session_id: 所属会话ID
+            - t_valid: 记忆时间
+            - related_concepts: 相关的概念列表
+        """
+        graph = self.get_knowledge(db, world_id)
+        episodes = graph.get("episodes", [])
+        
+        if not episodes:
+            return []
+        
+        # 按时间过滤（检查点之前的记忆）
+        checkpoint_dt = _parse_iso_datetime(checkpoint_time)
+        if checkpoint_dt:
+            episodes = [
+                e for e in episodes
+                if _parse_iso_datetime(e.get("t_valid", "")) is None
+                or _parse_iso_datetime(e.get("t_valid", "")) <= checkpoint_dt
+            ]
+        
+        # 按 significance 排序：breakthrough > normal > blocked
+        significance_order = {"breakthrough": 0, "normal": 1, "blocked": 2}
+        episodes_sorted = sorted(
+            episodes,
+            key=lambda e: significance_order.get(e.get("significance", "normal"), 1)
+        )
+        
+        # 简单相关性过滤：检查 episode.summary 是否包含当前话题关键词
+        # 优先返回 breakthrough 类型的记忆
+        memories = []
+        topic_keywords = set(current_topic.lower().split()) if current_topic else set()
+        
+        for ep in episodes_sorted[-50:]:  # 最近50条
+            summary = ep.get("summary", "")
+            significance = ep.get("significance", "normal")
+            
+            # 简单相关性：检查关键词匹配
+            relevance_score = 0
+            if topic_keywords:
+                summary_words = set(summary.lower().split())
+                relevance_score = len(topic_keywords & summary_words)
+            
+            # breakthrough 类型直接加入
+            # 其他类型需要有一定相关性才加入
+            if significance == "breakthrough" or relevance_score > 0:
+                memories.append({
+                    "type": significance,
+                    "content": summary,
+                    "session_id": ep.get("session_id"),
+                    "t_valid": ep.get("t_valid"),
+                    "related_concepts": ep.get("related_concepts", [])
+                })
+        
+        return memories[:limit]
+
 
 knowledge_service = KnowledgeService()

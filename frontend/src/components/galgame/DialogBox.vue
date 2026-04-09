@@ -1,5 +1,5 @@
 <template>
-  <div class="dialog-box galgame-dialog-box" @click="handleClick">
+  <div class="dialog-box galgame-dialog galgame-dialog-box galgame-scrollbar" @click="handleClick">
     <!-- Name tag -->
     <div class="name-tag galgame-name-tag" :class="{ 'name-tag-user': mode === 'USER_INPUT' }">
       {{ mode === 'USER_INPUT' ? '我' : characterName }}

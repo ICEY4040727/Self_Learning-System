@@ -1,147 +1,175 @@
 <template>
   <div class="archive-page">
-    <div class="archive-bg-image"></div>
-    <div class="archive-bg-overlay"></div>
+    <!-- Background -->
+    <div class="bg-image" :style="{ backgroundImage: `url(${BG_URL})` }"></div>
+    <div class="bg-gradient"></div>
+    <ParticleBackground :count="16" :gold-ratio="0.5" />
 
-    <header class="archive-header">
-      <button class="galgame-btn galgame-menu-item back-btn" @click="router.push('/home')">← 返回</button>
-      <h1>档 案 管 理</h1>
-      <span class="header-spacer"></span>
-    </header>
+    <!-- Header -->
+    <div class="archive-header font-ui">
+      <button class="galgame-hud-btn" @click="router.push('/home')">
+        <span>←</span> 返回
+      </button>
+      <span class="header-title">档 案 管 理</span>
+      <div style="width:80px;"></div>
+    </div>
 
-    <main class="archive-content galgame-scrollbar">
-      <section class="toolbar-row">
-        <div class="course-filter">
-          <span>课程筛选</span>
-          <select v-model="selectedCourseFilter" class="galgame-input" @change="fetchProgress">
-            <option value="">全部课程</option>
-            <option v-for="course in courses" :key="course.id" :value="String(course.id)">
-              {{ course.name }}
-            </option>
-          </select>
+    <!-- Content -->
+    <div class="archive-content galgame-scrollbar">
+      <!-- World selector -->
+      <div class="world-selector font-ui">
+        <span class="selector-label">当前世界：</span>
+        <div class="world-dropdown" @click="showWorldDropdown = !showWorldDropdown">
+          <span>{{ selectedWorldName }} ▾</span>
         </div>
-        <button class="galgame-btn galgame-btn-primary diary-trigger" @click="openDiaryDialog">写日记</button>
-      </section>
-
-      <p v-if="errorMessage" class="error-banner">{{ errorMessage }}</p>
-
-      <section class="archive-panel emotion-panel galgame-panel">
-        <div class="panel-header">
-          <h2>情感轨迹</h2>
-          <span>{{ selectedCourseName || '全部课程' }}</span>
-        </div>
-        <EmotionTrajectory :course-id="selectedCourseId" />
-      </section>
-
-      <div class="archive-grid">
-        <section class="archive-panel galgame-panel">
-          <div class="panel-header">
-            <h2>学习进度</h2>
-            <span>{{ progressList.length }} 条</span>
-          </div>
-
-          <div class="card-list">
-            <article v-for="prog in progressList" :key="prog.id" class="record-card">
-              <div class="record-head">
-                <strong>{{ prog.topic }}</strong>
-                <span class="record-mastery">{{ prog.mastery_level }}%</span>
-              </div>
-              <div class="progress-bar">
-                <div class="progress-fill" :style="{ width: `${prog.mastery_level}%` }"></div>
-              </div>
-              <p class="record-meta">下次复习：{{ prog.next_review ? formatDateTime(prog.next_review) : '未安排' }}</p>
-            </article>
-
-            <p v-if="progressList.length === 0" class="empty-text">暂无进度记录</p>
-          </div>
-        </section>
-
-        <section class="archive-panel galgame-panel">
-          <div class="panel-header">
-            <h2>存档与分叉</h2>
-            <span>{{ saves.length }} 条</span>
-          </div>
-
-          <div class="card-list">
-            <article v-for="save in saves" :key="save.id" class="record-card save-card">
-              <div class="record-head">
-                <strong>{{ save.save_name }}</strong>
-                <span>#{{ save.id }}</span>
-              </div>
-              <p class="record-meta">{{ formatDateTime(save.created_at) }}</p>
-              <div class="save-actions">
-                <button
-                  class="galgame-btn galgame-menu-item"
-                  :disabled="saveActionId === save.id"
-                  @click="loadSave(save.id)"
-                >
-                  {{ saveActionId === save.id ? '分叉中...' : '读档分叉' }}
-                </button>
-                <button
-                  class="galgame-btn galgame-menu-item danger"
-                  :disabled="saveActionId === save.id"
-                  @click="deleteSave(save.id)"
-                >
-                  删除
-                </button>
-              </div>
-            </article>
-
-            <p v-if="saves.length === 0" class="empty-text">暂无存档</p>
-          </div>
-        </section>
       </div>
 
-      <section class="archive-panel galgame-panel">
-        <div class="panel-header">
-          <h2>学习日记</h2>
-          <span>{{ diaries.length }} 篇</span>
-        </div>
-
-        <div class="card-list">
-          <article v-for="diary in sortedDiaries" :key="diary.id" class="record-card">
-            <div class="record-head">
-              <strong>{{ courseNameMap.get(diary.course_id) || `课程 #${diary.course_id}` }}</strong>
-              <span>{{ formatDateTime(diary.date) }}</span>
+      <div class="grid-layout">
+        <!-- Emotion Trajectory -->
+        <div class="panel full-width">
+          <div class="panel-header">
+            <div class="header-left">
+              <span class="icon">📈</span>
+              <span class="panel-title">情感轨迹</span>
             </div>
-            <p class="diary-content">{{ diary.content }}</p>
-            <p v-if="diary.reflection" class="record-meta reflection">反思：{{ diary.reflection }}</p>
-          </article>
-
-          <p v-if="diaries.length === 0" class="empty-text">暂无学习日记</p>
+            <span class="header-sub font-ui">{{ selectedWorldName }} · {{ selectedCourseName }}</span>
+          </div>
+          <div v-if="emotionData.length === 0" class="empty-placeholder">
+            暂无情感记录
+          </div>
+          <EmotionTrajectory v-else :course-id="selectedSessionId || undefined" />
         </div>
-      </section>
-    </main>
 
-    <div v-if="showDiaryDialog" class="dialog-overlay" @click.self="showDiaryDialog = false">
-      <div class="dialog-panel galgame-panel">
-        <h3>写学习日记</h3>
-        <label class="field">
-          <span>选择课程</span>
-          <select v-model="diaryForm.course_id" class="galgame-input">
-            <option v-for="course in courses" :key="course.id" :value="course.id">
-              {{ course.name }}
-            </option>
-          </select>
-        </label>
-        <label class="field">
-          <span>今日学习内容</span>
-          <textarea v-model="diaryForm.content" class="galgame-input" rows="4" placeholder="今天学了什么？"></textarea>
-        </label>
-        <label class="field">
-          <span>反思总结</span>
-          <textarea
-            v-model="diaryForm.reflection"
-            class="galgame-input"
-            rows="3"
-            placeholder="有什么收获或困惑？"
-          ></textarea>
-        </label>
-        <div class="dialog-actions">
-          <button class="galgame-btn galgame-menu-item" @click="showDiaryDialog = false">取消</button>
-          <button class="galgame-btn galgame-btn-primary" :disabled="diarySubmitting" @click="createDiary">
-            {{ diarySubmitting ? '保存中...' : '保存日记' }}
-          </button>
+        <!-- Emotion Distribution -->
+        <div class="panel">
+          <div class="panel-header">
+            <div class="header-left">
+              <span class="panel-title">情感分布</span>
+            </div>
+          </div>
+          <div v-if="emotionData.length === 0" class="empty-placeholder">
+            暂无数据
+          </div>
+          <div v-else class="pie-chart-container">
+            <div class="pie-chart">
+              <svg viewBox="0 0 100 100">
+                <circle
+                  v-for="(segment, i) in pieSegments"
+                  :key="i"
+                  cx="50"
+                  cy="50"
+                  r="30"
+                  fill="none"
+                  :stroke="segment.color"
+                  stroke-width="20"
+                  :stroke-dasharray="segment.dashArray"
+                  :stroke-dashoffset="segment.offset"
+                  transform="rotate(-90 50 50)"
+                />
+              </svg>
+            </div>
+            <div class="pie-legend">
+              <div v-for="item in emotionPieData" :key="item.type" class="legend-row">
+                <span class="legend-dot" :style="{ background: item.color }"></span>
+                <span class="legend-name">{{ item.type }}</span>
+                <span class="legend-value" :style="{ color: item.color }">{{ item.percent }}%</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Relationship Status -->
+        <div class="panel">
+          <div class="panel-header">
+            <div class="header-left">
+              <span class="panel-title">关系状态</span>
+            </div>
+          </div>
+          <div class="relationship-content">
+            <div class="current-stage">
+              <span class="stage-label font-ui">当前阶段</span>
+              <span class="stage-name font-ui">{{ currentStage }}</span>
+            </div>
+            <div v-for="(value, dim) in relationshipDimensions" :key="dim" class="dimension-item">
+              <div class="dimension-header">
+                <span class="dimension-name">{{ dimensionLabels[dim] || dim }}</span>
+                <span class="dimension-value">{{ Math.round(value * 100) }}%</span>
+              </div>
+              <div class="dimension-bar">
+                <div class="dimension-fill" :style="{ width: `${value * 100}%` }"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Concept Mastery -->
+        <div class="panel full-width">
+          <div class="panel-header">
+            <div class="header-left">
+              <span class="icon">📚</span>
+              <span class="panel-title">学习进度</span>
+            </div>
+            <span class="header-sub font-ui">{{ selectedCourseName }}</span>
+          </div>
+          <div v-if="progressList.length === 0" class="empty-placeholder">
+            暂无进度数据
+          </div>
+          <div v-else class="progress-list">
+            <div v-for="item in progressList" :key="item.id" class="progress-row">
+              <div class="progress-name font-ui">{{ item.topic }}</div>
+              <div class="progress-bar">
+                <div
+                  class="progress-fill"
+                  :style="{ width: `${item.mastery_level * 100}%`, background: getProgressColor(item.mastery_level) }"
+                ></div>
+              </div>
+              <div class="progress-value font-ui" :style="{ color: getProgressColor(item.mastery_level) }">
+                {{ Math.round(item.mastery_level * 100) }}%
+              </div>
+              <div class="progress-review font-ui">复习:{{ item.next_review }}</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Learning Diary -->
+        <div class="panel full-width">
+          <div class="panel-header">
+            <div class="header-left">
+              <span class="icon">✏️</span>
+              <span class="panel-title">学习日记</span>
+            </div>
+            <button class="galgame-hud-btn diary-btn" @click="diaryOpen = !diaryOpen">
+              <span>✏️</span> 写日记
+            </button>
+          </div>
+
+          <Transition name="diary-slide">
+            <div v-if="diaryOpen" class="diary-form">
+              <textarea
+                v-model="diaryContent"
+                class="galgame-input w-full p-3 font-dialogue"
+                placeholder="记下今天的学习感悟……"
+                rows="3"
+              ></textarea>
+              <div class="form-actions">
+                <button class="galgame-send-btn" @click="submitDiary">保存</button>
+              </div>
+            </div>
+          </Transition>
+
+          <div v-if="diaries.length === 0" class="empty-placeholder">
+            暂无日记
+          </div>
+          <div v-else class="diary-list">
+            <div v-for="entry in diaries" :key="entry.id" class="diary-entry">
+              <div class="entry-header font-ui">
+                <span class="entry-icon">📅</span>
+                <span class="entry-date">{{ formatDate(entry.date) }}</span>
+                <span class="entry-emotion">{{ entry.emotion }}</span>
+              </div>
+              <p class="entry-content font-dialogue">{{ entry.content }}</p>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -149,520 +177,515 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import axios from 'axios'
-import { useAuthStore } from '@/stores/auth'
+import client from '@/api/client'
 import { parseApiError } from '@/utils/error'
-import { buildLearningRoute } from '@/utils/navigation'
 import EmotionTrajectory from '@/components/EmotionTrajectory.vue'
+import ParticleBackground from '@/components/ParticleBackground.vue'
 
 const router = useRouter()
-const authStore = useAuthStore()
 
-interface Diary {
-  id: number
-  course_id: number
-  date: string
-  content: string
-  reflection?: string
-}
+const BG_URL = 'https://images.unsplash.com/photo-1675371708731-50d9c04eb530?w=1920&q=80'
 
-interface Progress {
-  id: number
-  topic: string
-  mastery_level: number
-  next_review?: string
-}
-
-interface Save {
-  id: number
-  save_name: string
-  created_at: string
-}
-
-interface Course {
-  id: number
-  name: string
-}
-
-interface BranchResponse {
-  course_id?: number
-  world_id?: number
-  session_id?: number
-}
+interface Diary { id: number; course_id: number; date: string; content: string; reflection?: string; emotion?: string }
+interface Progress { id: number; topic: string; mastery_level: number; next_review?: string }
+interface Session { id: number; started_at: string; course_name: string }
+interface Course { id: number; name: string }
+interface World { id: number; name: string }
 
 const diaries = ref<Diary[]>([])
 const progressList = ref<Progress[]>([])
-const saves = ref<Save[]>([])
+const sessions = ref<Session[]>([])
 const courses = ref<Course[]>([])
-const selectedCourseFilter = ref('')
+const worlds = ref<World[]>([])
+const emotionData = ref<any[]>([])
+const selectedSessionId = ref<number | null>(null)
+const selectedWorldId = ref<number | null>(null)
 
-const showDiaryDialog = ref(false)
-const diarySubmitting = ref(false)
-const saveActionId = ref<number | null>(null)
-const errorMessage = ref('')
+const diaryOpen = ref(false)
+const diaryContent = ref('')
+const showWorldDropdown = ref(false)
 
-const diaryForm = ref({
-  course_id: null as number | null,
-  content: '',
-  reflection: '',
-})
 
-const selectedCourseId = computed(() => {
-  const parsed = Number(selectedCourseFilter.value)
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined
-})
+const selectedWorldName = computed(() => worlds.value.find(w => w.id === selectedWorldId.value)?.name || '雅典学院')
+const selectedCourseName = computed(() => '哲学导论')
 
-const courseNameMap = computed(() => new Map(courses.value.map((course) => [course.id, course.name])))
+const currentStage = ref('相知')
+const relationshipDimensions = ref({ trust: 0.75, familiarity: 0.6, respect: 0.8, comfort: 0.65 })
+const dimensionLabels: Record<string, string> = { trust: '信任', familiarity: '默契', respect: '敬意', comfort: '舒适' }
 
-const selectedCourseName = computed(() =>
-  selectedCourseId.value ? courseNameMap.value.get(selectedCourseId.value) : undefined,
-)
-
-const sortedDiaries = computed(() =>
-  [...diaries.value].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
-)
-
-const headers = () => ({ Authorization: `Bearer ${authStore.token}` })
-
-const formatDateTime = (dateStr: string) => {
-  const date = new Date(dateStr)
-  if (Number.isNaN(date.getTime())) return dateStr
-  return date.toLocaleString('zh-CN', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
+const emotionCounts = computed(() => {
+  const counts: Record<string, number> = {}
+  emotionData.value.forEach(d => {
+    counts[d.emotion_type] = (counts[d.emotion_type] || 0) + 1
   })
+  return counts
+})
+
+const EMOTION_COLORS: Record<string, string> = {
+  '好奇': '#60a5fa',
+  '兴奋': '#ffd700',
+  '困惑': '#f97316',
+  '满足': '#4adf6a',
+  '中性': '#94a3b8',
 }
 
-const toPositiveInt = (value: unknown): number | undefined => {
-  const parsed = Number(value)
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined
-}
+const emotionPieData = computed(() => {
+  const total = emotionData.value.length
+  if (total === 0) return []
+  let cumulative = 0
+  return Object.entries(emotionCounts.value).map(([type, count]) => {
+    const percent = Math.round((count / total) * 100)
+    const item = { type, count, percent, color: EMOTION_COLORS[type] || '#94a3b8', cumulative }
+    cumulative += percent
+    return item
+  })
+})
 
-const showError = (error: unknown) => {
-  errorMessage.value = parseApiError(error)
-  setTimeout(() => {
-    errorMessage.value = ''
-  }, 4000)
+const pieSegments = computed(() => {
+  const circumference = 2 * Math.PI * 30
+  return emotionPieData.value.map(item => ({
+    color: item.color,
+    dashArray: `${(item.percent / 100) * circumference} ${circumference}`,
+    offset: 0
+  }))
+})
+
+const formatDate = (dateStr: string) => new Date(dateStr).toLocaleDateString('zh-CN')
+
+const getProgressColor = (level: number) => {
+  if (level >= 0.65) return '#4adf6a'
+  if (level >= 0.4) return '#ffd700'
+  return '#f97316'
 }
 
 const fetchDiaries = async () => {
   try {
-    const response = await axios.get('/api/learning_diary', { headers: headers() })
-    diaries.value = Array.isArray(response.data) ? response.data : []
-  } catch (error) {
-    showError(error)
-  }
+    const { data } = await client.get('learning_diary', )
+    diaries.value = data
+  } catch {}
 }
 
 const fetchProgress = async () => {
   try {
-    const response = await axios.get('/api/progress', {
-      params: { course_id: selectedCourseId.value },
-      headers: headers(),
-    })
-    progressList.value = Array.isArray(response.data) ? response.data : []
-  } catch (error) {
-    showError(error)
-  }
+    const { data } = await client.get('progress', )
+    progressList.value = data
+  } catch {}
 }
 
-const fetchSaves = async () => {
+const fetchSessions = async () => {
   try {
-    const response = await axios.get('/api/save', { headers: headers() })
-    saves.value = Array.isArray(response.data) ? response.data : []
-  } catch (error) {
-    showError(error)
-  }
+    const { data } = await client.get('sessions', )
+    sessions.value = data
+    if (data.length > 0) {
+      selectedSessionId.value = data[0].id
+      await fetchEmotionTrajectory()
+    }
+  } catch {}
+}
+
+const fetchEmotionTrajectory = async () => {
+  if (!selectedSessionId.value) return
+  try {
+    const { data } = await client.get(`/sessions/${selectedSessionId.value}/emotion_trajectory`)
+    emotionData.value = data
+  } catch {}
 }
 
 const fetchCourses = async () => {
   try {
-    const response = await axios.get('/api/courses', { headers: headers() })
-    courses.value = Array.isArray(response.data) ? response.data : []
-    if (!diaryForm.value.course_id && courses.value.length > 0) {
-      diaryForm.value.course_id = courses.value[0].id
-    }
-  } catch (error) {
-    showError(error)
-  }
+    const { data } = await client.get('courses')
+    courses.value = data
+  } catch {}
 }
 
-const openDiaryDialog = () => {
-  if (courses.value.length === 0) {
-    showError(new Error('暂无课程，无法创建日记'))
-    return
-  }
-  if (!diaryForm.value.course_id) {
-    diaryForm.value.course_id = courses.value[0].id
-  }
-  showDiaryDialog.value = true
-}
-
-const createDiary = async () => {
-  if (!diaryForm.value.course_id || !diaryForm.value.content.trim()) {
-    showError(new Error('请填写课程与学习内容'))
-    return
-  }
-
-  diarySubmitting.value = true
+const fetchWorlds = async () => {
   try {
-    await axios.post(
-      '/api/learning_diary',
-      {
-        course_id: diaryForm.value.course_id,
-        content: diaryForm.value.content.trim(),
-        reflection: diaryForm.value.reflection.trim() || undefined,
-        date: new Date().toISOString(),
-      },
-      { headers: headers() },
-    )
-    showDiaryDialog.value = false
-    diaryForm.value = {
-      course_id: diaryForm.value.course_id,
-      content: '',
-      reflection: '',
-    }
+    const { data } = await client.get('worlds', )
+    worlds.value = data
+    if (data.length > 0) selectedWorldId.value = data[0].id
+  } catch {}
+}
+
+const submitDiary = async () => {
+  if (!diaryContent.value.trim()) return
+  try {
+    await client.post('learning_diary', {
+      content: diaryContent.value.trim(),
+      date: new Date().toISOString(),
+    }, )
+    diaryContent.value = ''
+    diaryOpen.value = false
     await fetchDiaries()
-  } catch (error) {
-    showError(error)
-  } finally {
-    diarySubmitting.value = false
-  }
-}
-
-const loadSave = async (saveId: number) => {
-  saveActionId.value = saveId
-  try {
-    const response = await axios.post<BranchResponse>(`/api/checkpoints/${saveId}/branch`, {}, { headers: headers() })
-    const data = response.data
-    const courseId = toPositiveInt(data.course_id)
-    if (!courseId) throw new Error('分叉结果缺少课程信息')
-    router.push(buildLearningRoute(courseId, {
-      worldId: toPositiveInt(data.world_id),
-      sessionId: toPositiveInt(data.session_id),
-    }))
-  } catch (error) {
-    showError(error)
-  } finally {
-    saveActionId.value = null
-  }
-}
-
-const deleteSave = async (saveId: number) => {
-  const confirmed = window.confirm('确定要删除这个存档吗？')
-  if (!confirmed) return
-
-  saveActionId.value = saveId
-  try {
-    await axios.delete(`/api/save/${saveId}`, { headers: headers() })
-    await fetchSaves()
-  } catch (error) {
-    showError(error)
-  } finally {
-    saveActionId.value = null
+  } catch (e) {
+    console.error(parseApiError(e))
   }
 }
 
 onMounted(async () => {
-  await Promise.all([fetchCourses(), fetchDiaries(), fetchProgress(), fetchSaves()])
+  await Promise.all([fetchDiaries(), fetchProgress(), fetchSessions(), fetchCourses(), fetchWorlds()])
 })
 </script>
 
 <style scoped>
 .archive-page {
   position: relative;
-  min-height: 100vh;
+  width: 100vw;
+  height: 100vh;
   overflow: hidden;
-  background: var(--bg-primary);
+  background: #0a0a1e;
 }
 
-.archive-bg-image {
+.bg-image {
   position: absolute;
   inset: 0;
-  opacity: 0.08;
-  background-image: url('https://images.unsplash.com/photo-1675371708731-50d9c04eb530?w=1920&q=80');
   background-size: cover;
   background-position: center;
+  opacity: 0.08;
 }
 
-.archive-bg-overlay {
+.bg-gradient {
   position: absolute;
   inset: 0;
-  background: linear-gradient(to bottom, rgba(10, 10, 30, 0.95) 0%, rgba(10, 10, 30, 0.98) 100%);
+  background: linear-gradient(to bottom, rgba(10,10,30,0.95) 0%, rgba(10,10,30,0.98) 100%);
 }
 
 .archive-header {
-  position: relative;
-  z-index: 2;
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 16px 24px;
-  border-bottom: 1px solid rgba(255, 215, 0, 0.1);
+  border-bottom: 1px solid rgba(255,215,0,0.1);
+  z-index: 10;
 }
 
-.archive-header h1 {
-  color: var(--accent-gold);
-  letter-spacing: 4px;
-  font-size: 18px;
-}
-
-.header-spacer {
-  width: 80px;
-}
-
-.back-btn {
+.archive-header button {
   font-size: 13px;
   padding: 6px 14px;
 }
 
+.header-title {
+  color: #ffd700;
+  font-size: 16px;
+  letter-spacing: 4px;
+}
+
 .archive-content {
-  position: relative;
-  z-index: 2;
-  height: calc(100vh - 68px);
+  position: absolute;
+  inset: 0;
   overflow-y: auto;
-  padding: 20px 24px 24px;
+  padding-top: 68px;
+  padding-bottom: 24px;
+  padding-left: 24px;
+  padding-right: 24px;
 }
 
-.toolbar-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 16px;
-  margin-bottom: 14px;
-}
-
-.course-filter {
+.world-selector {
   display: flex;
   align-items: center;
-  gap: 10px;
-}
-
-.course-filter span {
-  color: rgba(255, 255, 255, 0.45);
+  gap: 12px;
+  margin-bottom: 24px;
   font-size: 13px;
 }
 
-.course-filter select {
-  min-width: 220px;
-  padding: 8px 10px;
+.selector-label {
+  color: rgba(255,255,255,0.35);
 }
 
-.diary-trigger {
-  padding: 8px 14px;
+.world-dropdown {
+  background: rgba(255,215,0,0.1);
+  border: 1px solid rgba(255,215,0,0.3);
+  border-radius: 6px;
+  padding: 4px 12px;
+  color: #ffd700;
+  cursor: pointer;
 }
 
-.error-banner {
-  margin-bottom: 12px;
-  padding: 8px 10px;
-  border: 1px solid rgba(223, 74, 74, 0.5);
-  background: rgba(223, 74, 74, 0.15);
-  color: #ffb3b3;
-  font-size: 13px;
-}
-
-.archive-grid {
+.grid-layout {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
 }
 
-.archive-panel {
-  margin-bottom: 14px;
-  padding: 16px 18px;
+.panel {
+  background: rgba(8, 8, 28, 0.8);
+  border: 1px solid rgba(255,215,0,0.12);
+  border-radius: 14px;
+  padding: 18px 20px;
+}
+
+.panel.full-width {
+  grid-column: 1 / -1;
 }
 
 .panel-header {
-  margin-bottom: 10px;
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
 }
 
-.panel-header h2 {
-  color: var(--accent-gold);
-  font-size: 15px;
-  letter-spacing: 1px;
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
-.panel-header span {
-  color: rgba(255, 255, 255, 0.35);
-  font-size: 12px;
+.icon {
+  font-size: 16px;
 }
 
-.emotion-panel {
-  padding-bottom: 14px;
+.panel-title {
+  color: #ffd700;
+  font-size: 14px;
+  letter-spacing: 2px;
 }
 
-.card-list {
+.header-sub {
+  color: rgba(255,255,255,0.3);
+  font-size: 11px;
+}
+
+.empty-placeholder {
+  color: rgba(255,255,255,0.3);
+  text-align: center;
+  padding: 40px 0;
+  font-size: 13px;
+}
+
+/* Pie Chart */
+.pie-chart-container {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+
+.pie-chart {
+  width: 140px;
+  height: 140px;
+  flex-shrink: 0;
+}
+
+.pie-chart svg {
+  width: 100%;
+  height: 100%;
+}
+
+.pie-legend {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
 }
 
-.record-card {
-  border: 1px solid rgba(74, 74, 138, 0.7);
-  background: rgba(0, 0, 0, 0.28);
-  border-radius: var(--radius-world-card);
-  padding: 10px 12px;
-}
-
-.record-head {
+.legend-row {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  gap: 10px;
-}
-
-.record-head strong {
-  color: var(--text-primary);
-  font-size: 14px;
-}
-
-.record-head span {
-  color: rgba(255, 255, 255, 0.42);
+  gap: 8px;
   font-size: 12px;
 }
 
-.record-mastery {
-  color: #6fcf97 !important;
+.legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.legend-name {
+  color: rgba(255,255,255,0.6);
+}
+
+.legend-value {
+  margin-left: auto;
   font-weight: 600;
 }
 
-.record-meta {
-  margin-top: 6px;
-  color: rgba(255, 255, 255, 0.48);
+/* Relationship */
+.relationship-content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.current-stage {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.stage-label {
+  color: rgba(255,255,255,0.5);
   font-size: 12px;
 }
 
-.progress-bar {
-  margin-top: 8px;
-  height: 6px;
-  border-radius: 999px;
+.stage-name {
+  color: #ffd700;
+  font-size: 14px;
+  letter-spacing: 2px;
+}
+
+.dimension-item {
+  margin-bottom: 12px;
+}
+
+.dimension-header {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.dimension-name {
+  color: rgba(255,255,255,0.45);
+  font-size: 12px;
+}
+
+.dimension-value {
+  color: rgba(255,255,255,0.35);
+  font-size: 12px;
+}
+
+.dimension-bar {
+  height: 5px;
+  border-radius: 3px;
+  background: rgba(255,255,255,0.08);
   overflow: hidden;
-  background: rgba(255, 255, 255, 0.1);
+}
+
+.dimension-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #ffd700, #a78bfa);
+  border-radius: 3px;
+  transition: width 0.8s ease;
+}
+
+/* Progress */
+.progress-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.progress-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.progress-name {
+  width: 120px;
+  color: rgba(255,255,255,0.65);
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
+.progress-bar {
+  flex: 1;
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(255,255,255,0.08);
+  overflow: hidden;
 }
 
 .progress-fill {
   height: 100%;
-  border-radius: 999px;
-  background: linear-gradient(90deg, #ffd700, #6fcf97);
+  border-radius: 3px;
+  transition: width 0.8s ease;
 }
 
-.save-actions {
-  margin-top: 10px;
-  display: flex;
-  gap: 8px;
-}
-
-.save-actions button {
+.progress-value {
+  width: 40px;
+  text-align: right;
   font-size: 12px;
-  padding: 6px 10px;
+  flex-shrink: 0;
 }
 
-.danger {
-  border-color: rgba(223, 74, 74, 0.6);
-  color: #ff9a9a;
+.progress-review {
+  width: 60px;
+  color: rgba(255,255,255,0.3);
+  font-size: 11px;
+  flex-shrink: 0;
 }
 
-.danger:hover:not(:disabled) {
-  border-color: rgba(223, 74, 74, 1);
-  color: #ffc1c1;
+/* Diary */
+.diary-btn {
+  font-size: 12px;
+  padding: 5px 12px;
 }
 
-.diary-content {
-  margin-top: 8px;
-  color: rgba(240, 240, 255, 0.78);
-  white-space: pre-wrap;
-  line-height: 1.7;
-  font-size: 14px;
+.diary-form {
+  margin-bottom: 16px;
 }
 
-.reflection {
-  border-top: 1px solid rgba(74, 74, 138, 0.6);
-  padding-top: 6px;
+.diary-form textarea {
+  font-size: 15px;
 }
 
-.empty-text {
-  text-align: center;
-  color: rgba(255, 255, 255, 0.45);
-  padding: 18px 0;
-  font-size: 13px;
-}
-
-.dialog-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 20;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(0, 0, 0, 0.72);
-}
-
-.dialog-panel {
-  width: min(92vw, 560px);
-  padding: 18px;
-  border-radius: var(--radius-modal);
-}
-
-.dialog-panel h3 {
-  color: var(--accent-gold);
-  font-size: 16px;
-  margin-bottom: 14px;
-}
-
-.field {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin-bottom: 10px;
-}
-
-.field span {
-  color: rgba(255, 255, 255, 0.65);
-  font-size: 13px;
-}
-
-.field select,
-.field textarea {
-  width: 100%;
-  padding: 9px 10px;
-}
-
-.field textarea {
-  resize: vertical;
-}
-
-.dialog-actions {
-  margin-top: 12px;
+.form-actions {
   display: flex;
   justify-content: flex-end;
-  gap: 8px;
+  margin-top: 8px;
 }
 
-@media (max-width: 980px) {
-  .archive-grid {
-    grid-template-columns: 1fr;
-  }
+.diary-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
 
-  .toolbar-row {
-    flex-direction: column;
-    align-items: flex-start;
-  }
+.diary-entry {
+  padding: 12px 14px;
+  background: rgba(255,255,255,0.03);
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,0.06);
+}
 
-  .course-filter {
-    width: 100%;
-  }
+.entry-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
 
-  .course-filter select {
-    flex: 1;
-    min-width: 0;
-  }
+.entry-icon {
+  color: #ffd700;
+}
+
+.entry-date {
+  color: #ffd700;
+  font-size: 12px;
+}
+
+.entry-emotion {
+  background: rgba(255,215,0,0.1);
+  border: 1px solid rgba(255,215,0,0.2);
+  border-radius: 4px;
+  padding: 1px 7px;
+  font-size: 11px;
+  color: rgba(255,215,0,0.7);
+}
+
+.entry-content {
+  color: rgba(240,240,255,0.7);
+  font-size: 14px;
+  line-height: 1.75;
+}
+
+/* Transitions */
+.diary-slide-enter-from {
+  opacity: 0;
+  transform: translateY(-8px);
+}
+
+.diary-slide-enter-active {
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+
+.diary-slide-leave-to {
+  opacity: 0;
 }
 </style>

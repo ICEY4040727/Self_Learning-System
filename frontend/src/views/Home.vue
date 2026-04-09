@@ -1,404 +1,179 @@
 <template>
-  <div class="home-page" :style="sceneStyle">
+  <div class="main-menu-page">
+    <!-- Fixed scene background -->
+    <div class="scene-bg" :style="{ backgroundImage: `url(${homeBg})` }"></div>
     <div class="scene-overlay"></div>
-    <div class="scene-vignette"></div>
 
-    <div class="home-layout">
-      <Transition name="phase" mode="out-in">
-        <section v-if="phase === 'menu'" key="menu" class="phase-menu">
-          <div class="menu-brand">
-            <p class="menu-subtitle">Zhī Yù · Socratic Learning</p>
-            <h1>知 遇</h1>
+    <!-- Main Menu - shown when no child route is active -->
+    <Transition name="menu-fade">
+      <div v-if="!hasChildRoute" key="menu" class="menu-container">
+        <!-- Title area with v-motion -->
+        <div 
+          class="title-area"
+          v-motion
+          :initial="{ opacity: 0, y: -30 }"
+          :enter="{ opacity: 1, y: 0 }"
+          :transition="{ delay: 200, duration: 800 }"
+        >
+          <h1 class="title-text-hover title-text">知遇</h1>
+          <div class="font-ui subtitle-text">✦ &nbsp; ZHĪ YÙ · 愿求知者皆得其道 &nbsp; ✦</div>
+          <div class="gold-divider"></div>
+        </div>
+
+        <!-- Menu nav with v-motion stagger -->
+        <nav 
+          class="menu-nav"
+          v-motion
+          :initial="{ opacity: 0 }"
+          :enter="{ opacity: 1 }"
+          :transition="{ delay: 500, duration: 600 }"
+        >
+          <div
+            v-for="(item, i) in MENU_ITEMS"
+            :key="item.label"
+            v-motion
+            :initial="{ opacity: 0, x: -30 }"
+            :enter="{ opacity: 1, x: 0 }"
+            :transition="{ delay: 500 + i * 0.1, duration: 500 }"
+          >
+            <div class="galgame-menu-item" @click="item.action">{{ item.label }}</div>
           </div>
+        </nav>
+      </div>
+    </Transition>
 
-          <div class="menu-actions">
-            <button class="galgame-btn galgame-menu-item" :disabled="loadingWorlds" @click="enterWorlds">
-              {{ loadingWorlds ? '载入世界中…' : '开始学习' }}
-            </button>
-            <button class="galgame-btn galgame-menu-item" @click="router.push('/archive')">档案管理</button>
-            <button class="galgame-btn galgame-menu-item" @click="router.push('/character')">角色设定</button>
-            <button class="galgame-btn galgame-menu-item" @click="router.push('/settings')">系统设置</button>
-            <button class="galgame-btn galgame-menu-item muted" @click="logout">退出登录</button>
-          </div>
-        </section>
-
-        <section v-else-if="phase === 'worlds'" key="worlds" class="phase-panel galgame-panel">
-          <header class="phase-header">
-            <p>WORLD-FIRST FLOW</p>
-            <h2>选择世界</h2>
-          </header>
-
-          <div v-if="loadingWorlds" class="hint">世界加载中...</div>
-          <p v-else-if="worlds.length === 0" class="hint">暂无世界，请先在角色设定中创建。</p>
-
-          <div v-else class="world-grid">
-            <button
-              v-for="world in worlds"
-              :key="world.id"
-              class="galgame-world-card world-card"
-              @click="selectWorld(world)"
-            >
-              <strong>{{ world.name }}</strong>
-              <span>{{ world.description || '暂无描述' }}</span>
-            </button>
-          </div>
-
-          <button class="galgame-btn galgame-menu-item back-btn" @click="phase = 'menu'">← 返回主菜单</button>
-        </section>
-
-        <section v-else-if="phase === 'memory'" key="memory" class="phase-panel phase-memory galgame-panel">
-          <header class="phase-header">
-            <p>MEMORY VAULT</p>
-            <h2>回忆库 · {{ selectedWorld?.name }}</h2>
-          </header>
-
-          <TimelineTree v-if="selectedWorld" :world-id="selectedWorld.id" @branch="branchFromCheckpoint" />
-
-          <div class="actions">
-            <button class="galgame-btn galgame-menu-item" :disabled="loadingCourses" @click="enterCourses">
-              {{ loadingCourses ? '载入课程中…' : '进入课程选择' }}
-            </button>
-            <button class="galgame-btn galgame-menu-item back-btn" @click="phase = 'worlds'">← 返回世界列表</button>
-          </div>
-        </section>
-
-        <section v-else key="courses" class="phase-panel galgame-panel">
-          <header class="phase-header">
-            <p>COURSE SELECT</p>
-            <h2>课程选择 · {{ selectedWorld?.name }}</h2>
-          </header>
-
-          <div v-if="loadingCourses" class="hint">课程加载中...</div>
-          <p v-else-if="courses.length === 0" class="hint">该世界下暂无课程。</p>
-
-          <div v-else class="course-list">
-            <button
-              v-for="course in courses"
-              :key="course.id"
-              class="galgame-world-card world-card"
-              @click="startLearning(course.id)"
-            >
-              <strong>{{ course.name }}</strong>
-              <span>{{ course.description || '暂无描述' }}</span>
-            </button>
-          </div>
-
-          <button class="galgame-btn galgame-menu-item back-btn" @click="phase = 'memory'">← 返回回忆库</button>
-        </section>
+    <!-- Child routes -->
+    <router-view v-slot="{ Component }">
+      <Transition name="page-fade">
+        <component :is="Component" />
       </Transition>
-    </div>
+    </router-view>
 
-    <p v-if="errorMessage" class="error">{{ errorMessage }}</p>
+    <p v-if="errorMessage" class="error-toast font-ui">{{ errorMessage }}</p>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
-import { useRouter } from 'vue-router'
-import axios from 'axios'
+import { ref, computed } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
+import homeBg from '@/assets/home-bg.png'
 import { useAuthStore } from '@/stores/auth'
-import { parseApiError } from '@/utils/error'
-import { buildLearningRoute } from '@/utils/navigation'
-import TimelineTree from '@/components/TimelineTree.vue'
-
-interface World {
-  id: number
-  name: string
-  description?: string
-  scenes?: Record<string, string>
-}
-
-interface Course {
-  id: number
-  name: string
-  description?: string
-}
-
-interface BranchResponse {
-  course_id?: number
-  world_id?: number
-  session_id?: number | null
-}
 
 const router = useRouter()
+const route = useRoute()
 const authStore = useAuthStore()
-const phase = ref<'menu' | 'worlds' | 'memory' | 'courses'>('menu')
-const worlds = ref<World[]>([])
-const courses = ref<Course[]>([])
-const selectedWorld = ref<World | null>(null)
 const errorMessage = ref('')
-const loadingWorlds = ref(false)
-const loadingCourses = ref(false)
 
-const headers = () => ({ Authorization: `Bearer ${authStore.token}` })
-
-const sceneStyle = computed(() => {
-  const scenes = selectedWorld.value?.scenes || {}
-  const url = scenes.default || Object.values(scenes)[0]
-  return url
-    ? { backgroundImage: `url(${url})`, backgroundSize: 'cover', backgroundPosition: 'center' }
-    : {}
+// Check if a child route is active (route has more than just /home)
+const hasChildRoute = computed(() => {
+  return route.matched.length > 1
 })
 
-const toPositiveInt = (value: unknown): number | undefined => {
-  const parsed = Number(value)
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined
+const logout = () => { 
+  authStore.logout(); 
+  router.push('/login') 
 }
 
-const showError = (error: unknown) => {
-  errorMessage.value = parseApiError(error)
-  setTimeout(() => (errorMessage.value = ''), 4000)
-}
-
-const fetchWorlds = async (): Promise<boolean> => {
-  loadingWorlds.value = true
-  try {
-    const res = await axios.get('/api/worlds', { headers: headers() })
-    worlds.value = Array.isArray(res.data) ? res.data : []
-    return true
-  } catch (error) {
-    showError(error)
-    return false
-  } finally {
-    loadingWorlds.value = false
-  }
-}
-
-const fetchCourses = async (): Promise<boolean> => {
-  if (!selectedWorld.value) {
-    showError(new Error('请先选择世界'))
-    return false
-  }
-
-  loadingCourses.value = true
-  try {
-    const res = await axios.get(`/api/worlds/${selectedWorld.value.id}/courses`, { headers: headers() })
-    courses.value = Array.isArray(res.data) ? res.data : []
-    return true
-  } catch (error) {
-    showError(error)
-    return false
-  } finally {
-    loadingCourses.value = false
-  }
-}
-
-const enterWorlds = async () => {
-  const loaded = await fetchWorlds()
-  if (loaded) phase.value = 'worlds'
-}
-
-const selectWorld = (world: World) => {
-  selectedWorld.value = world
-  courses.value = []
-  phase.value = 'memory'
-}
-
-const enterCourses = async () => {
-  const loaded = await fetchCourses()
-  if (loaded) phase.value = 'courses'
-}
-
-const startLearning = (courseId: number) => {
-  const worldId = selectedWorld.value?.id
-  if (!worldId) {
-    showError(new Error('请先选择世界'))
-    return
-  }
-  router.push(buildLearningRoute(courseId, { worldId }))
-}
-
-const branchFromCheckpoint = async (checkpoint: { id: number; save_name: string }) => {
-  try {
-    const branchNameInput = window.prompt('请输入分叉名称（可选）')
-    if (branchNameInput === null) return
-
-    const trimmedBranchName = branchNameInput.trim()
-    const payload = trimmedBranchName ? { branch_name: trimmedBranchName } : {}
-    const res = await axios.post(`/api/checkpoints/${checkpoint.id}/branch`, payload, { headers: headers() })
-    const data = res.data as BranchResponse
-
-    const courseId = toPositiveInt(data.course_id)
-    if (!courseId) throw new Error('分叉失败：未返回有效课程')
-
-    router.push(buildLearningRoute(courseId, {
-      worldId: toPositiveInt(data.world_id) || selectedWorld.value?.id,
-      sessionId: toPositiveInt(data.session_id),
-    }))
-  } catch (error) {
-    showError(error)
-  }
-}
-
-const logout = () => {
-  authStore.logout()
-  router.push('/login')
-}
+const MENU_ITEMS = [
+  { label: '开 始 学 习', action: () => router.push('/home/worlds') },
+  { label: '学 习 报 告', action: () => router.push('/home/report') },
+  { label: '角 色 管 理', action: () => router.push('/character') },
+  { label: '档 案 管 理', action: () => router.push('/archive') },
+  { label: '系 统 设 置', action: () => router.push('/settings') },
+  { label: '退 出 登 录', action: logout },
+]
 </script>
 
 <style scoped>
-.home-page {
+.main-menu-page {
   position: relative;
-  min-height: 100vh;
+  width: 100vw;
+  height: 100vh;
   overflow: hidden;
-  background: radial-gradient(ellipse at 50% 30%, #1a1a3e 0%, #0a0a1e 70%);
+  background: #0a0a1e;
+}
+
+.scene-bg {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center;
+  opacity: 0.60;
+  transition: opacity 1.2s ease;
 }
 
 .scene-overlay {
   position: absolute;
   inset: 0;
-  background: linear-gradient(to bottom, rgba(10, 10, 30, 0.52), rgba(0, 0, 0, 0.72));
+  background: 
+    radial-gradient(ellipse at 50% 0%, rgba(10,10,30,0.15) 0%, transparent 60%),
+    radial-gradient(ellipse at 30% 55%, rgba(255,215,0,0.05) 0%, transparent 55%),
+    radial-gradient(ellipse at 70% 35%, rgba(96,165,250,0.04) 0%, transparent 55%),
+    linear-gradient(to bottom, rgba(10,10,30,0.25) 0%, rgba(0,0,0,0.45) 100%);
 }
 
-.scene-vignette {
+/* Menu Container */
+.menu-container {
   position: absolute;
   inset: 0;
-  background: radial-gradient(ellipse at center, transparent 28%, rgba(0, 0, 0, 0.42) 100%);
-}
-
-.home-layout {
-  position: relative;
-  z-index: 1;
-  min-height: 100vh;
   display: flex;
+  flex-direction: column;
+  align-items: center;
   justify-content: center;
-  align-items: center;
-  padding: 24px;
 }
 
-.phase-menu {
-  width: 100%;
-  max-width: 1080px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 32px;
+.title-area {
+  text-align: center;
+  margin-bottom: 64px;
 }
 
-.menu-brand h1 {
-  color: var(--accent-gold);
-  font-size: 52px;
-  letter-spacing: 14px;
-  text-shadow: 0 0 20px rgba(255, 215, 0, 0.28);
+.gold-divider {
+  width: 180px;
+  height: 1px;
+  background: linear-gradient(to right, transparent, rgba(255,215,0,0.4), transparent);
+  margin: 14px auto 0;
 }
 
-.menu-subtitle {
-  margin-bottom: 10px;
-  color: rgba(255, 255, 255, 0.45);
-  letter-spacing: 3px;
-}
-
-.menu-actions {
-  width: min(320px, 100%);
+.menu-nav {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
 }
 
-.phase-panel {
-  width: 100%;
-  max-width: 1024px;
-  padding: 24px;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-
-.phase-memory {
-  max-width: 1120px;
-}
-
-.phase-header p {
-  color: rgba(255, 255, 255, 0.46);
-  letter-spacing: 3px;
-  font-size: 11px;
-  margin-bottom: 6px;
-}
-
-.phase-header h2 {
-  color: var(--accent-gold);
-  margin-bottom: 4px;
-}
-
-.world-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-  gap: 12px;
-}
-
-.course-list {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  max-height: 420px;
-  overflow-y: auto;
-}
-
-.world-card {
-  text-align: left;
-  width: 100%;
-}
-
-.world-card span {
-  color: var(--text-secondary);
-  font-size: 12px;
-}
-
-.actions {
-  display: flex;
-  justify-content: space-between;
-  gap: 10px;
-  margin-top: 4px;
-}
-
-.back-btn {
+.title-text {
+  font-family: "Noto Serif SC", "Source Han Serif SC", "SimSun", serif;
+  font-size: 38px;
+  letter-spacing: 12px;
+  color: #ffd700;
+  margin-bottom: 12px;
+  transition: text-shadow 0.6s ease;
   text-align: center;
 }
 
-.hint {
-  color: var(--text-secondary);
-  font-size: 13px;
+.title-text-hover:hover {
+  text-shadow:
+    0 0 8px rgba(255,215,0,0.6),
+    0 0 16px rgba(255,215,0,0.35);
 }
 
-.muted {
-  color: #aaa;
+.subtitle-text {
+  font-family: "Noto Serif SC", "Source Han Serif SC", "SimSun", serif;
+  color: rgba(255,255,255,0.70);
+  font-size: 14px;
+  letter-spacing: 4px;
 }
 
-.error {
+/* Error Toast */
+.error-toast {
   position: fixed;
   top: 20px;
   left: 50%;
   transform: translateX(-50%);
-  z-index: 3;
-  background: rgba(223, 74, 74, 0.92);
+  background: rgba(223, 74, 74, 0.9);
   padding: 8px 14px;
   border-radius: 6px;
-}
-
-.phase-enter-active,
-.phase-leave-active {
-  transition: transform 0.25s ease;
-}
-
-.phase-enter-from,
-.phase-leave-to {
-  transform: translateY(8px);
-}
-
-@media (max-width: 900px) {
-  .phase-menu {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-
-  .menu-brand h1 {
-    font-size: 40px;
-    letter-spacing: 10px;
-  }
-
-  .menu-actions {
-    width: 100%;
-    max-width: 420px;
-  }
+  font-size: 13px;
+  z-index: 9999;
+  letter-spacing: 1px;
 }
 </style>
