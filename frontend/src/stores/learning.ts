@@ -220,6 +220,13 @@ export const useLearningStore = defineStore('learning', () => {
         pushSpeaking(data.reply)
       }
 
+      // Issue #192: 通知 memory facts drawer 刷新（如果有新提取的记忆）
+      if (data.memory_extracted_count && data.memory_extracted_count > 0) {
+        window.dispatchEvent(new CustomEvent('memory:fresh', {
+          detail: { count: data.memory_extracted_count }
+        }))
+      }
+
     } catch (e: any) {
       const detail = e?.response?.data?.detail ?? '连接错误，请检查网络和 API Key 配置'
       pushSpeaking(`（${detail}）`)

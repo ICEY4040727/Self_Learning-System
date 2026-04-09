@@ -243,6 +243,7 @@ class LearningEngine:
 
             # 12. Extract and save memories from LLM response
             used_memory_ids = []
+            result = None
             if should_extract_memory(llm_response):
                 result = memory_extractor.extract(llm_response)
                 if result.memories:
@@ -296,6 +297,9 @@ class LearningEngine:
             # 16. Return response (移除 <memory> 标签)
             clean_response = memory_extractor.strip_tags(llm_response)
             
+            # 计算本次提取的 memory 数量 (Issue #192)
+            memory_extracted_count = len(result.memories) if result and result.memories else 0
+            
             return {
                 "type": "text",
                 "reply": clean_response,
@@ -304,6 +308,7 @@ class LearningEngine:
                 "relationship": updated_relationship,
                 "relationship_events": relationship_events,
                 "used_memory_ids": used_memory_ids,
+                "memory_extracted_count": memory_extracted_count,  # Issue #192
             }
 
         except Exception:
