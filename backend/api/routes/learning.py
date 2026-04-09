@@ -163,6 +163,16 @@ async def start_learning(
     db.commit()
     db.refresh(db_session)
 
+    # Create seed memories for first session (P1 #183)
+    # Seed from traveler character + learner_profile to sage character
+    if sage_character_id and traveler_character:
+        await learning_engine.create_seed_memories(
+            db=db,
+            sage_character_id=sage_character_id,
+            traveler_character=traveler_character,
+            learner_profile=learner_profile,
+        )
+
     # Get characters for sprites
     sage_character = None
     traveler_character = None
