@@ -10,6 +10,7 @@ from backend.api.routes.auth import get_current_user
 from backend.db.database import get_db
 from backend.models.models import (
     Character,
+    ChatMessage,
     Course,
     FSRSState,
     LearnerProfile,
@@ -1254,6 +1255,7 @@ class CourseSessionResponse(BaseModel):
     ended_at: datetime | None
     relationship_stage: str | None
     course_name: str | None = None
+    message_count: int = 0
 
     class Config:
         from_attributes = True
@@ -1342,13 +1344,22 @@ def get_course_sessions(
     获取课程的所有学习会话。
     """
     course = _get_course_with_auth(course_id, db, current_user)
-    
+
     from backend.models.models import Session as SessionModel
     sessions = db.query(SessionModel).filter(
         SessionModel.course_id == course_id,
         SessionModel.user_id == current_user.id,
     ).order_by(SessionModel.started_at.desc()).all()
-    
+
+    # Aggregate message count for each session
+    session_ids = [s.id for s in sessions]
+    message_counts: dict[int, int] = {}
+    if session_ids:
+        counts = db.query(ChatMessage.session_id, db.func.count(ChatMessage.id)).filter(
+            ChatMessage.session_id.in_(session_ids)
+        ).group_by(ChatMessage.session_id).all()
+        message_counts = dict(counts)
+
     return [
         CourseSessionResponse(
             id=s.id,
@@ -1356,6 +1367,7 @@ def get_course_sessions(
             ended_at=s.ended_at,
             relationship_stage=(s.relationship or {}).get("stage") if s.relationship else None,
             course_name=course.name,
+            message_count=message_counts.get(s.id, 0),
         )
         for s in sessions
     ]

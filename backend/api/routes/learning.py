@@ -38,6 +38,7 @@ class ChatResponse(BaseModel):
     relationship: dict | None = None
     relationship_events: list[dict] | None = None
     expression_hint: str | None = None  # "happy", "thinking", "concerned", "default"
+    memory_extracted_count: int = 0  # 本次会话提取的记忆数量
 
 
 EXPRESSION_MAP = {
@@ -273,6 +274,7 @@ async def send_message(
         relationship=result.get("relationship"),
         relationship_events=result.get("relationship_events"),
         expression_hint=expression,
+        memory_extracted_count=result.get("memory_extracted_count", 0),
     )
 
 
