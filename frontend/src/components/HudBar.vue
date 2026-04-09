@@ -8,6 +8,7 @@ const props = defineProps<{
   relationshipStage: RelationshipStage
   masteryPercent: number
   autoMode: boolean
+  motivation?: string  // v1.0 学习动机显示
 }>()
 
 const emit = defineEmits<{
@@ -19,6 +20,7 @@ const emit = defineEmits<{
   (e: 'knowledgeGraph'): void
   (e: 'settings'): void
   (e: 'home'): void
+  (e: 'openMemoryDrawer'): void  // v1.0 打开 Memory 抽屉
 }>()
 
 const emotionColor = computed(
@@ -53,6 +55,10 @@ const stageLabel = computed(() => STAGE_LABELS[props.relationshipStage])
       </button>
       <button class="galgame-hud-btn flex items-center gap-1" @click="emit('backlog')">
         📖<span>回忆</span>
+      </button>
+      <!-- v1.0 #191 Memory Drawer -->
+      <button class="galgame-hud-btn flex items-center gap-1" @click="emit('openMemoryDrawer')">
+        🧠<span>档案</span>
       </button>
       <!-- <button class="galgame-hud-btn flex items-center gap-1" @click="emit('knowledgeGraph')">🗺<span>知识图谱</span></button> P1 #185 -->
       <button class="galgame-hud-btn flex items-center gap-1" @click="emit('settings')">

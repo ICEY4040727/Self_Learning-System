@@ -100,6 +100,7 @@
           @knowledge-graph="openKnowledge"
           @settings="router.push('/settings')"
           @home="router.push('/home')"
+          @open-memory-drawer="memoryDrawerOpen = true"
         />
       </div>
     </Transition>
@@ -142,6 +143,15 @@
       :special-dialogue="store.stageSpecialLine"
       @continue="store.dismissStageEvent"
     />
+
+    <!-- v1.0 #191 Memory Facts Drawer -->
+    <MemoryFactsDrawer
+      :show="memoryDrawerOpen"
+      :facts="memoryFacts"
+      :stats="memoryStats"
+      :loading="memoryLoading"
+      @close="memoryDrawerOpen = false"
+    />
   </div>
 </template>
 
@@ -157,6 +167,7 @@ import BacklogPanel from '@/components/BacklogPanel.vue'
 import SaveLoadPanel from '@/components/SaveLoadPanel.vue'
 import KnowledgeGraphModal from '@/components/KnowledgeGraphModal.vue'
 import RelationshipStageOverlay from '@/components/RelationshipStageOverlay.vue'
+import MemoryFactsDrawer from '@/components/course/MemoryFactsDrawer.vue'
 import type { Checkpoint } from '@/types'
 
 const router = useRouter()
@@ -178,9 +189,15 @@ const autoMode = ref(false)
 const skipSignal = ref(0)
 const checkpoints = ref<Checkpoint[]>([])
 
+// v1.0 #191 Memory Facts Drawer state
+const memoryDrawerOpen = ref(false)
+const memoryFacts = ref<any[]>([])
+const memoryStats = ref({ total: 0, by_type: {} as Record<string, number> })
+const memoryLoading = ref(false)
+
 const anyPanelOpen = computed(() =>
   backlogOpen.value || saveOpen.value || loadOpen.value ||
-  knowledgeOpen.value || !!store.pendingStageEvent
+  knowledgeOpen.value || !!store.pendingStageEvent || memoryDrawerOpen.value
 )
 
 let autoTimer: ReturnType<typeof setTimeout> | null = null
