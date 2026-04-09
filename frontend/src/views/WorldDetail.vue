@@ -1,7 +1,8 @@
 <template>
   <div class="world-detail-page">
     <!-- Background -->
-    <div class="scene-bg"></div>
+    <div class="scene-bg" :style="{ backgroundImage: `url(${BG_URL})` }"></div>
+    <div class="scene-overlay"></div>
 
     <!-- Header -->
     <div class="char-header">
@@ -280,11 +281,14 @@ import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Edit3, Trash2 } from 'lucide-vue-next'
 import client from '@/api/client'
+import charBg from '@/assets/char-bg.jpg'
 
 import { parseApiError } from '@/utils/error'
 import CreateCourseModal from '@/components/CreateCourseModal.vue'
 import CreatePersonaModal from '@/components/CreatePersonaModal.vue'
 import StepCreateModal from '@/components/StepCreateModal.vue'
+
+const BG_URL = charBg
 
 const route = useRoute()
 const router = useRouter()
@@ -599,7 +603,19 @@ onMounted(async () => {
 .scene-bg {
   position: fixed;
   inset: 0;
-  background: linear-gradient(135deg, #1e3a5f 0%, #4c1d95 100%);
+  background-size: cover;
+  background-position: center;
+  opacity: 0.5;
+  z-index: -2;
+}
+
+.scene-overlay {
+  position: fixed;
+  inset: 0;
+  background:
+    radial-gradient(ellipse at 50% 0%, rgba(10,10,30,0.15) 0%, transparent 60%),
+    radial-gradient(ellipse at 30% 55%, rgba(255,215,0,0.05) 0%, transparent 55%),
+    linear-gradient(to bottom, rgba(10,10,30,0.25) 0%, rgba(0,0,0,0.45) 100%);
   z-index: -1;
 }
 

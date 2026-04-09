@@ -160,7 +160,6 @@ import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import client from '@/api/client'
 import ProgressBar from '@/components/course/ProgressBar.vue'
-import MotivationBanner from '@/components/course/MotivationBanner.vue'
 import SageRelationCard from '@/components/course/SageRelationCard.vue'
 import { DOMAIN_ICONS } from '@/constants/courseLevels'
 import { getLevelIndex } from '@/constants/courseLevels'
@@ -220,7 +219,6 @@ const progress = computed(() => {
 
 // Methods
 const fetchData = async () => {
-  console.log('[CoursePage DEBUG] fetchData called, courseId:', courseId.value)
   loading.value = true
   try {
     const [courseRes, sagesRes, sessionsRes, statsRes] = await Promise.allSettled([
@@ -230,14 +228,8 @@ const fetchData = async () => {
       client.get(`/courses/${courseId.value}/memory-facts?stats_only=true`),
     ])
 
-    console.log('[CoursePage DEBUG] courseRes:', courseRes.status, courseRes.reason?.message || 'ok')
-    console.log('[CoursePage DEBUG] sagesRes:', sagesRes.status, sagesRes.reason?.message || 'ok')
-    console.log('[CoursePage DEBUG] sessionsRes:', sessionsRes.status, sessionsRes.reason?.message || 'ok')
-    console.log('[CoursePage DEBUG] statsRes:', statsRes.status, statsRes.reason?.message || 'ok')
-
     if (courseRes.status === 'fulfilled') {
       course.value = courseRes.value.data
-      console.log('[CoursePage DEBUG] course.value set:', course.value)
     }
     if (sagesRes.status === 'fulfilled') {
       sages.value = sagesRes.value.data
@@ -247,7 +239,6 @@ const fetchData = async () => {
     }
     if (statsRes.status === 'fulfilled') {
       const stats = statsRes.value.data
-      // Transform stats by_type to flat object
       memoryStats.value = {
         student_state: stats.by_type?.student_state || 0,
         concept_mastered: stats.by_type?.concept_mastered || 0,
