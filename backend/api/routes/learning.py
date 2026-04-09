@@ -38,7 +38,8 @@ class ChatResponse(BaseModel):
     relationship: dict | None = None
     relationship_events: list[dict] | None = None
     expression_hint: str | None = None  # "happy", "thinking", "concerned", "default"
-    memory_extracted_count: int = 0  # 本次会话提取的记忆数量
+    # Issue #192: 本次会话提取的记忆数量
+    memory_extracted_count: int = 0
 
 
 EXPRESSION_MAP = {
