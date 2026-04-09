@@ -100,6 +100,7 @@ class MemoryFact(Base):
     expires_at = Column(DateTime, nullable=True)
 
     character = orm_relationship("Character", back_populates="memory_facts")
+    world = orm_relationship("World", back_populates="memory_facts")
 
 
 # =============================================================================
