@@ -33,7 +33,6 @@ from backend.db.database import SessionLocal
 from backend.models.models import (
     Character,
     ChatMessage,
-    Checkpoint,
     LearnerProfile,
     RelationshipStageRecord,
     TeacherPersona,
@@ -44,10 +43,10 @@ from backend.models.models import (
 )
 from backend.services.dynamic_analyzer import DynamicAnalyzer
 from backend.services.llm.adapter import get_llm_adapter
-from backend.services.memory_facts import memory_facts_service
 from backend.services.memory_extractor import memory_extractor, should_extract_memory
-from backend.services.relationship import relationship_service
+from backend.services.memory_facts import memory_facts_service
 from backend.services.prompt_builder import PromptBuilder, SceneConfig
+from backend.services.relationship import relationship_service
 
 logger = logging.getLogger(__name__)
 
@@ -141,7 +140,7 @@ class LearningEngine:
             relationship_instructions = self.relationship.get_instructions(
                 relationship.get("dimensions", {})
             )
-            
+
             # 构建上下文（包含 character_id 给 MemoryFactsModule 使用）
             context = {
                 "db": db,
@@ -159,7 +158,7 @@ class LearningEngine:
                 "mastery_level": 50,  # TODO: 从 FSRSState 计算
                 "user_message": user_message,  # 用于记忆检索
             }
-            
+
             system_prompt = self.prompt_builder.build(
                 teacher_persona=teacher_persona,
                 scene=SceneConfig.LEARNING,
@@ -168,7 +167,6 @@ class LearningEngine:
             )
 
             # 6. Get previous emotion from last user message
-            prev_emotion = None
             last_user_msg = (
                 db.query(ChatMessage)
                 .filter(ChatMessage.session_id == session_id, ChatMessage.sender_type == "user")
@@ -176,7 +174,7 @@ class LearningEngine:
                 .first()
             )
             if last_user_msg and last_user_msg.emotion_analysis:
-                prev_emotion = last_user_msg.emotion_analysis
+                pass
 
             # 7. Get recent chat history (limit to last 30 messages)
             chat_history = (
@@ -254,7 +252,7 @@ class LearningEngine:
                         .order_by(ChatMessage.timestamp.desc())
                         .first()
                     )
-                    
+
                     # 写入记忆
                     memory_data = [{
                         "fact_type": m.fact_type,
@@ -263,7 +261,7 @@ class LearningEngine:
                         "salience": m.salience,
                         "expires_at": m.expires_at,
                     } for m in result.memories]
-                    
+
                     used_memory_ids = memory_facts_service.write_memory_facts(
                         db=db,
                         character_id=session.sage_character_id,
@@ -271,7 +269,7 @@ class LearningEngine:
                         memories=memory_data,
                         source_message_id=ai_message.id if ai_message else None,
                     )
-            
+
             # 13. Update learner profile
             await self.analyzer.update_learner_profile(
                 user_id=session.user_id,
@@ -296,10 +294,10 @@ class LearningEngine:
 
             # 16. Return response (移除 <memory> 标签)
             clean_response = memory_extractor.strip_tags(llm_response)
-            
+
             # 计算本次提取的 memory 数量 (Issue #192)
             memory_extracted_count = len(result.memories) if result and result.memories else 0
-            
+
             return {
                 "type": "text",
                 "reply": clean_response,
@@ -331,7 +329,7 @@ class LearningEngine:
     ) -> list[int]:
         """
         为 sage character 创建 seed memories
-        
+
         从 traveler character 和 learner_profile 提取初始认知事实。
         """
         return memory_facts_service.create_seed_memories(

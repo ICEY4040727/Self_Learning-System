@@ -1,18 +1,39 @@
 <template>
   <div class="course-page">
+    <!-- Background -->
+    <div class="scene-bg" :style="{ backgroundImage: `url(${BG_URL})` }"></div>
+    <div class="scene-overlay"></div>
+
     <!-- Header -->
-    <div class="page-header">
-      <button class="back-btn" @click="goBack">← 返回</button>
-      <h1 class="page-title">课程主页</h1>
+    <div class="char-header">
+      <button class="back-btn" @click="goBack">
+        <span>←</span> 返回
+      </button>
+      <h1 class="header-title">{{ course?.name || '课程主页' }}</h1>
+      <div style="width: 80px;"></div>
     </div>
+
+    <!-- Content -->
+    <div class="char-content">
 
     <!-- Loading -->
     <div v-if="loading" class="loading">加载中…</div>
 
-    <!-- Content -->
-    <div v-else-if="course" class="course-content">
+    <!-- Error -->
+    <div v-else-if="!course" class="error-state">
+      <p>无法加载课程信息</p>
+      <button class="start-btn" @click="fetchData" style="margin-top: 16px;">重试</button>
+    </div>
+
+    <!-- Course Content -->
+    <template v-else>
       <!-- Course Overview -->
-      <section class="course-overview card">
+      <div class="section-group">
+        <div class="section-header">
+          <span class="section-label">课 程 信 息</span>
+          <span class="section-sublabel">COURSE OVERVIEW</span>
+        </div>
+        <div class="section-line"></div>
         <div class="course-header">
           <div class="course-icon">{{ domainIcon }}</div>
           <div class="course-title-area">
@@ -28,29 +49,30 @@
             开始学习 ▶
           </button>
         </div>
-      </section>
+      </div>
 
-      <!-- Motivation Banner -->
-      <MotivationBanner
-        v-if="course.meta?.motivation"
-        :motivation="course.meta.motivation"
-        :motivation-detail="course.meta.motivation_detail"
-      />
-
-      <!-- Progress Bar -->
-      <section class="progress-section card">
-        <h3 class="section-title">学习进度</h3>
+      <!-- Progress -->
+      <div class="section-group">
+        <div class="section-header">
+          <span class="section-label">学 习 进 度</span>
+          <span class="section-sublabel">PROGRESS</span>
+        </div>
+        <div class="section-line"></div>
         <ProgressBar
           :current-level="course.meta?.current_level || 'none'"
           :target-level="course.meta?.target_level || 'understand'"
           :progress="progress"
           :concept-mastered-count="memoryStats?.concept_mastered"
         />
-      </section>
+      </div>
 
-      <!-- Sage Relations -->
-      <section class="sages-section card">
-        <h3 class="section-title">知者</h3>
+      <!-- Sages -->
+      <div class="section-group">
+        <div class="section-header">
+          <span class="section-label">知 者</span>
+          <span class="section-sublabel">SAGES</span>
+        </div>
+        <div class="section-line"></div>
         <div v-if="sages.length > 0" class="sages-grid">
           <SageRelationCard
             v-for="sage in sages"
@@ -60,11 +82,15 @@
           />
         </div>
         <div v-else class="empty-state">暂无关联的知者</div>
-      </section>
+      </div>
 
-      <!-- Session History -->
-      <section class="sessions-section card">
-        <h3 class="section-title">历史会话</h3>
+      <!-- Sessions -->
+      <div class="section-group">
+        <div class="section-header">
+          <span class="section-label">学 习 会 话</span>
+          <span class="section-sublabel">SESSIONS</span>
+        </div>
+        <div class="section-line"></div>
         <div v-if="sessions.length > 0" class="sessions-list">
           <div
             v-for="session in sessions"
@@ -81,37 +107,31 @@
           </div>
         </div>
         <div v-else class="empty-state">暂无会话记录</div>
-      </section>
+      </div>
 
       <!-- Memory Stats -->
-      <section class="memory-section card">
+      <div class="section-group">
         <div class="section-header">
-          <h3 class="section-title">学习档案</h3>
-          <button class="view-archive-btn" @click="showMemoryDrawer = true">
-            查看档案 📋
-          </button>
+          <span class="section-label">学 习 档 案</span>
+          <span class="section-sublabel">MEMORY</span>
         </div>
+        <div class="section-line"></div>
         <div class="memory-stats">
           <div class="stat-item">
             <span class="stat-value">{{ memoryStats?.student_state || 0 }}</span>
-            <span class="stat-label">Sage 对我的了解</span>
+            <span class="stat-label">Sage 了解</span>
           </div>
           <div class="stat-item">
             <span class="stat-value">{{ memoryStats?.concept_mastered || 0 }}</span>
-            <span class="stat-label">已掌握概念</span>
+            <span class="stat-label">已掌握</span>
           </div>
           <div class="stat-item">
             <span class="stat-value">{{ memoryStats?.concept_struggle || 0 }}</span>
-            <span class="stat-label">薄弱概念</span>
+            <span class="stat-label">薄弱点</span>
           </div>
         </div>
-      </section>
-    </div>
-
-    <!-- Error -->
-    <div v-else class="error-state">
-      <p>无法加载课程信息</p>
-      <button @click="fetchData">重试</button>
+      </div>
+    </template>
     </div>
 
     <!-- Sage Selection Modal -->
@@ -140,10 +160,12 @@ import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import client from '@/api/client'
 import ProgressBar from '@/components/course/ProgressBar.vue'
-import MotivationBanner from '@/components/course/MotivationBanner.vue'
 import SageRelationCard from '@/components/course/SageRelationCard.vue'
 import { DOMAIN_ICONS } from '@/constants/courseLevels'
 import { getLevelIndex } from '@/constants/courseLevels'
+import charBg from '@/assets/char-bg.jpg'
+
+const BG_URL = charBg
 
 const route = useRoute()
 const router = useRouter()
@@ -217,7 +239,6 @@ const fetchData = async () => {
     }
     if (statsRes.status === 'fulfilled') {
       const stats = statsRes.value.data
-      // Transform stats by_type to flat object
       memoryStats.value = {
         student_state: stats.by_type?.student_state || 0,
         concept_mastered: stats.by_type?.concept_mastered || 0,
@@ -307,75 +328,122 @@ onMounted(() => {
 
 <style scoped>
 .course-page {
+  position: relative;
+  width: 100vw;
   min-height: 100vh;
-  padding: 16px;
-  background: linear-gradient(180deg, #1a1a2e 0%, #16213e 100%);
-  color: #fff;
+  overflow-y: auto;
+  padding-bottom: 48px;
 }
 
-.page-header {
+.scene-bg {
+  position: fixed;
+  inset: 0;
+  background-size: cover;
+  background-position: center;
+  opacity: 0.5;
+  z-index: -2;
+}
+
+.scene-overlay {
+  position: fixed;
+  inset: 0;
+  background:
+    radial-gradient(ellipse at 50% 0%, rgba(10,10,30,0.15) 0%, transparent 60%),
+    radial-gradient(ellipse at 30% 55%, rgba(255,215,0,0.05) 0%, transparent 55%),
+    linear-gradient(to bottom, rgba(10,10,30,0.25) 0%, rgba(0,0,0,0.45) 100%);
+  z-index: -1;
+}
+
+.char-header {
+  position: relative;
+  z-index: 1;
   display: flex;
   align-items: center;
-  gap: 16px;
-  margin-bottom: 20px;
+  justify-content: space-between;
+  padding: 24px 32px;
+  background: rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(10px);
 }
 
 .back-btn {
-  padding: 8px 16px;
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 8px;
-  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: "Noto Sans SC", sans-serif;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.7);
+  background: transparent;
+  border: none;
   cursor: pointer;
-  transition: all 0.2s;
+  padding: 8px 12px;
+  border-radius: 6px;
+  transition: all 0.2s ease;
 }
 
 .back-btn:hover {
-  background: rgba(255, 255, 255, 0.15);
+  color: #ffd700;
+  background: rgba(255, 215, 0, 0.1);
 }
 
-.page-title {
+.header-title {
+  font-family: "Noto Sans SC", sans-serif;
   font-size: 18px;
-  font-weight: 600;
+  color: #ffd700;
+  letter-spacing: 6px;
+  margin: 0;
+}
+
+.char-content {
+  position: relative;
+  z-index: 1;
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 32px;
+}
+
+.section-group {
+  margin-bottom: 48px;
+}
+
+.section-header {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.section-label {
+  font-family: "Noto Sans SC", sans-serif;
+  font-size: 18px;
+  color: #ffd700;
+  letter-spacing: 4px;
+}
+
+.section-line {
+  width: 100%;
+  height: 1px;
+  background: linear-gradient(to right, rgba(255, 215, 0, 0.3), transparent);
+  margin-bottom: 20px;
 }
 
 .loading, .error-state, .empty-state {
   text-align: center;
   padding: 40px;
-  color: rgba(255, 255, 255, 0.6);
-}
-
-.course-content {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  max-width: 800px;
-  margin: 0 auto;
-}
-
-.card {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 16px;
-  padding: 20px;
-}
-
-.section-title {
-  font-size: 14px;
-  font-weight: 600;
-  color: rgba(255, 255, 255, 0.7);
-  margin-bottom: 12px;
+  color: rgba(255, 255, 255, 0.4);
+  font-family: "Noto Sans SC", sans-serif;
+  letter-spacing: 2px;
 }
 
 /* Course Overview */
-.course-overview .course-header {
+.course-header {
   display: flex;
-  gap: 16px;
-  align-items: flex-start;
+  align-items: center;
+  gap: 24px;
+  padding: 20px 0;
 }
 
 .course-icon {
-  font-size: 48px;
+  font-size: 56px;
   flex-shrink: 0;
 }
 
@@ -384,50 +452,61 @@ onMounted(() => {
 }
 
 .course-name {
-  font-size: 20px;
-  font-weight: 700;
-  margin: 0;
+  font-family: "Noto Sans SC", sans-serif;
+  font-size: 22px;
+  color: #ffd700;
+  letter-spacing: 2px;
+  margin: 0 0 8px;
 }
 
 .course-desc {
   font-size: 14px;
-  color: rgba(255, 255, 255, 0.7);
-  margin: 4px 0 8px;
+  color: rgba(255, 255, 255, 0.6);
+  margin: 0 0 12px;
 }
 
 .course-meta {
   font-size: 12px;
-  color: rgba(255, 255, 255, 0.5);
+  color: rgba(255, 255, 255, 0.4);
+  font-family: "Noto Sans SC", sans-serif;
 }
 
 .separator {
-  margin: 0 6px;
+  margin: 0 8px;
+  color: rgba(255, 215, 0, 0.3);
 }
 
 .start-btn {
-  padding: 12px 24px;
+  padding: 12px 28px;
   background: linear-gradient(135deg, #fbbf24, #f59e0b);
   border: none;
   border-radius: 24px;
   color: #1a1a2e;
+  font-family: "Noto Sans SC", sans-serif;
+  font-size: 14px;
   font-weight: 600;
   cursor: pointer;
-  transition: transform 0.2s, box-shadow 0.2s;
+  transition: all 0.2s ease;
 }
 
 .start-btn:hover {
-  transform: scale(1.05);
-  box-shadow: 0 4px 20px rgba(251, 191, 36, 0.4);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(251, 191, 36, 0.4);
 }
 
 /* Sages Grid */
 .sages-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.sages-grid {
+  display: flex;
+  flex-wrap: wrap;
   gap: 12px;
 }
 
-/* Sessions List */
 .sessions-list {
   display: flex;
   flex-direction: column;
@@ -437,67 +516,77 @@ onMounted(() => {
 .session-item {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 12px;
-  background: rgba(255, 255, 255, 0.05);
-  border-radius: 8px;
+  gap: 16px;
+  padding: 16px 20px;
+  border-bottom: 1px solid rgba(255, 215, 0, 0.1);
   cursor: pointer;
-  transition: background 0.2s;
+  transition: all 0.2s ease;
+}
+
+.session-item:last-child {
+  border-bottom: none;
 }
 
 .session-item:hover {
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 215, 0, 0.05);
+  padding-left: 28px;
 }
 
 .session-time {
   font-size: 13px;
-  color: rgba(255, 255, 255, 0.6);
+  color: rgba(255, 255, 255, 0.5);
   min-width: 100px;
+  font-family: "Noto Sans SC", sans-serif;
 }
 
 .session-info {
   flex: 1;
   display: flex;
-  gap: 12px;
+  gap: 16px;
   font-size: 13px;
 }
 
 .session-stage {
   color: #a78bfa;
+  font-family: "Noto Sans SC", sans-serif;
 }
 
 .session-messages {
-  color: rgba(255, 255, 255, 0.5);
+  color: rgba(255, 255, 255, 0.4);
+  font-family: "Noto Sans SC", sans-serif;
 }
 
 .session-arrow {
-  color: rgba(255, 255, 255, 0.3);
+  color: rgba(255, 215, 0, 0.4);
 }
 
 /* Memory Stats */
-.section-header {
+.memory-section .section-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 12px;
+  margin-bottom: 16px;
 }
 
-.section-header .section-title {
-  margin-bottom: 0;
+.memory-section .section-header .section-title {
+  margin: 0;
 }
 
 .view-archive-btn {
-  padding: 6px 12px;
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  padding: 6px 14px;
+  background: rgba(255, 215, 0, 0.1);
+  border: 1px solid rgba(255, 215, 0, 0.25);
   border-radius: 6px;
-  color: #fff;
+  color: #ffd700;
+  font-family: "Noto Sans SC", sans-serif;
   font-size: 12px;
   cursor: pointer;
+  transition: all 0.2s ease;
 }
 
 .view-archive-btn:hover {
-  background: rgba(255, 255, 255, 0.15);
+  background: rgba(255, 215, 0, 0.15);
+  border-color: rgba(255, 215, 0, 0.4);
 }
 
 .memory-stats {
@@ -508,23 +597,29 @@ onMounted(() => {
 
 .stat-item {
   text-align: center;
-  padding: 12px;
-  background: rgba(255, 255, 255, 0.05);
-  border-radius: 8px;
+  padding: 20px 16px;
+  border-right: 1px solid rgba(255, 215, 0, 0.1);
+}
+
+.stat-item:last-child {
+  border-right: none;
 }
 
 .stat-value {
   display: block;
-  font-size: 24px;
+  font-size: 28px;
   font-weight: 700;
-  color: #a78bfa;
+  color: #ffd700;
+  font-family: "Noto Sans SC", sans-serif;
 }
 
 .stat-label {
   display: block;
   font-size: 11px;
-  color: rgba(255, 255, 255, 0.5);
-  margin-top: 4px;
+  color: rgba(255, 255, 255, 0.4);
+  margin-top: 6px;
+  font-family: "Noto Sans SC", sans-serif;
+  letter-spacing: 1px;
 }
 
 /* Modal */
@@ -535,67 +630,80 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  z-index: 2000;
+  backdrop-filter: blur(4px);
 }
 
 .modal-content {
-  background: #1a1a2e;
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(12, 12, 30, 0.98);
+  border: 1px solid rgba(255, 215, 0, 0.2);
   border-radius: 16px;
-  padding: 24px;
+  padding: 28px;
   max-width: 400px;
   width: 90%;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
 }
 
 .modal-content h3 {
+  font-family: "Noto Sans SC", sans-serif;
+  font-size: 18px;
+  color: #ffd700;
   text-align: center;
-  margin-bottom: 20px;
+  margin: 0 0 20px;
+  letter-spacing: 3px;
 }
 
 .sage-select-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 12px;
-  margin-bottom: 16px;
+  margin-bottom: 20px;
 }
 
 .sage-select-item {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
-  padding: 16px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  gap: 10px;
+  padding: 20px 16px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 215, 0, 0.15);
   border-radius: 12px;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.2s ease;
 }
 
 .sage-select-item:hover {
-  background: rgba(255, 255, 255, 0.1);
-  border-color: #fbbf24;
+  background: rgba(255, 215, 0, 0.08);
+  border-color: rgba(255, 215, 0, 0.4);
 }
 
 .sage-avatar-sm {
-  font-size: 32px;
+  font-size: 36px;
 }
 
 .sage-name-sm {
+  font-family: "Noto Sans SC", sans-serif;
   font-size: 14px;
+  color: rgba(255, 255, 255, 0.8);
 }
 
 .cancel-btn {
   width: 100%;
   padding: 12px;
   background: transparent;
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 215, 0, 0.2);
   border-radius: 8px;
-  color: rgba(255, 255, 255, 0.7);
+  color: rgba(255, 215, 0, 0.6);
+  font-family: "Noto Sans SC", sans-serif;
+  font-size: 14px;
   cursor: pointer;
+  transition: all 0.2s ease;
 }
 
 .cancel-btn:hover {
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(255, 215, 0, 0.1);
+  border-color: rgba(255, 215, 0, 0.4);
+  color: #ffd700;
 }
 </style>

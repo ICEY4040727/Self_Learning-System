@@ -14,8 +14,8 @@ set -euo pipefail
 # ---------------------------------------------------------------------------
 POLL_INTERVAL="${POLL_INTERVAL:-60}"                                # 1 minute
 REPO="${REPO:-ICEY4040727/Self_Learning-System}"
-CREATOR_SESSION="${CREATOR_SESSION:-SelfLearning-creator}"
-REVIEWER_SESSION="${REVIEWER_SESSION:-SelfLearn-reviewer}"
+CREATOR_SESSION="${CREATOR_SESSION:-creator}"
+REVIEWER_SESSION="${REVIEWER_SESSION:-reviewer}"
 STATE_DIR="/tmp/gh-notify"
 
 # ---------------------------------------------------------------------------

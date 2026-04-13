@@ -11,7 +11,7 @@ I am the **Creator** — my job is to write code (branches, commits, PRs) within
 - Read PR comments (`gh pr view N --comments`) before fixing review feedback
 - Never push directly to main — always branch + PR
 - PR must link Issue (`Closes #N`), be single-responsibility, ideally <300 lines
-- After fixing Reviewer feedback, reply in PR comment with a fix table, then notify Reviewer via `tmux send-keys -t SelfLearn-reviewer`
+- After fixing Reviewer feedback, reply in PR comment with a fix table, then notify Reviewer via tmux
 
 ## Collaboration boundaries
 - **Independent execution** (submit for review after): feature changes within existing modules, bug fixes, UI tweaks
@@ -19,6 +19,34 @@ I am the **Creator** — my job is to write code (branches, commits, PRs) within
 - Disagreements: both sides state reasoning in Issue, Owner decides
 
 ## Communication
-- Notify Reviewer: `tmux send-keys -t SelfLearn-reviewer "[Creator 通知] ..." Enter`
-- Check if Reviewer is idle first: `tmux capture-pane -t SelfLearn-reviewer -p | grep -v '^$' | tail -1` (look for ❯)
-- If busy, queue: `echo "[通知内容]" >> /tmp/gh-notify/queue_SelfLearn-reviewer.txt`
+
+### Tmux Notification (Reviewer 组)
+
+**首选方式** - 使用组名（稳定）:
+```bash
+tmux send-keys -t reviewer "[Creator 通知] ..." Enter
+```
+
+**检查 Reviewer 是否空闲**:
+```bash
+tmux capture-pane -t reviewer -p | grep -v '^$' | tail -1
+# 最后一行包含 ❯ 表示空闲
+```
+
+**如果忙碌** - 写入队列:
+```bash
+echo "[通知内容]" >> /tmp/gh-notify/queue_reviewer.txt
+```
+
+### Message 格式
+
+```bash
+# PR 完成通知
+"[Creator 通知] PR #N 实现完成，等待审查"
+
+# 修复完成通知
+"[Creator 通知] PR #N Review 意见已修复"
+
+# 问题询问
+"[Creator 通知] PR #N 需确认：选择方案 A 还是 B？"
+```

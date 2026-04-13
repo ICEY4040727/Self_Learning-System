@@ -156,7 +156,7 @@ def _build_checkpoint_response(cp: Checkpoint, db: Session, user_id: int) -> Che
     """Build CheckpointResponse with extended fields."""
     state = cp.state or {}
     relationship = state.get("relationship", {})
-    
+
     # Extract relationship stage
     stage = None
     if relationship:
@@ -168,10 +168,10 @@ def _build_checkpoint_response(cp: Checkpoint, db: Session, user_id: int) -> Che
             "partner": "伙伴",
         }
         stage = stage_map.get(relationship.get("stage", ""), relationship.get("stage"))
-    
+
     # Format date
     date = cp.created_at.strftime("%Y-%m-%d %H:%M") if cp.created_at else None
-    
+
     # Calculate mastery from progress tracking
     mastery = None
     course_id = state.get("course_id")
@@ -184,7 +184,7 @@ def _build_checkpoint_response(cp: Checkpoint, db: Session, user_id: int) -> Che
         if progress_list:
             total = sum(p.mastery_level for p in progress_list)
             mastery = total / len(progress_list) / 100.0  # Convert to 0-1 range
-    
+
     # Get preview text from chat history
     preview = None
     if cp.session_id:
@@ -194,7 +194,7 @@ def _build_checkpoint_response(cp: Checkpoint, db: Session, user_id: int) -> Che
         ).order_by(ChatMessage.id.desc()).limit(2).all()
         if last_msgs:
             preview = last_msgs[0].content[:100] if last_msgs else None
-    
+
     return CheckpointResponse(
         id=cp.id,
         world_id=cp.world_id,

@@ -95,7 +95,6 @@ const fetchCheckpoints = async (courseId: number) => {
 
 - [ ] 实现 Character Avatar 上传
 - [ ] 实现 Character Stats 展示
-- [ ] 实现 Character Level Up 系统
 - [ ] 实现 Persona 生成 UI
 - [ ] 实现 Progress Review 交互
 - [ ] 实现 Session End 调用

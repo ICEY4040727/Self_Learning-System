@@ -5,7 +5,6 @@ LLM 错误处理模块
 """
 
 from enum import Enum
-from typing import Optional
 
 
 class LLMErrorCode(Enum):
@@ -24,7 +23,7 @@ class LLMErrorCode(Enum):
 class LLMError(Exception):
     """
     LLM 基础错误类
-    
+
     Attributes:
         code: 错误码
         message: 错误消息
@@ -32,14 +31,14 @@ class LLMError(Exception):
         status_code: HTTP 状态码
         details: 额外详情
     """
-    
+
     def __init__(
         self,
         code: LLMErrorCode,
         message: str,
         provider: str,
-        status_code: Optional[int] = None,
-        details: Optional[dict] = None
+        status_code: int | None = None,
+        details: dict | None = None
     ):
         self.code = code
         self.message = message
@@ -47,7 +46,7 @@ class LLMError(Exception):
         self.status_code = status_code
         self.details = details or {}
         super().__init__(f"[{provider}] {code.value}: {message}")
-    
+
     def to_dict(self) -> dict:
         """转换为字典，用于 API 响应"""
         return {
@@ -61,8 +60,8 @@ class LLMError(Exception):
 
 class RateLimitError(LLMError):
     """限流错误（429）"""
-    
-    def __init__(self, provider: str, retry_after: Optional[int] = None):
+
+    def __init__(self, provider: str, retry_after: int | None = None):
         details = {"retry_after": retry_after} if retry_after else {}
         super().__init__(
             code=LLMErrorCode.RATE_LIMITED,
@@ -75,7 +74,7 @@ class RateLimitError(LLMError):
 
 class AuthError(LLMError):
     """认证错误（401/403）"""
-    
+
     def __init__(self, provider: str, message: str = "Invalid API key"):
         super().__init__(
             code=LLMErrorCode.AUTH_FAILED,
@@ -87,7 +86,7 @@ class AuthError(LLMError):
 
 class QuotaError(LLMError):
     """配额超限错误"""
-    
+
     def __init__(self, provider: str, quota_type: str):
         super().__init__(
             code=LLMErrorCode.QUOTA_EXCEEDED,
@@ -99,7 +98,7 @@ class QuotaError(LLMError):
 
 class InvalidRequestError(LLMError):
     """无效请求错误（400）"""
-    
+
     def __init__(self, provider: str, message: str):
         super().__init__(
             code=LLMErrorCode.INVALID_REQUEST,
@@ -111,7 +110,7 @@ class InvalidRequestError(LLMError):
 
 class ModelNotFoundError(LLMError):
     """模型不存在错误（404）"""
-    
+
     def __init__(self, provider: str, model: str):
         super().__init__(
             code=LLMErrorCode.MODEL_NOT_FOUND,
@@ -124,8 +123,8 @@ class ModelNotFoundError(LLMError):
 
 class NetworkError(LLMError):
     """网络错误"""
-    
-    def __init__(self, provider: str, message: str, details: Optional[dict] = None):
+
+    def __init__(self, provider: str, message: str, details: dict | None = None):
         super().__init__(
             code=LLMErrorCode.NETWORK_ERROR,
             message=message,
@@ -136,7 +135,7 @@ class NetworkError(LLMError):
 
 class TimeoutError(LLMError):
     """超时错误"""
-    
+
     def __init__(self, provider: str, timeout: float):
         super().__init__(
             code=LLMErrorCode.TIMEOUT,
@@ -148,7 +147,7 @@ class TimeoutError(LLMError):
 
 class ContextOverflowError(LLMError):
     """上下文超限错误"""
-    
+
     def __init__(self, provider: str, context_limit: int):
         super().__init__(
             code=LLMErrorCode.CONTEXT_OVERFLOW,
@@ -162,17 +161,17 @@ class ContextOverflowError(LLMError):
 def from_http_response(provider: str, status_code: int, response_body: str) -> LLMError:
     """
     根据 HTTP 响应创建对应的 LLM 错误
-    
+
     Args:
         provider: 提供商名称
         status_code: HTTP 状态码
         response_body: 响应体
-    
+
     Returns:
         对应的 LLM 错误类型
     """
     import json
-    
+
     # 尝试解析错误消息
     message = "Unknown error"
     try:
@@ -183,7 +182,7 @@ def from_http_response(provider: str, status_code: int, response_body: str) -> L
             message = str(data)
     except (json.JSONDecodeError, TypeError):
         message = response_body[:200] if response_body else "Unknown error"
-    
+
     if status_code == 401 or status_code == 403:
         return AuthError(provider, message)
     elif status_code == 429:

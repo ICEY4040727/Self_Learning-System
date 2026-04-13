@@ -36,27 +36,27 @@ class MemoryFactsService:
     ) -> list[int]:
         """
         写入记忆事实
-        
+
         Args:
             db: 数据库会话
             character_id: sage character ID（AI 老师）
             world_id: 世界 ID（可为 None 表示跨世界事实）
             memories: 记忆列表，每条包含 fact_type, content, concept_tags, salience, expires_at
             source_message_id: 溯源，指向 AI 回复的 ChatMessage.id
-        
+
         Returns:
             新写入的记忆 ID 列表
         """
         now = datetime.now(UTC)
         memory_ids = []
-        
+
         for mem in memories:
             fact_type = mem.get("fact_type", self.FACT_TYPE_EVENT)
             content = mem.get("content", "")[:500]  # 截断至 500 字
-            
+
             if not content:
                 continue
-            
+
             fact = MemoryFact(
                 character_id=character_id,
                 world_id=world_id,
@@ -73,7 +73,7 @@ class MemoryFactsService:
             db.add(fact)
             db.flush()
             memory_ids.append(fact.id)
-        
+
         return memory_ids
 
     def retrieve_memories(
@@ -88,7 +88,7 @@ class MemoryFactsService:
     ) -> list[MemoryFact]:
         """
         检索记忆事实
-        
+
         Args:
             db: 数据库会话
             character_id: sage character ID
@@ -97,7 +97,7 @@ class MemoryFactsService:
             fact_types: 事实类型过滤列表
             limit: 返回数量上限
             min_salience: 最低重要度阈值
-        
+
         Returns:
             MemoryFact 对象列表
         """
@@ -107,25 +107,25 @@ class MemoryFactsService:
             # 未过期或无过期时间
             (MemoryFact.expires_at.is_(None) | (MemoryFact.expires_at > datetime.now(UTC)))
         )
-        
+
         if world_id is not None:
             # 包含指定世界的事实 + 跨世界事实（world_id=NULL）
             q = q.filter(
                 (MemoryFact.world_id == world_id) | (MemoryFact.world_id.is_(None))
             )
-        
+
         if fact_types:
             q = q.filter(MemoryFact.fact_type.in_(fact_types))
-        
+
         if query:
             q = q.filter(MemoryFact.content.ilike(f"%{query}%"))
-        
+
         # 按 salience 降序 + created_at 降序排序
         memories = q.order_by(
             MemoryFact.salience.desc(),
             MemoryFact.created_at.desc()
         ).limit(limit).all()
-        
+
         return memories
 
     def update_recall_count(self, db: Session, memory_id: int) -> None:
@@ -154,9 +154,9 @@ class MemoryFactsService:
     ) -> list[int]:
         """
         创建 Seed Memory Facts
-        
+
         从 traveler character 和 learner_profile 提取初始认知事实。
-        
+
         Seed 内容（来自草案）:
         - 学生名字 (salience=0.9)
         - 学习方向 tags (salience=0.7)
@@ -168,7 +168,7 @@ class MemoryFactsService:
         - 元认知趋势 metacognition_trend (salience=0.6)
         """
         memory_ids = []
-        
+
         # 学生名字
         if traveler_character.name:
             memory_ids.extend(self.write_memory_facts(
@@ -181,7 +181,7 @@ class MemoryFactsService:
                     "salience": 0.9,
                 }],
             ))
-        
+
         # 学习方向 tags
         if traveler_character.tags:
             tags_str = ", ".join(traveler_character.tags) if isinstance(traveler_character.tags, list) else str(traveler_character.tags)
@@ -195,7 +195,7 @@ class MemoryFactsService:
                     "salience": 0.7,
                 }],
             ))
-        
+
         # 学习背景
         if traveler_character.background:
             memory_ids.extend(self.write_memory_facts(
@@ -208,7 +208,7 @@ class MemoryFactsService:
                     "salience": 0.6,
                 }],
             ))
-        
+
         # 性格特点
         if traveler_character.personality:
             memory_ids.extend(self.write_memory_facts(
@@ -221,11 +221,11 @@ class MemoryFactsService:
                     "salience": 0.5,
                 }],
             ))
-        
+
         # 从 learner_profile 提取学习统计
         if learner_profile and learner_profile.profile:
             profile = learner_profile.profile
-            
+
             # 已有学习经历
             learning_stats = profile.get("learning_stats", {})
             total_sessions = learning_stats.get("total_sessions", 0)
@@ -240,7 +240,7 @@ class MemoryFactsService:
                         "salience": 0.8,
                     }],
                 ))
-            
+
             # 平均掌握度
             avg_mastery = learning_stats.get("average_mastery", 0)
             if avg_mastery > 0:
@@ -255,7 +255,7 @@ class MemoryFactsService:
                         "salience": 0.85,
                     }],
                 ))
-            
+
             # 学习偏好
             pref_stability = profile.get("preference_stability", {})
             for pref_key, display_name in [
@@ -274,7 +274,7 @@ class MemoryFactsService:
                             "salience": 0.75,
                         }],
                     ))
-            
+
             # 元认知趋势
             metacognition = profile.get("metacognition_trend", {})
             for dim, label in [
@@ -297,7 +297,7 @@ class MemoryFactsService:
                             "salience": 0.6,
                         }],
                     ))
-        
+
         return memory_ids
 
 

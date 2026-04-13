@@ -3,13 +3,13 @@ from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile
 from pydantic import BaseModel, Field
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from backend.api.routes.auth import get_current_user
 from backend.db.database import get_db
 from backend.models.models import (
     Character,
+    ChatMessage,
     Course,
     FSRSState,
     LearnerProfile,
@@ -52,7 +52,7 @@ PERSONA_TEMPLATES = {
 
 def _create_default_persona(db: Session, character, template_name: str = "默认", traits: dict | None = None) -> TeacherPersona:
     """自动创建与角色关联的 TeacherPersona
-    
+
     Args:
         db: 数据库会话
         character: Character 实例
@@ -69,7 +69,7 @@ def _create_default_persona(db: Session, character, template_name: str = "默认
         persona_traits = list(template_traits)
         if character.tags:
             persona_traits.extend(t for t in character.tags if t not in persona_traits)
-    
+
     persona = TeacherPersona(
         character_id=character.id,
         name=f"{character.name} - 默认人格",
@@ -281,13 +281,13 @@ def create_character(
     # 提取 template_name 和 traits 用于创建 TeacherPersona (不在 Character 模型中)
     template_name = character.template_name
     traits = character.traits  # Phase 1 新增：传递滑块值
-    
+
     # 只传递 Character 模型支持的字段
     # sprites 不能是空列表，必须是 dict 或 None
     sprites = character.sprites
     if isinstance(sprites, list) and len(sprites) == 0:
         sprites = None
-    
+
     db_character = Character(
         user_id=current_user.id,
         name=character.name,
@@ -302,11 +302,11 @@ def create_character(
     )
     db.add(db_character)
     db.flush()
-    
+
     # sage 类型必须创建 TeacherPersona
     if character.type == "sage":
         _create_default_persona(db, db_character, template_name, traits)
-    
+
     db.commit()
     db.refresh(db_character)
     return db_character
@@ -545,7 +545,7 @@ def _build_world_response(world: World, db: Session, current_user_id: int = None
     """Build WorldResponse with sages, stageLabel, relationship data and courses."""
     sages = _get_world_characters_by_role(db, world.id, "sage")
     travelers = _get_world_characters_by_role(db, world.id, "traveler")
-    
+
     # Get courses for this world with progress and icon
     courses = db.query(Course).filter(Course.world_id == world.id).all()
     course_list = []
@@ -553,7 +553,7 @@ def _build_world_response(world: World, db: Session, current_user_id: int = None
         for course in courses:
             progress = None
             icon = "📖"  # 默认图标
-            
+
             # 如果提供了 user_id，获取课程进度
             if current_user_id:
                 course_progress = db.query(ProgressTracking).filter(
@@ -562,7 +562,7 @@ def _build_world_response(world: World, db: Session, current_user_id: int = None
                 ).first()
                 if course_progress:
                     progress = course_progress.mastery_level / 100.0
-            
+
             course_list.append(CourseResponse(
                 id=course.id,
                 world_id=course.world_id,
@@ -575,13 +575,13 @@ def _build_world_response(world: World, db: Session, current_user_id: int = None
             ))
     else:
         course_list = None
-    
+
     # Try to get relationship stage from the most recent session
     from backend.models.models import Session as SessionModel
     latest_session = db.query(SessionModel).filter(
         SessionModel.world_id == world.id
     ).order_by(SessionModel.started_at.desc()).first()
-    
+
     stage_label = None
     relationship = None
     if latest_session and latest_session.relationship:
@@ -595,7 +595,7 @@ def _build_world_response(world: World, db: Session, current_user_id: int = None
         }
         stage_label = stage_map.get(stage, stage)
         relationship = latest_session.relationship
-    
+
     return WorldResponse(
         id=world.id,
         user_id=world.user_id,
@@ -1254,6 +1254,7 @@ class CourseSessionResponse(BaseModel):
     ended_at: datetime | None
     relationship_stage: str | None
     course_name: str | None = None
+    message_count: int = 0
 
     class Config:
         from_attributes = True
@@ -1297,14 +1298,14 @@ def get_course_sages(
 ):
     """
     获取课程关联的 Sage 角色列表。
-    
+
     通过 Course.meta.sage_ids 获取，如果没有则返回世界级别的 Sage。
     """
     course = _get_course_with_auth(course_id, db, current_user)
-    
+
     # 优先从 meta.sage_ids 获取
     sage_ids = course.meta.get("sage_ids", []) if course.meta else []
-    
+
     if sage_ids:
         # 从指定 sage_ids 获取
         sages = db.query(Character).filter(
@@ -1319,7 +1320,7 @@ def get_course_sages(
         ).order_by(WorldCharacter.is_primary.desc()).all()
         sage_ids = [link.character_id for link in sage_links]
         sages = db.query(Character).filter(Character.id.in_(sage_ids)).all() if sage_ids else []
-    
+
     return [
         {
             "id": s.id,
@@ -1342,13 +1343,22 @@ def get_course_sessions(
     获取课程的所有学习会话。
     """
     course = _get_course_with_auth(course_id, db, current_user)
-    
+
     from backend.models.models import Session as SessionModel
     sessions = db.query(SessionModel).filter(
         SessionModel.course_id == course_id,
         SessionModel.user_id == current_user.id,
     ).order_by(SessionModel.started_at.desc()).all()
-    
+
+    # Aggregate message count for each session
+    session_ids = [s.id for s in sessions]
+    message_counts: dict[int, int] = {}
+    if session_ids:
+        counts = db.query(ChatMessage.session_id, db.func.count(ChatMessage.id)).filter(
+            ChatMessage.session_id.in_(session_ids)
+        ).group_by(ChatMessage.session_id).all()
+        message_counts = dict(counts)
+
     return [
         CourseSessionResponse(
             id=s.id,
@@ -1356,6 +1366,7 @@ def get_course_sessions(
             ended_at=s.ended_at,
             relationship_stage=(s.relationship or {}).get("stage") if s.relationship else None,
             course_name=course.name,
+            message_count=message_counts.get(s.id, 0),
         )
         for s in sessions
     ]
@@ -1370,56 +1381,56 @@ def get_course_memory_facts(
 ):
     """
     获取课程关联的记忆事实。
-    
+
     - stats_only=true: 只返回统计信息
     - stats_only=false: 返回统计 + 记忆列表
-    
+
     关联方式: 通过 course 的 world_id 查询 world 级别的记忆，
     或者通过 session 关联的 character_id 查询。
     """
     course = _get_course_with_auth(course_id, db, current_user)
-    
+
     # 获取该课程世界的所有 sage characters
     sage_links = db.query(WorldCharacter).filter(
         WorldCharacter.world_id == course.world_id,
         WorldCharacter.role == "sage",
     ).all()
     sage_character_ids = [link.character_id for link in sage_links]
-    
+
     if not sage_character_ids:
         if stats_only:
             return MemoryFactStatsResponse(total=0, by_type={}, avg_salience=0.0)
         return {"stats": MemoryFactStatsResponse(total=0, by_type={}, avg_salience=0.0), "facts": []}
-    
+
     # 查询记忆事实
     facts_query = db.query(MemoryFact).filter(
         MemoryFact.character_id.in_(sage_character_ids),
         # 包含世界级别或跨世界记忆
         (MemoryFact.world_id == course.world_id) | (MemoryFact.world_id.is_(None))
     )
-    
+
     facts = facts_query.all()
-    
+
     # 计算统计
     total = len(facts)
     by_type: dict[str, int] = {}
     total_salience = 0.0
-    
+
     for fact in facts:
         by_type[fact.fact_type] = by_type.get(fact.fact_type, 0) + 1
         total_salience += fact.salience
-    
+
     avg_salience = total_salience / total if total > 0 else 0.0
-    
+
     stats = MemoryFactStatsResponse(
         total=total,
         by_type=by_type,
         avg_salience=round(avg_salience, 3),
     )
-    
+
     if stats_only:
         return stats
-    
+
     return {
         "stats": stats,
         "facts": [

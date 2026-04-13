@@ -19,7 +19,6 @@ from backend.services.report import (
     get_world_mastery_trends,
 )
 
-
 router = APIRouter()
 
 
@@ -96,7 +95,7 @@ def get_mastery_trends(
     获取跨世界的知识掌握度趋势。
     """
     result = get_mastery_trends_by_user(db, current_user.id)
-    
+
     # 转换为 Pydantic 模型
     trends = [
         MasteryTrendItem(
@@ -108,7 +107,7 @@ def get_mastery_trends(
         )
         for t in result.get("trends", [])
     ]
-    
+
     return MasteryTrendResponse(
         trends=trends,
         average_mastery=result.get("average_mastery", 0),
@@ -126,12 +125,12 @@ def get_relationship_history(
     获取关系进化历程。
     """
     result = get_relationship_history_by_user(db, current_user.id)
-    
+
     # 转换 current_stages 的 key 为 int
     current_stages = {
         int(k): v for k, v in result.get("current_stages", {}).items()
     }
-    
+
     return RelationshipHistoryResponse(
         events=[
             RelationshipEvent(**e) for e in result.get("events", [])
@@ -160,7 +159,7 @@ def get_milestones(
 ):
     """
     获取里程碑事件。
-    
+
     如果不指定 world_id，返回所有世界的里程碑。
     如果指定 world_id，返回该世界的里程碑。
     """

@@ -4,17 +4,16 @@ UserProfile 测试 - 跨世界特征聚合
 测试根据 learning_memory_theory.md 第五部分的设计实现。
 """
 
+from unittest.mock import MagicMock
+
 import pytest
-from datetime import UTC, datetime
-from unittest.mock import MagicMock, patch
 
 from backend.services.user_profile import (
+    MSKT_DIMENSIONS,
+    compute_learning_stats,
     compute_metacognition_trend,
     compute_preference_stability,
-    compute_learning_stats,
     normalize_mskt_value,
-    MSKT_DIMENSIONS,
-    PREFERENCE_TRAITS,
 )
 
 
@@ -56,7 +55,7 @@ class TestComputeMetacognitionTrend:
             }
         ]
         result = compute_metacognition_trend(profiles)
-        
+
         assert "planning" in result
         assert result["planning"]["current"] == "moderate"
         assert result["planning"]["trend"] == "unknown"
@@ -85,7 +84,7 @@ class TestComputeMetacognitionTrend:
             }
         ]
         result = compute_metacognition_trend(profiles)
-        
+
         assert result["planning"]["current"] == "moderate"
         assert result["planning"]["trend"] == "improving"
         assert result["planning"]["evidence_count"] == 2
@@ -113,7 +112,7 @@ class TestComputeMetacognitionTrend:
             }
         ]
         result = compute_metacognition_trend(profiles)
-        
+
         assert result["planning"]["current"] == "moderate"
         assert result["planning"]["trend"] == "stable"
 
@@ -140,7 +139,7 @@ class TestComputeMetacognitionTrend:
             }
         ]
         result = compute_metacognition_trend(profiles)
-        
+
         # 4个维度都应该存在
         for dim in MSKT_DIMENSIONS:
             assert dim in result
@@ -166,7 +165,7 @@ class TestComputePreferenceStability:
             }
         ]
         result = compute_preference_stability(profiles)
-        
+
         assert result["visual_examples"]["status"] == "insufficient_data"
 
     def test_boolean_consistent(self):
@@ -192,7 +191,7 @@ class TestComputePreferenceStability:
             }
         ]
         result = compute_preference_stability(profiles)
-        
+
         assert result["visual_examples"]["stable"] == True
         assert result["visual_examples"]["consistency"] == 1.0
         assert result["visual_examples"]["display"] == "稳定"
@@ -220,7 +219,7 @@ class TestComputePreferenceStability:
             }
         ]
         result = compute_preference_stability(profiles)
-        
+
         assert result["visual_examples"]["stable"] == False
         assert result["visual_examples"]["consistency"] == pytest.approx(1/3)
         assert result["visual_examples"]["display"] == "变化中"
@@ -248,7 +247,7 @@ class TestComputePreferenceStability:
             }
         ]
         result = compute_preference_stability(profiles)
-        
+
         assert result["pace"]["stable"] == True
         assert result["pace"]["most_common"] == "slow"
         assert result["pace"]["display"] == "slow"
@@ -261,9 +260,9 @@ class TestComputeLearningStats:
         """空profile"""
         mock_db = MagicMock()
         mock_db.query.return_value.filter.return_value.first.return_value = None
-        
+
         result = compute_learning_stats(mock_db, [])
-        
+
         assert result["total_concepts_learned"] == 0
         assert result["total_sessions"] == 0
         assert result["average_mastery"] == 0
@@ -272,7 +271,7 @@ class TestComputeLearningStats:
     def test_single_world_with_knowledge(self):
         """单个世界有知识图谱"""
         mock_db = MagicMock()
-        
+
         # Mock Knowledge
         mock_knowledge = MagicMock()
         mock_knowledge.graph = {
@@ -283,16 +282,16 @@ class TestComputeLearningStats:
             }
         }
         mock_db.query.return_value.filter.return_value.first.return_value = mock_knowledge
-        
+
         profiles = [
             {
                 "world_id": 1,
                 "session_count": 5
             }
         ]
-        
+
         result = compute_learning_stats(mock_db, profiles)
-        
+
         assert result["total_concepts_learned"] == 3
         assert result["total_sessions"] == 5
         assert result["average_mastery"] == pytest.approx(0.767, rel=0.01)
@@ -301,7 +300,7 @@ class TestComputeLearningStats:
     def test_multiple_worlds(self):
         """多个世界"""
         mock_db = MagicMock()
-        
+
         # Mock for world 1
         mock_knowledge1 = MagicMock()
         mock_knowledge1.graph = {
@@ -309,7 +308,7 @@ class TestComputeLearningStats:
                 "concept1": {"mastery": 0.8}
             }
         }
-        
+
         # Mock for world 2
         mock_knowledge2 = MagicMock()
         mock_knowledge2.graph = {
@@ -318,7 +317,7 @@ class TestComputeLearningStats:
                 "concept3": {"mastery": 0.9}
             }
         }
-        
+
         def mock_filter(*args):
             mock_result = MagicMock()
             world_id = args[1].right.value if hasattr(args[1], 'right') else None
@@ -329,16 +328,16 @@ class TestComputeLearningStats:
             else:
                 mock_result.first.return_value = None
             return mock_result
-        
+
         mock_db.query.return_value.filter.side_effect = mock_filter
-        
+
         profiles = [
             {"world_id": 1, "session_count": 3},
             {"world_id": 2, "session_count": 7}
         ]
-        
+
         result = compute_learning_stats(mock_db, profiles)
-        
+
         assert result["total_concepts_learned"] == 3
         assert result["total_sessions"] == 10
         assert result["worlds_explored"] == 2

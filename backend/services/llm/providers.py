@@ -8,9 +8,9 @@ LLM Provider 配置模块
 https://github.com/cline/cline/blob/main/src/shared/providers/providers.json
 """
 
-from pathlib import Path
 import json
-from typing import TypedDict, Literal
+from pathlib import Path
+from typing import Literal, TypedDict
 
 
 class ProviderInfo(TypedDict):
@@ -38,10 +38,10 @@ PROVIDERS_MAP: dict[str, ProviderInfo] = {p["value"]: p for p in PROVIDERS}
 def get_provider_info(provider: str) -> ProviderInfo | None:
     """
     获取 Provider 信息
-    
+
     Args:
         provider: Provider 名称
-    
+
     Returns:
         ProviderInfo 或 None（如果不存在）
     """
@@ -51,10 +51,10 @@ def get_provider_info(provider: str) -> ProviderInfo | None:
 def get_provider_api_format(provider: str) -> str:
     """
     获取 Provider 的 API 格式
-    
+
     Args:
         provider: Provider 名称
-    
+
     Returns:
         API 格式 ("anthropic" | "openai" | "openai-compatible" | "gemini")
     """
@@ -81,7 +81,7 @@ def list_provider_values() -> list[str]:
 PROVIDER_ENDPOINTS: dict[str, str] = {
     # OpenAI 系列
     "openai": "https://api.openai.com/v1",
-    
+
     # 中国厂商
     "deepseek": "https://api.deepseek.com/v1",
     "qwen": "https://dashscope.aliyuncs.com/compatible-mode/v1",
@@ -89,7 +89,7 @@ PROVIDER_ENDPOINTS: dict[str, str] = {
     "moonshot": "https://api.moonshot.cn/v1",
     "minimax": "https://api.minimax.chat/v1",
     "doubao": "https://ark.cn-beijing.volces.com/api/v3",
-    
+
     # 海外厂商
     "groq": "https://api.groq.com/openai/v1",
     "together": "https://api.together.xyz/v1",
@@ -99,16 +99,16 @@ PROVIDER_ENDPOINTS: dict[str, str] = {
     "nebius": "https://api.nebius.ai/v1",
     "xai": "https://api.x.ai/v1",
     "sambanova": "https://api.sambanova.ai/v1",
-    
+
     # 开源/本地
     "ollama": "http://localhost:11434/v1",
     "lmstudio": "http://localhost:1234/v1",
     "huggingface": "https://api-inference.huggingface.co/v1",
-    
+
     # 聚合服务
     "openrouter": "https://openrouter.ai/api/v1",
     "litellm": "http://localhost:4000/v1",
-    
+
     # 自定义端点
     "custom": "http://localhost:8000/v1",
 }
@@ -123,22 +123,22 @@ GEMINI_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta"
 def get_provider_endpoint(provider: str, base_url: str | None = None) -> str:
     """
     获取 Provider 的 API 端点
-    
+
     Args:
         provider: Provider 名称
         base_url: 自定义 Base URL（用于兼容模式）
-    
+
     Returns:
         API 端点 URL
     """
     if base_url:
         return base_url.rstrip("/") + "/v1"
-    
+
     if provider == "claude":
         return ANTHROPIC_ENDPOINT
     elif provider == "gemini":
         return GEMINI_ENDPOINT
-    
+
     return PROVIDER_ENDPOINTS.get(provider, "http://localhost:11434/v1")
 
 

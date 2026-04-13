@@ -25,7 +25,7 @@ type: feedback
 **关键规则**:
 - 修复后必须在 PR comment 中回复，不得只推送代码不回复
 - 对建议有不同意见时在 comment 中说明理由，不静默忽略
-- 通过 `tmux send-keys -t SelfLearn-reviewer` 通知 Reviewer
+- 通过 `tmux send-keys -t reviewer` 通知 Reviewer（使用组名，稳定）
 
 **Why:** PR comments 是协作的核心上下文，Reviewer 需要知道哪些改了、哪些没改、为什么。
 

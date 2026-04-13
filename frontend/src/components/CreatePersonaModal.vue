@@ -237,7 +237,6 @@ import {
   AVATAR_OPTIONS,
   COLOR_OPTIONS,
   getTemplateByKey,
-  buildTraitsPayload,
   buildCharacterPayload,
 } from '@/constants/personaTemplates'
 import client from '@/api/client'
