@@ -103,7 +103,8 @@ async function mockLearningApis(page) {
   })
 }
 
-test('knowledge graph renders and node click reveals detail', async ({ page }) => {
+// Knowledge graph disabled - P1 #185 will redesign based on memory_facts
+test.skip('knowledge graph renders and node click reveals detail', async ({ page }) => {
   await page.addInitScript(() => {
     localStorage.setItem('token', 'mock-token')
   })
@@ -131,8 +132,8 @@ test.describe('mobile viewport adaptation', () => {
     await mockLearningApis(page)
 
     await page.goto(`${BASE_URL}/learning/1?worldId=1`)
-    await expect(page.locator('.character-layer')).toBeVisible()
-    const transform = await page.locator('.character-layer').evaluate((el) => getComputedStyle(el).transform)
+    await expect(page.locator('.characters-layer')).toBeVisible()
+    const transform = await page.locator('.characters-layer').evaluate((el) => getComputedStyle(el).transform)
     expect(transform).not.toBe('none')
     await expect(page.locator('.dialog-layer')).toBeVisible()
     await page.screenshot({ path: `${EVIDENCE_DIR}/04-learning-mobile-layout.png`, fullPage: true })
