@@ -162,10 +162,12 @@ Creator 和 Reviewer 运行在独立的 tmux session 中，三方共用同一个
 
 ```
 ┌──────────────────────┐  ┌──────────────────────┐  ┌──────────────────────┐
-│ SelfLearning-creator │  │ SelfLearn-reviewer   │  │ gh-notify            │
+│ creator-1 (组:creator) │  │ reviewer-0 (组:reviewer) │  │ gh-notify            │
 │ (Creator 工作区)      │  │ (Reviewer 工作区)     │  │ (通知守护脚本)        │
 └──────────────────────┘  └──────────────────────┘  └──────────────────────┘
 ```
+
+> **重要**: Session 名称可能动态变化 (如 creator-1, creator-2)，但组名固定。**优先使用组名**。
 
 ### 手动通知命令
 
@@ -174,26 +176,35 @@ Creator 和 Reviewer 运行在独立的 tmux session 中，三方共用同一个
 **Creator → Reviewer（如：PR 修复完成、需要重新审查）**
 
 ```bash
-tmux send-keys -t SelfLearn-reviewer "[Creator 通知] PR #9 已修复 Reviewer 提出的问题，请重新审查。" Enter
+# 推荐：使用组名（稳定）
+tmux send-keys -t reviewer "[Creator 通知] PR #9 已修复 Reviewer 提出的问题，请重新审查。" Enter
+
+# 或使用具体 session 名称
+tmux send-keys -t reviewer-0 "[Creator 通知] PR #9 已修复 Reviewer 提出的问题，请重新审查。" Enter
 ```
 
 **Reviewer → Creator（如：审查完成、发现紧急 Bug）**
 
 ```bash
-tmux send-keys -t SelfLearning-creator "[Reviewer 通知] PR #9 审查完成，有 2 个必须修复的问题，详见 PR comment。" Enter
+# 推荐：使用组名（稳定）
+tmux send-keys -t creator "[Reviewer 通知] PR #9 审查完成，有 2 个必须修复的问题，详见 PR comment。" Enter
+
+# 或使用具体 session 名称
+tmux send-keys -t creator-1 "[Reviewer 通知] PR #9 审查完成，有 2 个必须修复的问题，详见 PR comment。" Enter
 ```
 
 **注意事项：**
 
 - 发送前**必须检查对方是否空闲**，避免打断正在进行的对话：
   ```bash
-  # 检查空闲：末尾显示 ❯ 表示等待输入
-  tmux capture-pane -t <session-name> -p | grep -v '^$' | tail -1
+  # 检查空闲：末尾显示 ❯ 表示等待输入（使用组名）
+  tmux capture-pane -t creator -p | grep -v '^$' | tail -1
+  tmux capture-pane -t reviewer -p | grep -v '^$' | tail -1
   ```
 - 如果对方**忙碌**（正在输出或思考），等待或记录到队列文件：
-**单通道通知：先检测当前有效会话名，只投递一次；仅在明确切换会话时再改目标，不再多路径并发发送。**
   ```bash
-  echo "[通知内容]" >> /tmp/gh-notify/queue_<session>.txt
+  echo "[通知内容]" >> /tmp/gh-notify/queue_reviewer.txt
+  echo "[通知内容]" >> /tmp/gh-notify/queue_creator.txt
   ```
 - 消息格式统一前缀 `[Creator 通知]` 或 `[Reviewer 通知]`，便于识别来源
 
@@ -228,8 +239,8 @@ tmux kill-session -t gh-notify
 | ------------------ | ---------------------------------- | --------------------- |
 | `POLL_INTERVAL`    | `300`                              | 轮询间隔（秒）        |
 | `REPO`             | `ICEY4040727/Self_Learning-System` | 目标仓库              |
-| `CREATOR_SESSION`  | `SelfLearning-creator`             | Creator tmux session  |
-| `REVIEWER_SESSION` | `SelfLearn-reviewer`               | Reviewer tmux session |
+| `CREATOR_SESSION`  | `creator`                          | Creator tmux 组名     |
+| `REVIEWER_SESSION` | `reviewer`                          | Reviewer tmux 组名    |
 
 ### 空闲检测原理
 
