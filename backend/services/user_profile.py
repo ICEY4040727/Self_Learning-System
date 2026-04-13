@@ -21,7 +21,6 @@ from sqlalchemy.orm import Session
 
 from backend.models.models import LearnerProfile, MemoryFact, UserProfile
 
-
 # MSKT 元认知四维度
 MSKT_DIMENSIONS = ["planning", "monitoring", "regulating", "reflecting"]
 
@@ -244,38 +243,38 @@ def update_single_world(
 ) -> dict:
     """
     增量更新单个世界的数据
-    
+
     只更新该世界的原始数据，然后重新聚合。
     """
     profile = user_profile.profile or {}
-    
+
     # 获取或创建 raw_worlds
     raw_worlds = get_raw_worlds(profile)
-    
+
     # 获取当前 LearnerProfile 数据
     profile_data = learner_profile.profile or {}
     profile_data["world_id"] = world_id
     profile_data["updated_at"] = datetime.now(UTC).isoformat()
-    
+
     # 增量更新：只更新这一个世界
     raw_worlds[world_id] = profile_data
-    
+
     # 重新聚合所有世界的数据
     world_profiles = list(raw_worlds.values())
     metacognition_trend = compute_metacognition_trend(world_profiles)
     preference_stability = compute_preference_stability(world_profiles)
     learning_stats = compute_learning_stats(db, world_profiles)
-    
+
     aggregated = {
         "metacognition_trend": metacognition_trend,
         "preference_stability": preference_stability,
         "learning_stats": learning_stats
     }
-    
+
     # 更新 profile
     set_raw_worlds(profile, raw_worlds)
     set_aggregated(profile, aggregated)
-    
+
     return profile
 
 
@@ -286,35 +285,35 @@ def update_session_count(
 ) -> dict:
     """
     增量更新会话数
-    
+
     只增加该世界的 session_count，不重算其他数据。
     """
     profile = user_profile.profile or {}
     raw_worlds = get_raw_worlds(profile)
-    
+
     if world_id in raw_worlds:
         world_data = raw_worlds[world_id]
         world_data["session_count"] = world_data.get("session_count", 0) + 1
     else:
         # 如果世界不存在，创建新记录
         raw_worlds[world_id] = {"session_count": 1}
-    
+
     # 更新 session_count（这是增量操作）
     aggregated = get_aggregated(profile)
     if aggregated:
         learning_stats = aggregated.get("learning_stats", {})
         learning_stats["total_sessions"] = learning_stats.get("total_sessions", 0) + 1
         aggregated["learning_stats"] = learning_stats
-    
+
     set_raw_worlds(profile, raw_worlds)
-    
+
     return profile
 
 
 def get_or_create_user_profile(db: Session, user_id: int) -> UserProfile:
     """
     获取或创建 UserProfile
-    
+
     首次创建时执行全量计算，后续返回缓存。
     """
     user_profile = (
@@ -338,7 +337,7 @@ def get_or_create_user_profile(db: Session, user_id: int) -> UserProfile:
         db.add(user_profile)
         db.commit()
         db.refresh(user_profile)
-        
+
         # 填充 raw_worlds
         _populate_raw_worlds_from_db(db, user_profile)
     else:
@@ -357,16 +356,16 @@ def _populate_raw_worlds_from_db(db: Session, user_profile: UserProfile) -> None
         .filter(LearnerProfile.user_id == user_profile.user_id)
         .all()
     )
-    
+
     profile = user_profile.profile or {}
     raw_worlds = get_raw_worlds(profile)
-    
+
     for lp in learner_profiles:
         profile_data = lp.profile or {}
         profile_data["world_id"] = lp.world_id
         profile_data["updated_at"] = lp.updated_at.isoformat() if lp.updated_at else None
         raw_worlds[lp.world_id] = profile_data
-    
+
     # 重新聚合
     world_profiles = list(raw_worlds.values())
     aggregated = {
@@ -374,11 +373,11 @@ def _populate_raw_worlds_from_db(db: Session, user_profile: UserProfile) -> None
         "preference_stability": compute_preference_stability(world_profiles),
         "learning_stats": compute_learning_stats(db, world_profiles)
     }
-    
+
     set_raw_worlds(profile, raw_worlds)
     set_aggregated(profile, aggregated)
     user_profile.computed_at = datetime.now(UTC)
-    
+
     db.commit()
 
 
@@ -389,11 +388,11 @@ def update_user_profile_after_chat(
 ) -> None:
     """
     在聊天消息后调用 - 增量更新
-    
+
     只更新指定世界的 LearnerProfile 引用。
     """
     user_profile = get_or_create_user_profile(db, user_id)
-    
+
     # 获取当前世界的 LearnerProfile
     learner_profile = (
         db.query(LearnerProfile)
@@ -403,7 +402,7 @@ def update_user_profile_after_chat(
         )
         .first()
     )
-    
+
     if learner_profile:
         # 增量更新该世界
         user_profile.profile = update_single_world(db, user_profile, world_id, learner_profile)
@@ -420,7 +419,7 @@ def update_user_profile_after_session_end(
     在会话结束后调用 - 增量更新会话数
     """
     user_profile = get_or_create_user_profile(db, user_id)
-    
+
     # 增量更新会话数
     user_profile.profile = update_session_count(db, user_profile, world_id)
     user_profile.computed_at = datetime.now(UTC)
@@ -430,22 +429,22 @@ def update_user_profile_after_session_end(
 def get_user_profile(db: Session, user_id: int) -> dict[str, Any]:
     """
     获取用户画像
-    
+
     返回聚合后的数据。
     如果 raw_worlds 与 aggregated 不一致，重新计算。
     """
     user_profile = get_or_create_user_profile(db, user_id)
     profile = user_profile.profile or {}
-    
+
     # 检查是否需要重新聚合
     raw_worlds = get_raw_worlds(profile)
     aggregated = get_aggregated(profile)
-    
+
     if not aggregated or not raw_worlds:
         # 首次访问或数据损坏，重新计算
         computed = compute_user_profile(db, user_id)
         return computed
-    
+
     # 检查是否过期（超过24小时）
     now = datetime.now(UTC)
     last_computed = user_profile.computed_at
@@ -460,12 +459,12 @@ def get_user_profile(db: Session, user_id: int) -> dict[str, Any]:
         set_aggregated(profile, aggregated)
         user_profile.computed_at = now
         db.commit()
-    
+
     # 返回聚合结果
     result = {
         "user_id": user_id,
         "computed_at": user_profile.computed_at.isoformat() if user_profile.computed_at else None,
         **aggregated
     }
-    
+
     return result

@@ -310,7 +310,7 @@ async def end_session(
         raise HTTPException(status_code=404, detail="Session not found")
 
     session.ended_at = datetime.now(UTC)
-    
+
     # Update LearnerProfile session_count
     if session.learner_profile_id:
         from backend.models.models import LearnerProfile
@@ -321,11 +321,11 @@ async def end_session(
             profile = learner_profile.profile or {}
             profile["session_count"] = profile.get("session_count", 0) + 1
             learner_profile.profile = profile
-    
+
     # Update UserProfile (incremental update)
     from backend.services.user_profile import update_user_profile_after_session_end
     update_user_profile_after_session_end(db, current_user.id, session.world_id)
-    
+
     db.commit()
 
     return {"message": "Session ended"}
@@ -436,18 +436,18 @@ def get_user_profile(
 ):
     """
     获取用户全局画像（跨世界特征聚合）
-    
+
     返回数据包括：
     - metacognition_trend: 元认知趋势（MSKT四维度）
     - preference_stability: 偏好稳定性
     - learning_stats: 学习统计
-    
+
     这是懒计算模式：数据超过24小时会自动重新计算
     """
     from backend.services.user_profile import get_user_profile as compute_user_profile
-    
+
     profile = compute_user_profile(db, user.id)
-    
+
     # 直接返回 profile，不包装 { success, data }
     return profile
 
@@ -460,13 +460,13 @@ def refresh_user_profile(
 ):
     """
     手动刷新用户画像
-    
+
     如果 force=True，忽略缓存强制重新计算
     """
     from backend.services.user_profile import get_or_create_user_profile
-    
+
     user_profile = get_or_create_user_profile(db, user.id)
-    
+
     return {
         "success": True,
         "data": user_profile.profile,

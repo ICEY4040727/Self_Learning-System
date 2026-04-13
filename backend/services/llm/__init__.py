@@ -5,70 +5,48 @@ LLM 服务模块
 """
 
 # 适配器
+# 缓存适配器
 from backend.services.llm.adapter import (
-    LLMAdapter,
+    CachedAdapter,
     ClaudeAdapter,
-    OpenAIAdapter,
+    LLMAdapter,
     LocalAdapter,
+    OpenAIAdapter,
     OpenAICompatibleAdapter,
     get_llm_adapter,
 )
 
+# 预算控制
+from backend.services.llm.budget import (
+    BudgetLimit,
+    BudgetStatus,
+    TokenBudget,
+    UsageRecord,
+    clear_user_budget,
+    get_user_budget,
+)
+
+# 缓存
+from backend.services.llm.cache import (
+    CacheEntry,
+    LLMCache,
+    clear_llm_cache,
+    get_llm_cache,
+)
+
 # 错误处理
 from backend.services.llm.errors import (
+    AuthError,
+    ContextOverflowError,
+    InvalidRequestError,
     LLMError,
     LLMErrorCode,
-    RateLimitError,
-    AuthError,
-    QuotaError,
-    InvalidRequestError,
     ModelNotFoundError,
     NetworkError,
+    QuotaError,
+    RateLimitError,
     TimeoutError,
-    ContextOverflowError,
     from_http_response,
-)
-
-# 模型信息
-from backend.services.llm.models import (
-    ModelInfo,
-    get_model_info,
-    ALL_MODELS,
-    CLAUDE_MODELS,
-    OPENAI_MODELS,
-    OPENAI_COMPATIBLE_MODELS,
-    OLLAMA_MODELS,
-)
-
-# 类型定义
-from backend.services.llm.types import (
-    Message,
-    Tool,
-    ToolCall,
-    ToolResult,
-    LLMRequest,
-    LLMResponse,
-    Usage,
-    StreamChunk,
-)
-
-# Provider 配置
-from backend.services.llm.providers import (
-    PROVIDERS,
-    PROVIDERS_MAP,
-    get_provider_info,
-    get_provider_api_format,
-    list_providers,
-    list_provider_values,
-    get_provider_endpoint,
-)
-
-# 弹性机制
-from backend.services.llm.resilience import (
-    CircuitBreaker,
-    CircuitOpenError,
-    with_retry,
-    ResilientAdapter,
 )
 
 # 管理器
@@ -79,33 +57,54 @@ from backend.services.llm.manager import (
     set_llm_manager,
 )
 
-# 预算控制
-from backend.services.llm.budget import (
-    TokenBudget,
-    BudgetStatus,
-    BudgetLimit,
-    UsageRecord,
-    get_user_budget,
-    clear_user_budget,
+# 模型信息
+from backend.services.llm.models import (
+    ALL_MODELS,
+    CLAUDE_MODELS,
+    OLLAMA_MODELS,
+    OPENAI_COMPATIBLE_MODELS,
+    OPENAI_MODELS,
+    ModelInfo,
+    get_model_info,
 )
 
-# 缓存
-from backend.services.llm.cache import (
-    LLMCache,
-    CacheEntry,
-    get_llm_cache,
-    clear_llm_cache,
+# Provider 配置
+from backend.services.llm.providers import (
+    PROVIDERS,
+    PROVIDERS_MAP,
+    get_provider_api_format,
+    get_provider_endpoint,
+    get_provider_info,
+    list_provider_values,
+    list_providers,
 )
 
-# 缓存适配器
-from backend.services.llm.adapter import CachedAdapter
+# 弹性机制
+from backend.services.llm.resilience import (
+    CircuitBreaker,
+    CircuitOpenError,
+    ResilientAdapter,
+    with_retry,
+)
 
 # SDK 适配器
 from backend.services.llm.sdk_adapter import (
-    SDKAdapter,
     ClaudeSDKAdapter,
     OpenAISDKAdapter,
+    SDKAdapter,
     get_sdk_adapter,
+)
+
+# 类型定义
+from backend.services.llm.types import (
+    LLMRequest,
+    LLMResponse,
+    Message,
+    StreamChunk,
+    Tool,
+    ToolCall,
+    ToolResult,
+    Usage,
 )
 
 __all__ = [
@@ -169,4 +168,16 @@ __all__ = [
     "ProviderHealth",
     "get_llm_manager",
     "set_llm_manager",
+    # 预算控制
+    "BudgetLimit",
+    "BudgetStatus",
+    "TokenBudget",
+    "UsageRecord",
+    "clear_user_budget",
+    "get_user_budget",
+    # 缓存
+    "CacheEntry",
+    "LLMCache",
+    "clear_llm_cache",
+    "get_llm_cache",
 ]

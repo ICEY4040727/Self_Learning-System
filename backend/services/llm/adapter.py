@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """
 LLM Adapter 模块
 
@@ -5,19 +7,19 @@ LLM Adapter 模块
 集成错误处理、模型信息、重试机制。
 """
 
-import logging
-import time
 import json
+import logging
 from abc import ABC, abstractmethod
 from collections.abc import AsyncGenerator
-from typing import Optional, Any
 
 import httpx
 
 from backend.core.config import get_settings
 from backend.services.llm.errors import (
-    LLMError, RateLimitError, AuthError, InvalidRequestError,
-    ModelNotFoundError, NetworkError, from_http_response
+    AuthError,
+    LLMError,
+    NetworkError,
+    from_http_response,
 )
 from backend.services.llm.models import ModelInfo, get_model_info
 from backend.services.llm.providers import get_provider_endpoint
@@ -99,8 +101,8 @@ class ClaudeAdapter(LLMAdapter):
     def __init__(
         self,
         model: str = "claude-3-5-sonnet-20241022",
-        api_key: Optional[str] = None,
-        base_url: Optional[str] = None,
+        api_key: str | None = None,
+        base_url: str | None = None,
         timeout: float = 60.0
     ):
         self._model = model
@@ -116,7 +118,7 @@ class ClaudeAdapter(LLMAdapter):
     def model(self) -> str:
         return self._model
 
-    def _get_api_key(self, user_api_key: Optional[str] = None) -> str:
+    def _get_api_key(self, user_api_key: str | None = None) -> str:
         """获取 API Key"""
         if user_api_key:
             return user_api_key
@@ -129,7 +131,7 @@ class ClaudeAdapter(LLMAdapter):
         system_prompt: str,
         user_api_key: str = None,
         temperature: float = 0.7,
-        max_tokens: Optional[int] = None,
+        max_tokens: int | None = None,
         **kwargs
     ) -> str:
         """发送聊天请求到 Claude API"""
@@ -281,8 +283,8 @@ class OpenAIAdapter(LLMAdapter):
     def __init__(
         self,
         model: str = "gpt-4",
-        api_key: Optional[str] = None,
-        base_url: Optional[str] = None,
+        api_key: str | None = None,
+        base_url: str | None = None,
         timeout: float = 60.0
     ):
         self._model = model
@@ -298,7 +300,7 @@ class OpenAIAdapter(LLMAdapter):
     def model(self) -> str:
         return self._model
 
-    def _get_api_key(self, user_api_key: Optional[str] = None) -> str:
+    def _get_api_key(self, user_api_key: str | None = None) -> str:
         """获取 API Key"""
         if user_api_key:
             return user_api_key
@@ -311,7 +313,7 @@ class OpenAIAdapter(LLMAdapter):
         system_prompt: str,
         user_api_key: str = None,
         temperature: float = 0.7,
-        max_tokens: Optional[int] = None,
+        max_tokens: int | None = None,
         **kwargs
     ) -> str:
         """发送聊天请求到 OpenAI API"""
@@ -594,8 +596,8 @@ class OpenAICompatibleAdapter(LLMAdapter):
     def __init__(
         self,
         model: str,
-        api_key: Optional[str] = None,
-        base_url: Optional[str] = None,
+        api_key: str | None = None,
+        base_url: str | None = None,
         timeout: float = 60.0
     ):
         self._model = model
@@ -617,7 +619,7 @@ class OpenAICompatibleAdapter(LLMAdapter):
         system_prompt: str,
         user_api_key: str = None,
         temperature: float = 0.7,
-        max_tokens: Optional[int] = None,
+        max_tokens: int | None = None,
         **kwargs
     ) -> str:
         """发送聊天请求到 OpenAI 兼容 API"""
@@ -703,7 +705,7 @@ class OpenAICompatibleAdapter(LLMAdapter):
     ) -> tuple[str, list[ToolCall]]:
         """
         发送带工具调用的聊天请求
-        
+
         Args:
             messages: 消息列表
             tools: 可用工具列表
@@ -711,10 +713,10 @@ class OpenAICompatibleAdapter(LLMAdapter):
             user_api_key: 用户 API Key
             temperature: 温度参数
             tool_choice: 工具选择策略 ("auto", "any", "none")
-        
+
         Returns:
             (text_response, tool_calls)
-        
+
         Raises:
             LLMError: API 调用错误
         """
@@ -789,14 +791,14 @@ class OpenAICompatibleAdapter(LLMAdapter):
                         usage.get("prompt_tokens", 0),
                         usage.get("completion_tokens", 0),
                     )
-                    
+
                     choices = data.get("choices", [{}])
                     if not choices:
                         return "", []
-                    
+
                     message = choices[0].get("message", {})
                     text_content = message.get("content", "") or ""
-                    
+
                     # 解析工具调用
                     tool_calls = []
                     for tc in message.get("tool_calls", []):
@@ -806,7 +808,7 @@ class OpenAICompatibleAdapter(LLMAdapter):
                             name=func.get("name", ""),
                             arguments=json.loads(func.get("arguments", "{}"))
                         ))
-                    
+
                     return text_content, tool_calls
                 else:
                     error = from_http_response(
@@ -898,9 +900,9 @@ class OpenAICompatibleAdapter(LLMAdapter):
 
 def get_llm_adapter(
     provider: str = "claude",
-    model: Optional[str] = None,
-    api_key: Optional[str] = None,
-    base_url: Optional[str] = None
+    model: str | None = None,
+    api_key: str | None = None,
+    base_url: str | None = None
 ) -> LLMAdapter:
     """
     工厂函数：获取 LLM 适配器
@@ -915,7 +917,6 @@ def get_llm_adapter(
         LLMAdapter 实例
     """
     from backend.core.config import get_settings
-    from backend.services.llm.providers import get_provider_endpoint
 
     settings = get_settings()
 
@@ -944,20 +945,20 @@ def get_llm_adapter(
 class CachedAdapter(LLMAdapter):
     """
     带缓存的 LLM 适配器封装
-    
+
     对底层适配器的响应进行缓存，减少重复请求。
     """
-    
+
     def __init__(
         self,
         adapter: LLMAdapter,
-        cache: "LLMCache" = None,  # type: ignore
+        cache: LLMCache = None,  # type: ignore
         ttl: float = 3600.0,
         enabled: bool = True
     ):
         """
         初始化缓存适配器
-        
+
         Args:
             adapter: 底层适配器
             cache: 缓存实例，默认使用全局缓存
@@ -968,22 +969,22 @@ class CachedAdapter(LLMAdapter):
         self._cache = cache
         self._ttl = ttl
         self._enabled = enabled
-    
+
     @property
     def provider(self) -> str:
         return self._adapter.provider
-    
+
     @property
     def model(self) -> str:
         return self._adapter.model
-    
-    def get_cache(self) -> "LLMCache":  # type: ignore
+
+    def get_cache(self) -> LLMCache:  # type: ignore
         """获取缓存实例"""
         if self._cache is None:
             from backend.services.llm.cache import get_llm_cache
             self._cache = get_llm_cache()
         return self._cache
-    
+
     async def chat(
         self,
         messages: list[dict],
@@ -995,7 +996,7 @@ class CachedAdapter(LLMAdapter):
         # 如果缓存被禁用，直接调用底层适配器
         if not self._enabled:
             return await self._adapter.chat(messages, system_prompt, user_api_key, **kwargs)
-        
+
         # 尝试从缓存获取
         cache = self.get_cache()
         cached = cache.get(
@@ -1005,14 +1006,14 @@ class CachedAdapter(LLMAdapter):
             system_prompt=system_prompt,
             **kwargs
         )
-        
+
         if cached is not None:
             logger.debug(f"Cache hit for {self.provider}/{self.model}")
             return cached
-        
+
         # 调用底层适配器
         response = await self._adapter.chat(messages, system_prompt, user_api_key, **kwargs)
-        
+
         # 存入缓存
         cache.set(
             provider=self.provider,
@@ -1023,9 +1024,9 @@ class CachedAdapter(LLMAdapter):
             ttl=self._ttl,
             **kwargs
         )
-        
+
         return response
-    
+
     async def chat_stream(
         self,
         messages: list[dict],
@@ -1036,7 +1037,7 @@ class CachedAdapter(LLMAdapter):
         """流式响应不支持缓存，直接传递给底层"""
         async for chunk in self._adapter.chat_stream(messages, system_prompt, user_api_key, **kwargs):
             yield chunk
-    
+
     def get_model_info(self) -> ModelInfo:
         """获取模型信息"""
         return self._adapter.get_model_info()

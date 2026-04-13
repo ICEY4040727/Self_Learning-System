@@ -3,7 +3,6 @@
 验证 seed memories 正确写入 memory_facts 表。
 """
 
-import pytest
 from sqlalchemy.orm import Session
 
 from backend.models.models import Character, LearnerProfile, MemoryFact, World
@@ -109,7 +108,7 @@ class TestSeedMemories:
         db_session.commit()
 
         # 执行
-        memory_ids = memory_facts_service.create_seed_memories(
+        memory_facts_service.create_seed_memories(
             db=db_session,
             sage_character_id=sage.id,
             traveler_character=traveler,
@@ -120,7 +119,7 @@ class TestSeedMemories:
         facts = db_session.query(MemoryFact).filter(
             MemoryFact.character_id == sage.id
         ).all()
-        
+
         # 基础: 4条 (name, tags, background, personality)
         # Profile: 约5条 (total_sessions, avg_mastery, 2 preferences, metacognition)
         assert len(facts) >= 6, f"Expected at least 6 facts with profile, got {len(facts)}"

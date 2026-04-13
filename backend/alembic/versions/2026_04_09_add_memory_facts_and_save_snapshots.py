@@ -39,7 +39,7 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(['world_id'], ['worlds.id'], ondelete='CASCADE'),
     )
     op.create_index(op.f('ix_memory_facts_id'), 'memory_facts', ['id'], unique=False)
-    
+
     # 创建 save_snapshots 表
     op.create_table(
         'save_snapshots',
@@ -53,7 +53,7 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
     )
     op.create_index(op.f('ix_save_snapshots_id'), 'save_snapshots', ['id'], unique=False)
-    
+
     # 删除 knowledge 表（如果存在）
     op.drop_table('knowledge')
 
@@ -65,11 +65,11 @@ def downgrade() -> None:
         sa.Column('world_id', sa.Integer(), nullable=False),
         sa.Column('graph', sa.JSON(), nullable=False),
     )
-    
+
     # 删除 save_snapshots 表
     op.drop_index(op.f('ix_save_snapshots_id'), table_name='save_snapshots')
     op.drop_table('save_snapshots')
-    
+
     # 删除 memory_facts 表
     op.drop_index(op.f('ix_memory_facts_id'), table_name='memory_facts')
     op.drop_table('memory_facts')

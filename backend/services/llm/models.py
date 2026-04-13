@@ -5,46 +5,46 @@ LLM 模型配置模块
 参考 Cline 的 ModelInfo 设计。
 """
 
-from typing import Optional
+
 from pydantic import BaseModel
 
 
 class ModelInfo(BaseModel):
     """
     模型元信息
-    
+
     包含模型的所有配置和能力信息，用于：
     - Token 限制和上下文窗口
     - 能力支持（图像、思考模式、缓存等）
     - 价格信息（用于成本计算）
     """
-    name: Optional[str] = None
+    name: str | None = None
     max_tokens: int = 1024  # 单次回复最大 token 数
     context_window: int = 128000  # 上下文窗口大小
     supports_images: bool = False  # 是否支持图像输入
     supports_reasoning: bool = False  # 是否支持思考模式（如 Claude 的 Extended Thinking）
     supports_prompt_cache: bool = False  # 是否支持提示缓存
     supports_vision: bool = False  # 是否支持视觉（图像理解）
-    
+
     # 价格信息（每百万 token）
-    input_price: Optional[float] = None
-    output_price: Optional[float] = None
-    cache_writes_price: Optional[float] = None  # 缓存写入价格
-    cache_reads_price: Optional[float] = None  # 缓存读取价格
-    
+    input_price: float | None = None
+    output_price: float | None = None
+    cache_writes_price: float | None = None  # 缓存写入价格
+    cache_reads_price: float | None = None  # 缓存读取价格
+
     # 生成参数默认值
     temperature: float = 0.7
     top_p: float = 1.0
-    
+
     # 描述
-    description: Optional[str] = None
-    
+    description: str | None = None
+
     def get_input_cost(self, tokens: int) -> float:
         """计算输入 token 的成本"""
         if self.input_price is None:
             return 0.0
         return (tokens / 1_000_000) * self.input_price
-    
+
     def get_output_cost(self, tokens: int) -> float:
         """计算输出 token 的成本"""
         if self.output_price is None:
@@ -327,21 +327,21 @@ ALL_MODELS.update(MINIMAX_MODELS)
 def get_model_info(model_id: str) -> ModelInfo:
     """
     获取模型信息
-    
+
     Args:
         model_id: 模型 ID
-    
+
     Returns:
         ModelInfo 实例，如果模型未知则返回默认值
     """
     if model_id in ALL_MODELS:
         return ALL_MODELS[model_id]
-    
+
     # 尝试模糊匹配（如带版本号的模型）
     for known_id, info in ALL_MODELS.items():
         if known_id.split("-")[0] == model_id.split("-")[0]:
             return info
-    
+
     # 返回默认配置
     return ModelInfo(
         name=model_id,

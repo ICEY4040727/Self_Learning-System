@@ -9,7 +9,6 @@ See: docs/v1.0.0前后端联调修复/世界_课程_角色_表单设计.md Phase
 
 from backend.services.prompt_builder.base import MemoryModule
 
-
 # 字段枚举值标签映射（附录 A 定义）
 CURRENT_LEVEL_LABELS = {
     "none": "完全陌生",
@@ -42,57 +41,57 @@ PACE_LABELS = {
 
 class CourseIntentModule(MemoryModule):
     """课程学习意图模块
-    
+
     从 Course.meta 读取学习目标信息：
     - current_level: 学生当前水平
     - target_level: 学习目标
     - motivation: 学习动机
     - motivation_detail: 动机详细说明
     - pace: 学习节奏
-    
+
     这是会话级静态层，每个 session 的课程不变。
     """
-    
+
     def get_section_name(self) -> str:
         return "【学习目标】"
-    
+
     def is_applicable(self, context: dict) -> bool:
         """需要有 course_id 才能获取课程信息"""
         return context.get("course_id") is not None
-    
+
     def assemble(self, context: dict) -> str:
         """从 Course.meta 读取信息并渲染"""
         db = context.get("db")
         course_id = context.get("course_id")
-        
+
         if not db or not course_id:
             return ""
-        
+
         from backend.models.models import Course
-        
+
         course = db.query(Course).filter(Course.id == course_id).first()
         if not course:
             return ""
-        
+
         meta = course.meta or {}
         parts = []
-        
+
         # 课程名称
         if course.name:
             parts.append(f"当前课程：{course.name}")
-        
+
         # 当前水平
         current_level = meta.get("current_level")
         if current_level:
             label = CURRENT_LEVEL_LABELS.get(current_level, current_level)
             parts.append(f"学生当前水平：**{label}**")
-        
+
         # 目标水平
         target_level = meta.get("target_level") or course.target_level
         if target_level:
             label = TARGET_LEVEL_LABELS.get(target_level, target_level)
             parts.append(f"目标水平：**{label}**")
-        
+
         # 学习动机
         motivation = meta.get("motivation")
         motivation_detail = meta.get("motivation_detail")
@@ -102,17 +101,17 @@ class CourseIntentModule(MemoryModule):
                 parts.append(f"学习动机：**{label}**（{motivation_detail}）")
             else:
                 parts.append(f"学习动机：**{label}**")
-        
+
         # 学习节奏
         pace = meta.get("pace")
         if pace:
             label = PACE_LABELS.get(pace, pace)
             parts.append(f"学习节奏：**{label}**")
-        
+
         # 综合指导
         if current_level or target_level or motivation:
             parts.append(
                 "请按上述目标推进，避免超出/低于当前水平的内容。"
             )
-        
+
         return " ".join(parts)
