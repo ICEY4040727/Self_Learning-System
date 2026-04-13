@@ -1,3 +1,4 @@
+import warnings
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -457,13 +458,19 @@ def _get_owned_course(
     return course
 
 
-# Legacy save endpoints for frontend compatibility.
+# Legacy save endpoints - DEPRECATED
+# Use /checkpoints/* endpoints instead. See Issue #204.
 @router.post("/save")
 async def create_save_legacy(
     payload: LegacySaveCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    warnings.warn(
+        "Legacy /save endpoints are deprecated. Use /checkpoints/* instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     course = _get_owned_course(db, current_user, payload.subject_id)
     checkpoint = await create_checkpoint(
         CheckpointCreate(
@@ -483,6 +490,11 @@ async def list_save_legacy(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    warnings.warn(
+        "Legacy /save endpoints are deprecated. Use /checkpoints/* instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     query = db.query(Checkpoint).filter(Checkpoint.user_id == current_user.id)
     session_course_cache: dict[int, int | None] = {}
     if subject_id is not None:
@@ -526,6 +538,11 @@ async def get_save_legacy(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    warnings.warn(
+        "Legacy /save endpoints are deprecated. Use /checkpoints/* instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     checkpoint = db.query(Checkpoint).filter(
         Checkpoint.id == save_id,
         Checkpoint.user_id == current_user.id,
@@ -580,6 +597,11 @@ async def delete_save_legacy(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    warnings.warn(
+        "Legacy /save endpoints are deprecated. Use /checkpoints/* instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     return await delete_checkpoint(save_id, db, current_user)
 
 
