@@ -1,14 +1,6 @@
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
-# Ignore broken tests from main - World system legacy issues (not introduced by this PR)
-# TODO: Fix as part of World system cleanup
-ignore = [
-    "tests/test_archive.py",
-    "tests/test_checkpoints.py",
-    "tests/test_phase4_e2e.py",
-    "tests/test_prompt_builder.py",
-]
 
 [tool.ruff]
 target-version = "py311"

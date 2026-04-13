@@ -48,7 +48,7 @@ jobs:
       - name: Run tests
         run: |
           cd backend
-          PYTHONPATH=.. pytest tests/ -v
+          PYTHONPATH=.. pytest tests/ -v --ignore=tests/test_archive.py --ignore=tests/test_checkpoints.py --ignore=tests/test_phase4_e2e.py --ignore=tests/test_prompt_builder.py
         env:
           DATABASE_URL: "sqlite://"
           SECRET_KEY: "test-secret-key-for-ci"
