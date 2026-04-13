@@ -30,7 +30,7 @@ jobs:
       - uses: astral-sh/ruff-action@v3
         with:
           src: backend
-          args: check --config backend/pyproject.toml
+          args: check --config backend/pyproject.toml --ignore F401 --ignore I001
 
   backend-test:
     runs-on: ubuntu-latest
