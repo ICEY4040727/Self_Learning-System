@@ -1,9 +1,0 @@
-
-Running 5 tests using 1 worker
-
-[1A[2K[1/5] e2e/character-migration.spec.mjs:197:1 › character page creates world and binding when creating course without world
-[1A[2K[2/5] e2e/character-migration.spec.mjs:223:1 › character page saves course world_id edit and refreshes listing
-[1A[2K[3/5] e2e/character-migration.spec.mjs:255:1 › character page aggregates multi-world courses and updates after delete
-[1A[2K[4/5] e2e/phase4-ui.spec.mjs:103:1 › knowledge graph renders and node click reveals detail
-[1A[2K[5/5] e2e/phase4-ui.spec.mjs:124:3 › mobile viewport adaptation › learning page applies mobile layout for dual-role scene
-[1A[2K  5 passed (17.5s)

@@ -1,6 +1,6 @@
 ---
-name: Actual Codebase State (2026-04-09 v1.0.0-baseline)
-description: Verified snapshot after D0 baseline reset — World system in main, UI Phase 1-9 done, PR #174 pending split
+name: Actual Codebase State (2026-04-14 update)
+description: Post D0 baseline, CI in place, Legacy Save deprecated, PR #205 pending merge
 type: project
 ---
 
@@ -9,19 +9,23 @@ type: project
 **Git tag**: `v1.0.0-baseline` (bb5d151)
 
 ### Backend models (World system schema)
-- **Tables**: User, UserProfile, World, Character, TeacherPersona, WorldCharacter, Course, LearnerProfile, Session, ChatMessage, ProgressTracking, Checkpoint, Save, Knowledge, FSRSState
+- **Tables**: User, UserProfile, World, Character, TeacherPersona, WorldCharacter, Course, LessonPlan, LearningDiary, ProgressTracking, Session, ChatMessage, RelationshipStageRecord, Checkpoint, SaveSnapshot, MemoryFact, FSRSState
 - **World system**: World → WorldCharacter → Character, World → Course
 - **Relationship**: 4-dim JSON (trust/familiarity/respect/comfort) + stage on Session
 - **4 Alembic migrations**: 2026_04_06_add_character_experience, 2026_04_06_add_user_profiles, 2026_04_08_add_character_title, 2026_04_08_add_course_meta_json
 
 ### Backend services
-- `memory.py` = **stub** (returns empty). Knowledge retrieval NOT implemented
-- `knowledge.py` = **stub** (empty implementation)
+- `memory.py` = **deleted** (no longer exists)
+- `knowledge.py` = **deleted** (no longer exists)
+- `memory_facts.py` = functional, MemoryFact CRUD + retrieval
+- `memory_extractor.py` = memory extraction from conversations
 - `learning_engine.py` = functional, dual-layer prompt, ZPD scaffold, emotion analysis
 - `llm/adapter.py` = **refactored** (official SDKs: Claude, OpenAI, Ollama)
 - `prompt_builder/` = **NEW** modular prompt injection system
 - `dynamic_analyzer.py` = emotion analysis service
 - `relationship.py` = relationship tracking
+- `spaced_repetition.py` = FSRS-based spaced repetition
+- `user_profile.py` = cross-world user profile aggregation
 
 ### Frontend (UI Phase 1-9 completed)
 - **Views**: Login, Home, Worlds, WorldDetail, Character, Learning, Archive, Settings
@@ -36,7 +40,12 @@ type: project
 
 ### Docker
 - frontend (nginx) + backend only
-- docker-compose.yml references PostgreSQL (NOT used, outdated)
+- docker-compose.yml does NOT reference PostgreSQL (cleaned)
+
+### CI
+- `.github/workflows/ci.yml` — full pipeline (lint + pytest + npm build + E2E + docker smoke)
+- `.github/workflows/phase4-evidence.yml` — evidence collection
+- ⚠️ backend-test ignores 11 test files via `--ignore` list
 
 ---
 
@@ -58,28 +67,58 @@ type: project
 
 ---
 
-## Open Issues (post D0 reset)
+## Open Issues (2026-04-14 Reviewer 更新)
 
-- **#172**: [bugfix] 登录页面从注册切换到登入时动画不平滑 (P1, creator)
-  - 相关文件: frontend/src/views/Login.vue
-  - 状态: 待处理
-
-- **#183**: feat: 存储结构重设计 - 记忆事实表 + DB 存档 (P1)
-  - 依赖 P0 #175（合并 Alembic 双 head）修完后才能开始
-  - 设计：新增 memory_facts + save_snapshots 表
-  - 删除：knowledge.py 关键词召回、./saves/ JSON 存档
+### P1 Sprint（建议 Creator 按顺序执行）
+- **#176**: fix: 修复 checkpoints/sessions FK 循环依赖 (bugfix, P1)
+  - Session.parent_checkpoint_id → Checkpoint.id ↔ Checkpoint.session_id → Session.id
   - 状态: 待 Creator 实现
+- **#179**: docs: 同步技术栈文档到实际实现 (documentation, P1)
+  - CLAUDE.md 有 7+ 处过时描述（ChromaDB/PostgreSQL/Axios/memory.py）
+  - 状态: 待 Creator 实现
+- **#178**: fix: 登录页注册/登入切换动画优化 (bugfix, P1)
+  - Login.vue confirm-fast transition 仅 opacity，无 height/margin 过渡
+  - 状态: 待 Creator 实现
+- **#181**: test: 存档读档端到端回归测试 (feature, P1 → 原 P2, Reviewer 建议升级)
+  - CI 中 --ignore=test_checkpoints.py，无 E2E 覆盖
+  - 依赖 #176 先完成
+  - 状态: 待 Creator 实现
+
+### P0
+- **#204**: P0: 清理 Legacy Save API 冗余接口
+  - PR #205 已开，Reviewer 已 Approve，等 Owner 合并
+  - Phase 1 (deprecation) 完成，Phase 3 (移除) 待下个版本
+- **#207**: refactor: 记忆系统文件化改造
+  - ⚠️ Reviewer 指出与已有 SaveSnapshot 模型冲突，需修订设计
+  - 状态: 待 Creator 修订方案
+
+### P2 Backlog (v1.1.0)
+- **#184**: v1.1.0 知识图谱基于 memory_facts 重做 (feature, P2)
+- **#194**: [B4] 前端: 工具调用 UI 占位 (enhancement, P2)
+
+### Closed
+- **#177**: ci: 添加 GitHub Actions — ✅ 已完成关闭 (2026-04-14)
 
 ---
 
-## D0 Changes Summary
+## Open PRs (2026-04-14)
+
+- **PR #205**: feat(#204): 标记 Legacy /save/* 接口为废弃
+  - 状态: Reviewer ✅ Approve (comment)，等 Owner 确认合并
+- **PR #206**: docs: 添加 GitHub Projects 设置指南与自动化工作流 (copilot DRAFT)
+
+---
+
+## Reviewer Activity (2026-04-14)
 
 | Action | Status |
 |--------|--------|
-| Tag v1.0.0-baseline | ✅ Done |
-| Close old issues (#124-133, #150, #157, #159-160, #163-172) | ✅ Done |
-| PR #174 review | ✅ Done (Request Changes) |
-| memory/project_actual_state.md | ✅ Updated |
+| 审查全部 9 个 Open Issue 合理性 | ✅ 完成 |
+| PR #205 Review (approve) | ✅ 完成 |
+| 关闭 #177 (CI 已实现) | ✅ 完成 |
+| 评论 #207 (SaveSnapshot 冲突) | ✅ 完成 |
+| 评论 #181 (优先级 P2→P1) + 更新 label | ✅ 完成 |
+| 更新 memory/project_actual_state.md | ✅ 进行中 |
 
 ---
 

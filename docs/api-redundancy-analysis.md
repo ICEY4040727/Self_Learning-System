@@ -458,4 +458,13 @@ GET /worlds/{world_id}/overview
 
 ---
 
-**文档状态**: 待 Reviewer 审批后启动 Phase 0
+
+   任务清单
+   • [x]
+     Phase 0: 前端 Legacy API 调用检查 ✅
+   • [ ]
+     Phase 1: 后端标记 Legacy 接口为废弃
+   • [ ]
+     Phase 2: 等待一个版本周期
+   • [ ]
+     Phase 3: 移除 Legacy 接口代码
