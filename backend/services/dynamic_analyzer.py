@@ -233,111 +233,53 @@ class DynamicAnalyzer:
         }
 
     # ------------------------------------------------------------------
-    # Relationship stage tracking
+    # Learner profile tracking
     # ------------------------------------------------------------------
-    async def update_relationship_stage(self, session_id: int, emotion: dict, db=None) -> str:
+    async def update_learner_profile(self, user_id: int, world_id: int, interaction: dict, db):
+        """Update learner profile based on interaction data.
+
+        Args:
+            db: SQLAlchemy Session (required, managed by caller).
         """
-        Update relationship stage based on emotion and interaction count.
-        Stages: stranger -> acquaintance -> friend -> mentor -> partner
-        """
-        from backend.db.database import SessionLocal
-        from backend.models.models import ChatMessage
-
-        own_db = False
-        if not db:
-            db = SessionLocal()
-            own_db = True
-
-        try:
-            message_count = db.query(ChatMessage).filter(
-                ChatMessage.session_id == session_id
-            ).count()
-
-            # Use average valence of recent messages instead of single message
-            recent_msgs = (
-                db.query(ChatMessage)
-                .filter(
-                    ChatMessage.session_id == session_id,
-                    ChatMessage.sender_type == "user",
-                    ChatMessage.emotion_analysis != None,
-                )
-                .order_by(ChatMessage.timestamp.desc())
-                .limit(10)
-                .all()
-            )
-            if recent_msgs:
-                valence = sum(
-                    m.emotion_analysis.get("valence", 0.5) for m in recent_msgs
-                ) / len(recent_msgs)
-            else:
-                valence = emotion.get("valence", 0.5)
-
-            if message_count >= 30 and valence > 0.7:
-                return "partner"
-            elif message_count >= 20 and valence > 0.6:
-                return "mentor"
-            elif message_count >= 10 and valence > 0.5:
-                return "friend"
-            elif message_count >= 3:
-                return "acquaintance"
-            else:
-                return "stranger"
-        finally:
-            if own_db:
-                db.close()
-
-    async def update_learner_profile(self, user_id: int, world_id: int, interaction: dict, db=None):
-        """Update learner profile based on interaction data."""
-        from backend.db.database import SessionLocal
         from backend.models.models import LearnerProfile
 
-        own_db = False
-        if not db:
-            db = SessionLocal()
-            own_db = True
-
-        try:
-            profile_row = db.query(LearnerProfile).filter(
-                LearnerProfile.user_id == user_id,
-                LearnerProfile.world_id == world_id,
-            ).first()
-            if not profile_row:
-                profile_row = LearnerProfile(
-                    user_id=user_id,
-                    world_id=world_id,
-                    profile={"preferences": {}, "affect": {}, "metacognition": {}},
-                )
-                db.add(profile_row)
-                db.flush()
-
-            profile = profile_row.profile if isinstance(profile_row.profile, dict) else {}
-            preferences = dict(profile.get("preferences") or {})
-            affect = dict(profile.get("affect") or {})
-            metacognition = dict(profile.get("metacognition") or {})
-
-            emotion_type = (interaction or {}).get("emotion_type")
-            if emotion_type:
-                affect["last_emotion"] = emotion_type
-                affect[f"count_{emotion_type}"] = int(affect.get(f"count_{emotion_type}", 0)) + 1
-
-            user_message = str((interaction or {}).get("message", "")).strip()
-            if "例子" in user_message or "example" in user_message.lower():
-                preferences["example_first"] = True
-            if "步骤" in user_message or "step" in user_message.lower():
-                preferences["step_by_step"] = True
-
-            confidence = (interaction or {}).get("confidence")
-            if isinstance(confidence, (int, float)):
-                metacognition["self_confidence"] = round(float(confidence), 3)
-
-            profile_row.profile = {
-                "preferences": preferences,
-                "affect": affect,
-                "metacognition": metacognition,
-            }
+        profile_row = db.query(LearnerProfile).filter(
+            LearnerProfile.user_id == user_id,
+            LearnerProfile.world_id == world_id,
+        ).first()
+        if not profile_row:
+            profile_row = LearnerProfile(
+                user_id=user_id,
+                world_id=world_id,
+                profile={"preferences": {}, "affect": {}, "metacognition": {}},
+            )
+            db.add(profile_row)
             db.flush()
-            return profile_row.profile
-        finally:
-            if own_db:
-                db.commit()
-                db.close()
+
+        profile = profile_row.profile if isinstance(profile_row.profile, dict) else {}
+        preferences = dict(profile.get("preferences") or {})
+        affect = dict(profile.get("affect") or {})
+        metacognition = dict(profile.get("metacognition") or {})
+
+        emotion_type = (interaction or {}).get("emotion_type")
+        if emotion_type:
+            affect["last_emotion"] = emotion_type
+            affect[f"count_{emotion_type}"] = int(affect.get(f"count_{emotion_type}", 0)) + 1
+
+        user_message = str((interaction or {}).get("message", "")).strip()
+        if "例子" in user_message or "example" in user_message.lower():
+            preferences["example_first"] = True
+        if "步骤" in user_message or "step" in user_message.lower():
+            preferences["step_by_step"] = True
+
+        confidence = (interaction or {}).get("confidence")
+        if isinstance(confidence, (int, float)):
+            metacognition["self_confidence"] = round(float(confidence), 3)
+
+        profile_row.profile = {
+            "preferences": preferences,
+            "affect": affect,
+            "metacognition": metacognition,
+        }
+        db.flush()
+        return profile_row.profile
