@@ -54,7 +54,6 @@ class User(Base):
     sessions = orm_relationship("Session", back_populates="user", cascade="all, delete-orphan")
     checkpoints = orm_relationship("Checkpoint", back_populates="user", cascade="all, delete-orphan")
     user_profile = orm_relationship("UserProfile", back_populates="user", uselist=False, cascade="all, delete-orphan")
-    save_snapshots = orm_relationship("SaveSnapshot", back_populates="user", cascade="all, delete-orphan")
 
 
 class UserProfile(Base):
@@ -101,28 +100,6 @@ class MemoryFact(Base):
 
     character = orm_relationship("Character", back_populates="memory_facts")
     world = orm_relationship("World", back_populates="memory_facts")
-
-
-# =============================================================================
-# 存档快照表 (SaveSnapshot)
-# 用于存储用户学习会话的完整存档
-#
-# 设计说明:
-# - payload: JSON 包含会话状态、聊天记录、角色状态等
-# - session_id: 可选，关联的学习会话
-# =============================================================================
-class SaveSnapshot(Base):
-    __tablename__ = "save_snapshots"
-
-    id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    session_id = Column(Integer, ForeignKey("sessions.id"), nullable=True)
-    name = Column(String(100), nullable=False)
-    payload = Column(JSON, nullable=False)
-    created_at = Column(DateTime, default=_utcnow)
-
-    user = orm_relationship("User", back_populates="save_snapshots")
-    session = orm_relationship("Session", back_populates="save_snapshots")
 
 
 class World(Base):
@@ -336,7 +313,6 @@ class Session(Base):
     chat_messages = orm_relationship("ChatMessage", back_populates="session", cascade="all, delete-orphan")
     relationship_stage_records = orm_relationship("RelationshipStageRecord", back_populates="session", cascade="all, delete-orphan")
     parent_checkpoint = orm_relationship("Checkpoint", foreign_keys=[parent_checkpoint_id], post_update=True)
-    save_snapshots = orm_relationship("SaveSnapshot", back_populates="session", cascade="all, delete-orphan")
 
     @property
     def relationship_stage(self):
@@ -388,6 +364,9 @@ class Checkpoint(Base):
     save_name = Column(String(100), nullable=False)
     message_index = Column(Integer, nullable=False, default=0)
     state = Column(JSON, nullable=False, default=dict)
+    # Issue #207: 文件存储路径（新存档用文件存储，旧存档 file_path 为 NULL）
+    file_path = Column(String(255), nullable=True)
+    file_size_bytes = Column(Integer, nullable=True)
     thumbnail_path = Column(String(255), nullable=True)
     created_at = Column(DateTime, default=_utcnow)
 
