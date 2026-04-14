@@ -133,7 +133,18 @@ class LearningEngine:
                     Character.id == session.traveler_character_id
                 ).first()
 
-            # 5. Build system prompt using modular PromptBuilder
+            # 5. Get previous emotion from last user message (DD13: prev_emotion bug fix)
+            last_user_msg = (
+                db.query(ChatMessage)
+                .filter(ChatMessage.session_id == session_id, ChatMessage.sender_type == "user")
+                .order_by(ChatMessage.timestamp.desc())
+                .first()
+            )
+            prev_emotion = None
+            if last_user_msg and last_user_msg.emotion_analysis:
+                prev_emotion = last_user_msg.emotion_analysis
+
+            # 6. Build system prompt using modular PromptBuilder
             # MemoryFactsModule 会自动从 memory_facts 检索相关记忆
             relationship = session.relationship or _default_relationship()
             relationship_stage = relationship.get("stage", "stranger")
@@ -154,7 +165,7 @@ class LearningEngine:
                     "instructions": relationship_instructions,
                 },
                 "learner_profile": learner_profile,
-                "prev_emotion": None,
+                "prev_emotion": prev_emotion,  # DD13: 使用实际的 emotion_analysis 值
                 "mastery_level": 50,  # TODO: 从 FSRSState 计算
                 "user_message": user_message,  # 用于记忆检索
             }
@@ -165,16 +176,6 @@ class LearningEngine:
                 context=context,
                 traveler_character=traveler_character,
             )
-
-            # 6. Get previous emotion from last user message
-            last_user_msg = (
-                db.query(ChatMessage)
-                .filter(ChatMessage.session_id == session_id, ChatMessage.sender_type == "user")
-                .order_by(ChatMessage.timestamp.desc())
-                .first()
-            )
-            if last_user_msg and last_user_msg.emotion_analysis:
-                pass
 
             # 7. Get recent chat history (limit to last 30 messages)
             chat_history = (

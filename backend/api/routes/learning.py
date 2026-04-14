@@ -197,6 +197,8 @@ async def start_learning(
     ).first()
 
     # Create new session
+    traveler_character = db.query(Character).filter(Character.id == traveler_character_id).first() if traveler_character_id else None
+
     db_session = SessionModel(
         course_id=course_id,
         user_id=current_user.id,
