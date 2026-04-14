@@ -1,4 +1,3 @@
-import warnings
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -51,18 +50,6 @@ class CheckpointResponse(BaseModel):
 
     class Config:
         from_attributes = True
-
-
-class LegacySaveCreate(BaseModel):
-    subject_id: int
-    save_name: str = Field(..., max_length=100, pattern=r"^[a-zA-Z0-9_\-\u4e00-\u9fff]+$")
-    session_id: int | None = None
-
-
-class LegacySaveSummary(BaseModel):
-    id: int
-    save_name: str
-    created_at: datetime
 
 
 class BranchRequest(BaseModel):
@@ -128,13 +115,7 @@ def _build_full_save_data(
     # Chat history
     chat_history = []
     if checkpoint.session_id is not None:
-        messages = (
-            db.query(ChatMessage)
-            .filter(ChatMessage.session_id == checkpoint.session_id)
-            .order_by(ChatMessage.id.asc())
-            .limit(checkpoint.message_index)
-            .all()
-        )
+        messages = _get_session_messages(db, checkpoint.session_id, limit=checkpoint.message_index)
         chat_history = [
             {
                 "sender_type": m.sender_type,
@@ -269,6 +250,19 @@ def _build_checkpoint_response(cp: Checkpoint, db: Session, user_id: int) -> Che
     )
 
 
+def _get_session_messages(db: Session, session_id: int, limit: int | None = None) -> list:
+    """查询 session 的聊天记录（按 id 升序）"""
+    q = db.query(ChatMessage).filter(ChatMessage.session_id == session_id).order_by(ChatMessage.id.asc())
+    if limit is not None:
+        q = q.limit(limit)
+    return q.all()
+
+
+def _count_session_messages(db: Session, session_id: int) -> int:
+    """统计 session 的消息数量"""
+    return int(db.query(ChatMessage).filter(ChatMessage.session_id == session_id).count())
+
+
 def _get_owned_world(db: Session, current_user: User, world_id: int) -> World:
     world = db.query(World).filter(
         World.id == world_id,
@@ -320,12 +314,7 @@ async def create_checkpoint(
 
     message_index = payload.message_index
     if message_index is None:
-        if db_session:
-            message_index = int(
-                db.query(ChatMessage).filter(ChatMessage.session_id == db_session.id).count()
-            )
-        else:
-            message_index = 0
+        message_index = _count_session_messages(db, db_session.id) if db_session else 0
 
     relationship = (
         db_session.relationship
@@ -523,14 +512,7 @@ async def branch_from_checkpoint(
     db.flush()
 
     if source_session is not None:
-        messages = (
-            db.query(ChatMessage)
-            .filter(ChatMessage.session_id == source_session.id)
-            .order_by(ChatMessage.id.asc())
-            .limit(checkpoint.message_index)
-            .all()
-        )
-        for msg in messages:
+        for msg in _get_session_messages(db, source_session.id, limit=checkpoint.message_index):
             db.add(
                 ChatMessage(
                     session_id=new_session.id,
@@ -639,13 +621,7 @@ async def export_checkpoint(
             SessionModel.id == checkpoint.session_id
         ).first()
         if session:
-            messages = (
-                db.query(ChatMessage)
-                .filter(ChatMessage.session_id == checkpoint.session_id)
-                .order_by(ChatMessage.id.asc())
-                .limit(checkpoint.message_index)
-                .all()
-            )
+            messages = _get_session_messages(db, checkpoint.session_id, limit=checkpoint.message_index)
             session_snapshot = {
                 "relationship": session.relationship,
                 "course_id": session.course_id,
@@ -734,156 +710,3 @@ async def import_checkpoint(
         "created_at": checkpoint.created_at,
         "file_path": checkpoint.file_path,
     }
-
-
-# ---------------------------------------------------------------------------
-# Legacy endpoints (DEPRECATED — Issue #204)
-# ---------------------------------------------------------------------------
-
-@router.post("/save")
-async def create_save_legacy(
-    payload: LegacySaveCreate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    warnings.warn(
-        "Legacy /save endpoints are deprecated. Use /checkpoints/* instead.",
-        DeprecationWarning,
-        stacklevel=2,
-    )
-    course = _get_owned_course(db, current_user, payload.subject_id)
-    checkpoint = await create_checkpoint(
-        CheckpointCreate(
-            world_id=course.world_id,
-            session_id=payload.session_id,
-            save_name=payload.save_name,
-        ),
-        db,
-        current_user,
-    )
-    return checkpoint
-
-
-@router.get("/save", response_model=list[LegacySaveSummary])
-async def list_save_legacy(
-    subject_id: int | None = None,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    warnings.warn(
-        "Legacy /save endpoints are deprecated. Use /checkpoints/* instead.",
-        DeprecationWarning,
-        stacklevel=2,
-    )
-    query = db.query(Checkpoint).filter(Checkpoint.user_id == current_user.id)
-    session_course_cache: dict[int, int | None] = {}
-    if subject_id is not None:
-        course = _get_owned_course(db, current_user, subject_id)
-        query = query.filter(Checkpoint.world_id == course.world_id)
-    checkpoints = query.order_by(Checkpoint.created_at.desc()).all()
-
-    if subject_id is not None:
-        filtered: list[Checkpoint] = []
-        for checkpoint in checkpoints:
-            state = checkpoint.state or {}
-            checkpoint_course_id = state.get("course_id")
-            if checkpoint_course_id is None and checkpoint.session_id is not None:
-                if checkpoint.session_id not in session_course_cache:
-                    session_row = db.query(SessionModel).filter(
-                        SessionModel.id == checkpoint.session_id,
-                        SessionModel.user_id == current_user.id,
-                    ).first()
-                    session_course_cache[checkpoint.session_id] = (
-                        session_row.course_id if session_row else None
-                    )
-                checkpoint_course_id = session_course_cache[checkpoint.session_id]
-
-            if checkpoint_course_id == subject_id:
-                filtered.append(checkpoint)
-        checkpoints = filtered
-
-    return [
-        LegacySaveSummary(
-            id=cp.id,
-            save_name=cp.save_name,
-            created_at=cp.created_at,
-        )
-        for cp in checkpoints
-    ]
-
-
-@router.get("/save/{save_id}")
-async def get_save_legacy(
-    save_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    warnings.warn(
-        "Legacy /save endpoints are deprecated. Use /checkpoints/* instead.",
-        DeprecationWarning,
-        stacklevel=2,
-    )
-    checkpoint = db.query(Checkpoint).filter(
-        Checkpoint.id == save_id,
-        Checkpoint.user_id == current_user.id,
-    ).first()
-    if not checkpoint:
-        raise HTTPException(status_code=404, detail="Checkpoint not found")
-
-    state = checkpoint.state or {}
-    relationship = state.get("relationship") or models_module._default_relationship()
-    relationship_stage = relationship.get("stage", "stranger")
-    expression = state.get("expression", "default")
-
-    subject_id = state.get("course_id")
-    if subject_id is None and checkpoint.session_id is not None:
-        session_row = db.query(SessionModel).filter(
-            SessionModel.id == checkpoint.session_id,
-            SessionModel.user_id == current_user.id,
-        ).first()
-        if session_row:
-            subject_id = session_row.course_id
-
-    chat_history = []
-    if checkpoint.session_id is not None:
-        messages = (
-            db.query(ChatMessage)
-            .filter(ChatMessage.session_id == checkpoint.session_id)
-            .order_by(ChatMessage.id.asc())
-            .limit(checkpoint.message_index)
-            .all()
-        )
-        chat_history = [
-            {
-                "id": m.id,
-                "sender_type": m.sender_type,
-                "content": m.content,
-            }
-            for m in messages
-        ]
-
-    return {
-        "id": checkpoint.id,
-        "save_name": checkpoint.save_name,
-        "created_at": checkpoint.created_at,
-        "data": {
-            "relationship_stage": relationship_stage,
-            "expression": expression,
-            "chat_history": chat_history,
-            "session_meta": {"subject_id": subject_id},
-        },
-    }
-
-
-@router.delete("/save/{save_id}")
-async def delete_save_legacy(
-    save_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    warnings.warn(
-        "Legacy /save endpoints are deprecated. Use /checkpoints/* instead.",
-        DeprecationWarning,
-        stacklevel=2,
-    )
-    return await delete_checkpoint(save_id, db, current_user)
