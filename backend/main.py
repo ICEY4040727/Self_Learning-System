@@ -30,7 +30,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Socratic Learning System",
     description="基于苏格拉底教学法的个性化学习系统",
-    version="1.0.0",
+    version=settings.app_version,
     lifespan=lifespan,
 )
 
@@ -50,7 +50,7 @@ app.add_middleware(
 
 @app.get("/")
 async def root():
-    return {"message": "Socratic Learning System API", "version": "1.0.0"}
+    return {"message": "Socratic Learning System API", "version": settings.app_version}
 
 
 @app.get("/health")

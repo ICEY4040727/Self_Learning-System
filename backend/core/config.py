@@ -39,8 +39,11 @@ class Settings(BaseSettings):
     # Features
     features_voice_enabled: bool = False
 
-    # Save directory
+    # Save directory (used by save_file_manager)
     save_directory: str = "./saves"
+
+    # Application version (single source of truth)
+    app_version: str = "1.0.0"
 
     model_config = SettingsConfigDict(
         env_file=".env",
