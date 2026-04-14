@@ -22,6 +22,16 @@ def _utcnow():
     return datetime.now(UTC)
 
 
+# Relationship stage labels (shared across routes)
+RELATIONSHIP_STAGE_LABELS = {
+    "stranger": "初识",
+    "acquaintance": "相识",
+    "friend": "朋友",
+    "mentor": "导师",
+    "partner": "伙伴",
+}
+
+
 def _default_relationship():
     return {
         "dimensions": {

@@ -201,14 +201,9 @@ def _build_checkpoint_response(cp: Checkpoint, db: Session, user_id: int) -> Che
 
     stage = None
     if relationship:
-        stage_map = {
-            "stranger": "初识",
-            "acquaintance": "相识",
-            "friend": "朋友",
-            "mentor": "导师",
-            "partner": "伙伴",
-        }
-        stage = stage_map.get(relationship.get("stage", ""), relationship.get("stage"))
+        stage = models_module.RELATIONSHIP_STAGE_LABELS.get(
+            relationship.get("stage", ""), relationship.get("stage")
+        )
 
     date = cp.created_at.strftime("%Y-%m-%d %H:%M") if cp.created_at else None
 
