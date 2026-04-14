@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { RelationshipStage } from '@/types'
-import { STAGE_LABELS, STAGE_COLORS } from '@/types'
+import { RELATIONSHIP_STAGE_LABELS } from '@/constants/courseLevels'
+import { STAGE_COLORS } from '@/types'
 import { computed } from 'vue'
 
 const props = defineProps<{
@@ -13,7 +14,7 @@ const props = defineProps<{
 const emit = defineEmits<{ (e: 'continue'): void }>()
 
 const colors     = computed(() => STAGE_COLORS[props.newStage])
-const stageLabel = computed(() => STAGE_LABELS[props.newStage])
+const stageLabel = computed(() => RELATIONSHIP_STAGE_LABELS[props.newStage] || props.newStage)
 </script>
 
 <template>
