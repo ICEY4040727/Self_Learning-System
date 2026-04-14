@@ -17,7 +17,6 @@ from backend.models.models import (
     LearningDiary,
     MemoryFact,
     ProgressTracking,
-    TeacherPersona,
     User,
     World,
     WorldCharacter,
@@ -41,7 +40,7 @@ router = APIRouter()
 #   - Session.learner_profile_id: 用户的学习档案
 # =============================================================================
 
-# TeacherPersona 模板（用于生成简洁的 traits）
+# Phase 1.5 DD1: PERSONA_TEMPLATES 保留用于提示词构建，不再用于 TeacherPersona 创建
 # Issue #15/#213: 同时支持中文名和英文 key（前端传英文 key 如 'socrates'）
 PERSONA_TEMPLATES = {
     "socrates":      ["耐心", "追问型", "启发型"],
@@ -55,36 +54,6 @@ PERSONA_TEMPLATES = {
     "custom":        ["耐心", "启发型"],
     "默认":          ["耐心", "启发型"],
 }
-
-
-def _create_default_persona(db: Session, character, template_name: str = "默认", traits: dict | None = None) -> TeacherPersona:
-    """自动创建与角色关联的 TeacherPersona
-
-    Args:
-        db: 数据库会话
-        character: Character 实例
-        template_name: 人格模板名称
-        traits: 前端传入的滑块值 dict，若提供则优先使用（Phase 1 新增）
-              格式: {"strictness": 5, "pace": 5, "questioning": 5, "warmth": 5, "humor": 5}
-    """
-    # 优先使用传入的 traits（Phase 1 新增），否则 fallback 到模板
-    if traits is not None:
-        persona_traits = traits
-    else:
-        template_traits = PERSONA_TEMPLATES.get(template_name, PERSONA_TEMPLATES["默认"])
-        # 合并模板 traits 和用户选择的 tags
-        persona_traits = list(template_traits)
-        if character.tags:
-            persona_traits.extend(t for t in character.tags if t not in persona_traits)
-
-    persona = TeacherPersona(
-        character_id=character.id,
-        name=f"{character.name} - 默认人格",
-        traits=persona_traits,
-        is_active=True
-    )
-    db.add(persona)
-    return persona
 
 
 # Pydantic Schemas
@@ -103,6 +72,8 @@ class CharacterCreate(BaseModel):
     # 性格滑块值 (Phase 1 新增)
     # 格式: {"strictness": 5, "pace": 5, "questioning": 5, "warmth": 5, "humor": 5}
     traits: dict | None = None
+    # Phase 1.5 DD1: is_active 替代 TeacherPersona.is_active
+    is_active: bool = True
 
 
 class CharacterResponse(CharacterCreate):
@@ -177,20 +148,7 @@ class WorldCharacterResponse(BaseModel):
         from_attributes = True
 
 
-class TeacherPersonaCreate(BaseModel):
-    character_id: int
-    name: str
-    version: str = "1.0"
-    traits: dict | None = None
-    system_prompt_template: str | None = None
-    is_active: bool = False
-
-
-class TeacherPersonaResponse(TeacherPersonaCreate):
-    id: int
-
-    class Config:
-        from_attributes = True
+# Phase 1.5 DD1: TeacherPersona 相关类已删除，人格数据直接存储在 Character 模型中
 
 
 class LearnerProfileCreate(BaseModel):
@@ -285,9 +243,9 @@ def create_character(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    # 提取 template_name 和 traits 用于创建 TeacherPersona (不在 Character 模型中)
+    # Phase 1.5 DD1: template_name 和 traits 直接存储在 Character 模型中
     template_name = character.template_name
-    traits = character.traits  # Phase 1 新增：传递滑块值
+    traits = character.traits
 
     # 只传递 Character 模型支持的字段
     # sprites 不能是空列表，必须是 dict 或 None
@@ -306,14 +264,12 @@ def create_character(
         sprites=sprites,
         title=character.title,
         tags=character.tags,
+        # Phase 1.5 DD1: traits 和 template_name 直接存入 Character
+        template_name=template_name,
+        traits=traits,
+        is_active=True,  # 默认激活
     )
     db.add(db_character)
-    db.flush()
-
-    # sage 类型必须创建 TeacherPersona
-    if character.type == "sage":
-        _create_default_persona(db, db_character, template_name, traits)
-
     db.commit()
     db.refresh(db_character)
     return db_character
@@ -389,10 +345,9 @@ def update_character(
     if not db_character:
         raise HTTPException(status_code=404, detail="Character not found")
 
-    # 只更新 Character 模型支持的字段，排除 template_name 和 traits
+    # Phase 1.5 DD1: 更新所有字段包括 template_name, traits, is_active
     for key, value in character.model_dump().items():
-        if key not in ("template_name", "traits"):
-            setattr(db_character, key, value)
+        setattr(db_character, key, value)
 
     db.commit()
     db.refresh(db_character)
@@ -934,106 +889,6 @@ async def upload_sprites(
     db.refresh(character)
 
     return {"sprites": sprites}
-
-
-# Teacher Persona endpoints
-@router.post("/teacher_persona", response_model=TeacherPersonaResponse)
-def create_teacher_persona(
-    persona: TeacherPersonaCreate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    # Verify character ownership
-    char = db.query(Character).filter(
-        Character.id == persona.character_id,
-        Character.user_id == current_user.id,
-    ).first()
-    if not char:
-        raise HTTPException(status_code=404, detail="Character not found")
-
-    db_persona = TeacherPersona(
-        **persona.model_dump()
-    )
-    db.add(db_persona)
-    db.commit()
-    db.refresh(db_persona)
-    return db_persona
-
-
-@router.get("/teacher_persona", response_model=list[TeacherPersonaResponse])
-def get_teacher_personas(
-    character_id: int | None = None,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    query = db.query(TeacherPersona).filter(TeacherPersona.character_id.in_(db.query(Character.id).filter(Character.user_id == current_user.id)))
-    if character_id:
-        query = query.filter(TeacherPersona.character_id == character_id)
-    return query.all()
-
-
-@router.put("/teacher_persona/{persona_id}/activate")
-def activate_teacher_persona(
-    persona_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    persona = db.query(TeacherPersona).filter(
-        TeacherPersona.id == persona_id,
-        TeacherPersona.character_id.in_(db.query(Character.id).filter(Character.user_id == current_user.id))
-    ).first()
-    if not persona:
-        raise HTTPException(status_code=404, detail="Teacher persona not found")
-
-    # Deactivate all other personas for this character
-    db.query(TeacherPersona).filter(
-        TeacherPersona.character_id == persona.character_id,
-        TeacherPersona.id != persona_id
-    ).update({"is_active": False})
-
-    persona.is_active = True
-    db.commit()
-    return {"message": "Teacher persona activated"}
-
-
-@router.put("/teacher_persona/{persona_id}", response_model=TeacherPersonaResponse)
-def update_teacher_persona(
-    persona_id: int,
-    persona: TeacherPersonaCreate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    db_persona = db.query(TeacherPersona).filter(
-        TeacherPersona.id == persona_id,
-        TeacherPersona.character_id.in_(db.query(Character.id).filter(Character.user_id == current_user.id))
-    ).first()
-    if not db_persona:
-        raise HTTPException(status_code=404, detail="Teacher persona not found")
-
-    for key, value in persona.model_dump().items():
-        setattr(db_persona, key, value)
-
-    db.commit()
-    db.refresh(db_persona)
-    return db_persona
-
-
-@router.delete("/teacher_persona/{persona_id}")
-def delete_teacher_persona(
-    persona_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    persona = db.query(TeacherPersona).filter(
-        TeacherPersona.id == persona_id,
-        TeacherPersona.character_id.in_(db.query(Character.id).filter(Character.user_id == current_user.id))
-    ).first()
-    if not persona:
-        raise HTTPException(status_code=404, detail="Teacher persona not found")
-
-    db.delete(persona)
-    db.commit()
-    return {"message": "Teacher persona deleted"}
 
 
 # Learner Profile endpoints

@@ -79,44 +79,52 @@ class PromptBuilder:
 
     def __init__(
         self,
-        knowledge_svc=None,
+        db=None,
         relationship_svc=None,
     ):
-        self.knowledge = knowledge_svc
+        # Phase 1.5 DD12: knowledge_svc 重命名为 db
+        self.db = db
         self.relationship = relationship_svc
 
-    def _get_character_from_persona(self, teacher_persona, db=None) -> "Character | None":
-        """从 TeacherPersona 获取关联的 Character"""
+    def _get_character(self, character_or_id, db=None) -> "Character | None":
+        """从 character 对象或 ID 获取 Character 模型"""
         from backend.models.models import Character
 
-        if not teacher_persona:
+        if character_or_id is None:
             return None
 
-        character_id = getattr(teacher_persona, 'character_id', None)
-        if not character_id:
+        # 如果传入的是整数 ID
+        if isinstance(character_or_id, int):
+            target_db = db or self.db
+            if target_db is not None:
+                return target_db.query(Character).filter(Character.id == character_or_id).first()
             return None
 
-        # 如果有 db session，直接查询
-        if db is not None:
-            return db.query(Character).filter(Character.id == character_id).first()
+        # 如果传入的是 Character 对象
+        if isinstance(character_or_id, Character):
+            return character_or_id
 
-        # 否则通过 self.knowledge 获取（如果它是 db session）
-        if (
-            hasattr(self, 'knowledge')
-            and self.knowledge is not None
-            and hasattr(self.knowledge, 'query')
-        ):
-            return self.knowledge.query(Character).filter(Character.id == character_id).first()
+        # 如果传入的是 TeacherPersona 对象（兼容旧代码）
+        from backend.models.models import TeacherPersona
+        if isinstance(character_or_id, TeacherPersona):
+            character_id = getattr(character_or_id, 'character_id', None)
+            if character_id:
+                target_db = db or self.db
+                if target_db is not None:
+                    return target_db.query(Character).filter(Character.id == character_id).first()
+            return None
 
         return None
 
     def build_static_layer(
         self,
-        teacher_persona,
+        character,
         traveler_character=None,
         db=None,
     ) -> str:
         """构建静态层
+
+        Phase 1.5 DD1: 参数从 teacher_persona 改为 character
 
         静态层包含不随对话变化的内容：
         - Teacher Persona（从 Character 表注入信息）
@@ -126,36 +134,36 @@ class PromptBuilder:
         """
         parts = []
 
-        # 1. Teacher Persona - 从 Character 表获取信息
-        character = self._get_character_from_persona(teacher_persona, db)
+        # 1. Teacher Persona - 从 Character 获取信息
+        char = self._get_character(character, db)
 
-        if character:
+        if char:
             # 角色身份（必填）
-            parts.append(f"你是 {character.name}")
+            parts.append(f"你是 {char.name}")
 
             # 注入 background（角色背景故事）
-            background = getattr(character, 'background', None)
+            background = getattr(char, 'background', None)
             if background:
                 parts.append(background)
 
             # 注入 personality（性格特点）
-            personality = getattr(character, 'personality', None)
+            personality = getattr(char, 'personality', None)
             if personality:
                 parts.append(f"性格特点: {personality}")
 
             # 注入 speech_style（说话风格）
-            speech_style = getattr(character, 'speech_style', None)
+            speech_style = getattr(char, 'speech_style', None)
             if speech_style:
                 parts.append(f"说话风格: {speech_style}")
 
             # 注入 tags（特质）
-            tags = getattr(character, 'tags', None)
+            tags = getattr(char, 'tags', None)
             if tags and isinstance(tags, (list, tuple)):
                 parts.append(f"角色特质: {', '.join(str(t) for t in tags)}")
 
-            # 注入 traits（性格参数，Phase 3 新增）
-            # 从 teacher_persona.traits 读取，格式: {"strictness": 5, "pace": 5, "questioning": 5, "warmth": 5, "humor": 5}
-            traits = getattr(teacher_persona, 'traits', None)
+            # 注入 traits（性格参数，Phase 1.5 DD1）
+            # Phase 1.5: 从 Character.traits 读取，格式: {"strictness": 5, "pace": 5, "questioning": 5, "warmth": 5, "humor": 5}
+            traits = getattr(char, 'traits', None)
             if traits and isinstance(traits, dict) and traits:
                 parts.append(
                     f"【性格参数 0-10】严厉度={traits.get('strictness', 5)}, "
@@ -163,17 +171,17 @@ class PromptBuilder:
                     f"温度={traits.get('warmth', 5)}, 幽默={traits.get('humor', 5)}。"
                     "请让你的回应风格严格符合上述参数。"
                 )
+
+            # 注入 system_prompt_template（自定义模板）
+            system_prompt_template = getattr(char, 'system_prompt_template', None)
+            if system_prompt_template:
+                parts.append(system_prompt_template)
         else:
-            # 降级方案：使用 teacher_persona 的 system_prompt_template 或 name
-            persona = getattr(teacher_persona, "system_prompt_template", None) or ""
-            if persona:
-                parts.append(persona)
-            else:
-                name = getattr(teacher_persona, "name", "老师")
-                parts.append(
-                    f"你是 {name}，一位富有耐心的教师，"
-                    f"运用苏格拉底教学法帮助学生自主思考和探索知识。"
-                )
+            # 降级方案
+            parts.append(
+                "你是一位富有耐心的教师，"
+                "运用苏格拉底教学法帮助学生自主思考和探索知识。"
+            )
 
         # 2. Socratic Method Rules
         parts.append("""【教学方法——苏格拉底式提问】
@@ -292,18 +300,19 @@ class PromptBuilder:
 
     def build(
         self,
-        teacher_persona,
+        character,
         scene: str,
         context: dict[str, Any],
         traveler_character=None,
     ) -> str:
         """构建完整系统提示词
 
+        Phase 1.5 DD1: 参数从 teacher_persona 改为 character
         合并静态层和动态层。
         """
         # 从 context 中获取 db session
         db = context.get("db")
-        static = self.build_static_layer(teacher_persona, traveler_character, db)
+        static = self.build_static_layer(character, traveler_character, db)
         dynamic = self.build_with_fallback(scene, context)
         return f"{static}\n\n---\n\n{dynamic}"
 

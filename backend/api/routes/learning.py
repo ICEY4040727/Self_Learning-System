@@ -12,7 +12,7 @@ from backend.models.models import (
     ChatMessage,
     Course,
     LearnerProfile,
-    TeacherPersona,
+    # Phase 1.5 DD1: TeacherPersona 已删除，相关功能合并到 Character
     User,
     World,
     WorldCharacter,
@@ -90,49 +90,58 @@ def _get_active_session(db: Session, course_id: int, user_id: int):
 def _get_session_characters(db: Session, session_obj):
     """Resolve sage/traveler Character objects from a Session's character ids.
 
-    Returns (teacher_persona, sage_character, traveler_character).
+    Returns (sage_character, traveler_character).
+    Phase 1.5 DD1: 不再使用 TeacherPersona，直接从 Character 表获取人格数据。
     """
-    teacher_persona = None
     sage_character = None
     traveler_character = None
 
-    if getattr(session_obj, "teacher_persona_id", None):
-        teacher_persona = db.query(TeacherPersona).filter(
-            TeacherPersona.id == session_obj.teacher_persona_id
-        ).first()
-        if teacher_persona:
-            sage_character = db.query(Character).filter(
-                Character.id == teacher_persona.character_id
-            ).first()
-    if getattr(session_obj, "sage_character_id", None) and not sage_character:
+    # 优先使用 sage_character_id (Phase 1.5 DD1 新字段)
+    if getattr(session_obj, "sage_character_id", None):
         sage_character = db.query(Character).filter(
             Character.id == session_obj.sage_character_id
         ).first()
+
+    # Fallback: 从 teacher_persona_id 兼容旧数据 (Session 可能仍存储旧数据)
+    if not sage_character and getattr(session_obj, "teacher_persona_id", None):
+        # teacher_persona_id 保留用于向后兼容，不再查询 TeacherPersona 表
+        # 直接通过 character_id 查找对应的 Character
+        from backend.models.models import WorldCharacter
+        wc = db.query(WorldCharacter).filter(
+            WorldCharacter.id == session_obj.teacher_persona_id
+        ).first()
+        if wc:
+            sage_character = db.query(Character).filter(
+                Character.id == wc.character_id
+            ).first()
+
     if getattr(session_obj, "traveler_character_id", None):
         traveler_character = db.query(Character).filter(
             Character.id == session_obj.traveler_character_id
         ).first()
 
-    return teacher_persona, sage_character, traveler_character
+    return sage_character, traveler_character
 
 
 def _build_start_response(
     session_id: int,
     course: Course,
-    teacher_persona,
     sage_character,
     traveler_character,
     relationship: dict,
     stage: str,
 ):
-    """Build the standard response dict for start/resume session endpoints."""
+    """Build the standard response dict for start/resume session endpoints.
+    
+    Phase 1.5 DD1: teacher_persona 已合并到 Character，直接使用 sage_character。
+    """
     return {
         "session_id": session_id,
-        "teacher_persona": teacher_persona.name if teacher_persona else None,
+        "teacher_persona": sage_character.name if sage_character else None,
         "course": course.name,
         "relationship_stage": stage,
         "relationship": relationship,
-        "greeting": _get_greeting(stage, teacher_persona.name if teacher_persona else None),
+        "greeting": _get_greeting(stage, sage_character.name if sage_character else None),
         "scenes": course.world.scenes if course.world and course.world.scenes else {},
         "sage_sprites": sage_character.sprites if sage_character else None,
         "traveler_sprites": traveler_character.sprites if traveler_character else None,
@@ -158,13 +167,12 @@ async def start_learning(
     existing = _get_active_session(db, course_id, current_user.id)
 
     if existing:
-        teacher_persona, sage_character, traveler_character = _get_session_characters(db, existing)
+        sage_character, traveler_character = _get_session_characters(db, existing)
         relationship = existing.relationship or _default_relationship()
         stage = relationship.get("stage", "stranger")
         return _build_start_response(
             session_id=existing.id,
             course=course,
-            teacher_persona=teacher_persona,
             sage_character=sage_character,
             traveler_character=traveler_character,
             relationship=relationship,
@@ -183,12 +191,8 @@ async def start_learning(
     sage_character_id = sage_link.character_id if sage_link else None
     traveler_character_id = traveler_link.character_id if traveler_link else None
 
-    teacher_persona = None
-    if sage_character_id is not None:
-        teacher_persona = db.query(TeacherPersona).filter(
-            TeacherPersona.character_id == sage_character_id,
-            TeacherPersona.is_active == True,
-        ).first()
+    # Phase 1.5 DD1: 直接从 Character 获取人格数据，不再查询 TeacherPersona
+    sage_character = db.query(Character).filter(Character.id == sage_character_id).first() if sage_character_id else None
 
     # Get learner profile for this world
     learner_profile = db.query(LearnerProfile).filter(
@@ -206,8 +210,9 @@ async def start_learning(
         sage_character_id=sage_character_id,
         traveler_character_id=traveler_character_id,
         relationship=_default_relationship(),
-        system_prompt=teacher_persona.system_prompt_template if teacher_persona else None,
-        teacher_persona_id=teacher_persona.id if teacher_persona else None,
+        # Phase 1.5 DD1: system_prompt 直接从 Character.system_prompt_template 获取
+        system_prompt=sage_character.system_prompt_template if sage_character else None,
+        # teacher_persona_id 保留用于向后兼容，不再设置
         learner_profile_id=learner_profile.id if learner_profile else None,
     )
     db.add(db_session)
@@ -231,7 +236,6 @@ async def start_learning(
     return _build_start_response(
         session_id=db_session.id,
         course=course,
-        teacher_persona=teacher_persona,
         sage_character=sage_character,
         traveler_character=traveler_character,
         relationship=db_session.relationship,
