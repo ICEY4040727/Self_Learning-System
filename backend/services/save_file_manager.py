@@ -14,8 +14,16 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-# 默认存档根目录（相对于项目根目录）
-SAVE_DIR = Path("data/saves")
+# Issue #214: SAVE_DIR 从 config 获取，支持 .env 覆盖
+def _get_save_dir() -> Path:
+    try:
+        from backend.core.config import get_settings
+        return Path(get_settings().save_directory)
+    except Exception:
+        return Path("data/saves")
+
+
+SAVE_DIR = _get_save_dir()
 
 # 单文件大小上限 (10 MB)
 MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024
