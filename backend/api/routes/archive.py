@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from backend.api.routes.auth import get_current_user
 from backend.db.database import get_db
+from backend.models import models as models_module
 from backend.models.models import (
     Character,
     ChatMessage,
@@ -586,14 +587,7 @@ def _build_world_response(world: World, db: Session, current_user_id: int = None
     relationship = None
     if latest_session and latest_session.relationship:
         stage = latest_session.relationship.get("stage", "stranger")
-        stage_map = {
-            "stranger": "初识",
-            "acquaintance": "相识",
-            "friend": "朋友",
-            "mentor": "导师",
-            "partner": "伙伴",
-        }
-        stage_label = stage_map.get(stage, stage)
+        stage_label = models_module.RELATIONSHIP_STAGE_LABELS.get(stage, stage)
         relationship = latest_session.relationship
 
     return WorldResponse(

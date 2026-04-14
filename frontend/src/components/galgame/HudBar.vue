@@ -25,6 +25,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { RELATIONSHIP_STAGE_LABELS } from '@/constants/courseLevels'
 
 const props = defineProps<{
   emotion?: string
@@ -51,13 +52,8 @@ const EMOTION_LABELS: Record<string, string> = {
   anxiety: '焦虑', neutral: '平静',
 }
 
-const STAGE_LABELS: Record<string, string> = {
-  stranger: '陌生人', acquaintance: '熟人', friend: '朋友',
-  mentor: '导师', partner: '伙伴',
-}
-
 const emotionLabel = computed(() => EMOTION_LABELS[props.emotion || 'neutral'] || '平静')
-const stageLabel = computed(() => STAGE_LABELS[props.stage || 'stranger'] || '陌生人')
+const stageLabel = computed(() => RELATIONSHIP_STAGE_LABELS[props.stage || 'stranger'] || '初识')
 const mastery = computed(() => props.mastery ?? 0)
 </script>
 
