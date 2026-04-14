@@ -512,11 +512,6 @@ def character_levelup(
 
 
 # World endpoints
-def _ensure_world_knowledge(db: Session, world_id: int) -> None:
-    """Knowledge graph is deprecated in P1 #183. This function is a no-op."""
-    pass
-
-
 def _get_world_characters_by_role(db: Session, world_id: int, role: str) -> list[SageInfo]:
     """Get all characters of a given role bound to a world. Primary first."""
     links = db.query(WorldCharacter).filter(
@@ -541,11 +536,6 @@ def _get_world_characters_by_role(db: Session, world_id: int, role: str) -> list
                 type=char.type or role,  # 从 Character 对象获取类型，fallback 到 role
             ))
     return result
-
-
-def _get_world_sages(db: Session, world_id: int) -> list[SageInfo]:
-    """Backward-compat wrapper."""
-    return _get_world_characters_by_role(db, world_id, "sage")
 
 
 def _build_world_response(world: World, db: Session, current_user_id: int = None) -> WorldResponse:
@@ -624,7 +614,6 @@ def create_world(
     )
     db.add(db_world)
     db.flush()
-    _ensure_world_knowledge(db, db_world.id)
     db.commit()
     db.refresh(db_world)
     return _build_world_response(db_world, db, current_user.id)
@@ -741,7 +730,6 @@ def create_world_character(
         is_primary=wc.is_primary,
     )
     db.add(db_wc)
-    _ensure_world_knowledge(db, world_id)
     db.commit()
     db.refresh(db_wc)
     return WorldCharacterResponse(
@@ -837,7 +825,6 @@ def set_world_character_primary(
             is_primary=True,
         )
         db.add(link)
-        _ensure_world_knowledge(db, world_id)
     else:
         link.is_primary = True
 
