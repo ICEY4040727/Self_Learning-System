@@ -218,17 +218,7 @@ def _build_checkpoint_response(cp: Checkpoint, db: Session, user_id: int) -> Che
             total = sum(p.mastery_level for p in progress_list)
             mastery = total / len(progress_list) / 100.0
 
-    preview = None
-    if cp.session_id:
-        last_msgs = (
-            db.query(ChatMessage)
-            .filter(ChatMessage.session_id == cp.session_id)
-            .order_by(ChatMessage.id.desc())
-            .limit(2)
-            .all()
-        )
-        if last_msgs:
-            preview = last_msgs[0].content[:100]
+    preview = _get_last_message_preview(db, cp.session_id) if cp.session_id else None
 
     return CheckpointResponse(
         id=cp.id,
@@ -256,6 +246,18 @@ def _get_session_messages(db: Session, session_id: int, limit: int | None = None
 def _count_session_messages(db: Session, session_id: int) -> int:
     """统计 session 的消息数量"""
     return int(db.query(ChatMessage).filter(ChatMessage.session_id == session_id).count())
+
+
+def _get_last_message_preview(db: Session, session_id: int) -> str | None:
+    """获取 session 最后一条消息的前100字符作为预览"""
+    last_msgs = (
+        db.query(ChatMessage)
+        .filter(ChatMessage.session_id == session_id)
+        .order_by(ChatMessage.id.desc())
+        .limit(1)
+        .all()
+    )
+    return last_msgs[0].content[:100] if last_msgs else None
 
 
 def _get_owned_world(db: Session, current_user: User, world_id: int) -> World:
