@@ -74,6 +74,72 @@ class ToolConfirmRequest(BaseModel):
     reason: str
 
 
+# ---------------------------------------------------------------------------
+# Issue #212 helpers: extract duplicated patterns
+# ---------------------------------------------------------------------------
+
+def _get_active_session(db: Session, course_id: int, user_id: int):
+    """Return the most recent active (un-ended) session for a course + user, or None."""
+    return db.query(SessionModel).filter(
+        SessionModel.course_id == course_id,
+        SessionModel.user_id == user_id,
+        SessionModel.ended_at == None,  # noqa: E711
+    ).order_by(SessionModel.started_at.desc()).first()
+
+
+def _get_session_characters(db: Session, session_obj):
+    """Resolve sage/traveler Character objects from a Session's character ids.
+
+    Returns (teacher_persona, sage_character, traveler_character).
+    """
+    teacher_persona = None
+    sage_character = None
+    traveler_character = None
+
+    if getattr(session_obj, "teacher_persona_id", None):
+        teacher_persona = db.query(TeacherPersona).filter(
+            TeacherPersona.id == session_obj.teacher_persona_id
+        ).first()
+        if teacher_persona:
+            sage_character = db.query(Character).filter(
+                Character.id == teacher_persona.character_id
+            ).first()
+    if getattr(session_obj, "sage_character_id", None) and not sage_character:
+        sage_character = db.query(Character).filter(
+            Character.id == session_obj.sage_character_id
+        ).first()
+    if getattr(session_obj, "traveler_character_id", None):
+        traveler_character = db.query(Character).filter(
+            Character.id == session_obj.traveler_character_id
+        ).first()
+
+    return teacher_persona, sage_character, traveler_character
+
+
+def _build_start_response(
+    session_id: int,
+    course: Course,
+    teacher_persona,
+    sage_character,
+    traveler_character,
+    relationship: dict,
+    stage: str,
+):
+    """Build the standard response dict for start/resume session endpoints."""
+    return {
+        "session_id": session_id,
+        "teacher_persona": teacher_persona.name if teacher_persona else None,
+        "course": course.name,
+        "relationship_stage": stage,
+        "relationship": relationship,
+        "greeting": _get_greeting(stage, teacher_persona.name if teacher_persona else None),
+        "scenes": course.world.scenes if course.world and course.world.scenes else {},
+        "sage_sprites": sage_character.sprites if sage_character else None,
+        "traveler_sprites": traveler_character.sprites if traveler_character else None,
+        "character_sprites": sage_character.sprites if sage_character else None,
+    }
+
+
 # Start learning session
 @router.post("/courses/{course_id}/start")
 async def start_learning(
@@ -89,40 +155,21 @@ async def start_learning(
         raise HTTPException(status_code=404, detail="Course not found")
 
     # Reuse existing active session if available
-    existing = db.query(SessionModel).filter(
-        SessionModel.course_id == course_id,
-        SessionModel.user_id == current_user.id,
-        SessionModel.ended_at == None
-    ).order_by(SessionModel.started_at.desc()).first()
+    existing = _get_active_session(db, course_id, current_user.id)
 
     if existing:
-        teacher_persona = None
-        sage_character = None
-        traveler_character = None
-        if existing.teacher_persona_id:
-            teacher_persona = db.query(TeacherPersona).filter(
-                TeacherPersona.id == existing.teacher_persona_id
-            ).first()
-            if teacher_persona:
-                sage_character = db.query(Character).filter(Character.id == teacher_persona.character_id).first()
-        if existing.sage_character_id and not sage_character:
-            sage_character = db.query(Character).filter(Character.id == existing.sage_character_id).first()
-        if existing.traveler_character_id:
-            traveler_character = db.query(Character).filter(Character.id == existing.traveler_character_id).first()
+        teacher_persona, sage_character, traveler_character = _get_session_characters(db, existing)
         relationship = existing.relationship or _default_relationship()
         stage = relationship.get("stage", "stranger")
-        return {
-            "session_id": existing.id,
-            "teacher_persona": teacher_persona.name if teacher_persona else None,
-            "course": course.name,
-            "relationship_stage": stage,
-            "relationship": relationship,
-            "greeting": _get_greeting(stage, teacher_persona.name if teacher_persona else None),
-            "scenes": course.world.scenes if course.world and course.world.scenes else {},
-            "sage_sprites": sage_character.sprites if sage_character else None,
-            "traveler_sprites": traveler_character.sprites if traveler_character else None,
-            "character_sprites": sage_character.sprites if sage_character else None,
-        }
+        return _build_start_response(
+            session_id=existing.id,
+            course=course,
+            teacher_persona=teacher_persona,
+            sage_character=sage_character,
+            traveler_character=traveler_character,
+            relationship=relationship,
+            stage=stage,
+        )
 
     sage_link = db.query(WorldCharacter).filter(
         WorldCharacter.world_id == course.world_id,
@@ -175,26 +222,19 @@ async def start_learning(
             learner_profile=learner_profile,
         )
 
-    # Get characters for sprites
-    sage_character = None
-    traveler_character = None
-    if sage_character_id is not None:
-        sage_character = db.query(Character).filter(Character.id == sage_character_id).first()
-    if traveler_character_id is not None:
-        traveler_character = db.query(Character).filter(Character.id == traveler_character_id).first()
+    # Get characters for sprites (reuse helper)
+    sage_character = db.query(Character).filter(Character.id == sage_character_id).first() if sage_character_id else None
+    traveler_character = db.query(Character).filter(Character.id == traveler_character_id).first() if traveler_character_id else None
 
-    return {
-        "session_id": db_session.id,
-        "teacher_persona": teacher_persona.name if teacher_persona else None,
-        "course": course.name,
-        "relationship_stage": "stranger",
-        "relationship": db_session.relationship,
-        "greeting": _get_greeting("stranger", teacher_persona.name if teacher_persona else None),
-        "scenes": course.world.scenes if course.world and course.world.scenes else {},
-        "sage_sprites": sage_character.sprites if sage_character else None,
-        "traveler_sprites": traveler_character.sprites if traveler_character else None,
-        "character_sprites": sage_character.sprites if sage_character else None,
-    }
+    return _build_start_response(
+        session_id=db_session.id,
+        course=course,
+        teacher_persona=teacher_persona,
+        sage_character=sage_character,
+        traveler_character=traveler_character,
+        relationship=db_session.relationship,
+        stage="stranger",
+    )
 
 
 # Send chat message
@@ -205,22 +245,14 @@ async def send_message(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    # Get active session for this course
-    db_session = db.query(SessionModel).filter(
-        SessionModel.course_id == course_id,
-        SessionModel.user_id == current_user.id,
-        SessionModel.ended_at == None
-    ).order_by(SessionModel.started_at.desc()).first()
+    # Get active session for this course (reuse helper)
+    db_session = _get_active_session(db, course_id, current_user.id)
 
     if not db_session:
         # Auto-start a new session
         await start_learning(course_id, db, current_user)
         # Get the newly created session
-        db_session = db.query(SessionModel).filter(
-            SessionModel.course_id == course_id,
-            SessionModel.user_id == current_user.id,
-            SessionModel.ended_at == None
-        ).order_by(SessionModel.started_at.desc()).first()
+        db_session = _get_active_session(db, course_id, current_user.id)
 
     if not db_session:
         raise HTTPException(status_code=500, detail="Failed to create session")
