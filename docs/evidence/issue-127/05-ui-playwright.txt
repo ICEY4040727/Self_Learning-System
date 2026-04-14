@@ -1,6 +1,0 @@
-
-Running 2 tests using 1 worker
-
-[1A[2K[1/2] e2e/phase4-ui.spec.mjs:103:1 › knowledge graph renders and node click reveals detail
-[1A[2K[2/2] e2e/phase4-ui.spec.mjs:124:3 › mobile viewport adaptation › learning page applies mobile layout for dual-role scene
-[1A[2K  2 passed (8.1s)

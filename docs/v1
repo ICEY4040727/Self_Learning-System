@@ -1,0 +1,53 @@
+# 问题 04: `start_learning` 响应中 `sage_sprites` 与 `character_sprites` 完全相同
+
+## 问题类型
+冗余字段 / 逻辑不清
+
+## 涉及文件
+- `backend/api/routes/learning.py` 第 122、124 行（existing session 路径）
+- `backend/api/routes/learning.py` 第 195、196 行（new session 路径）
+- `frontend/src/types/index.ts` 第 185 行（类型定义）
+- `frontend/src/stores/learning.ts` 第 127 行（实际使用）
+
+## 前端使用情况调查（2026-04-14）
+
+```typescript
+// frontend/src/types/index.ts:185
+character_sprites: Sprites | null     // legacy alias for sage_sprites
+
+// frontend/src/stores/learning.ts:126-127
+// sage_sprites / character_sprites are aliases
+sageSprites.value = data.sage_sprites ?? data.character_sprites ?? {}
+```
+
+**结论**：前端已经优先使用 `sage_sprites`，`character_sprites` 只是 fallback。可以安全移除。
+
+## ✅ 已确认修复方案
+
+### 步骤 1：后端删除 `character_sprites` 字段
+
+```python
+# 删除这两处（learning.py 第 124、196 行）：
+"character_sprites": sage_character.sprites if sage_character else None,
+```
+
+### 步骤 2：前端清理
+
+1. `frontend/src/types/index.ts` 第 185 行：删除 `character_sprites` 字段定义
+2. `frontend/src/stores/learning.ts` 第 127 行：简化为 `sageSprites.value = data.sage_sprites ?? {}`
+
+### 步骤 3：验证无其他引用
+
+确认前端无其他文件引用 `character_sprites`。
+
+### 影响面
+
+| 文件 | 变更 | 风险 |
+|------|------|------|
+| `learning.py` | 删除 2 行 | 低（前端已优先用 sage_sprites） |
+| `frontend/src/types/index.ts` | 删除 1 个字段 | 低 |
+| `frontend/src/stores/learning.ts` | 简化 1 行 | 无 |
+
+### 联动
+
+- 与 #05（返回字典重复）一起修复，提取 `_build_start_response()` 时直接不含 `character_sprites`
