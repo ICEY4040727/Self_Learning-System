@@ -320,14 +320,6 @@ export const TREND_COLORS: Record<string, string> = {
 }
 
 // ---- UI Constants ----
-export const STAGE_LABELS: Record<RelationshipStage, string> = {
-  stranger:     '陌生人',
-  acquaintance: '相识',
-  friend:       '朋友',
-  mentor:       '导师',
-  partner:      '伙伴',
-}
-
 export const STAGE_COLORS: Record<RelationshipStage, { primary: string; glow: string }> = {
   stranger:     { primary: '#94a3b8', glow: 'rgba(148,163,184,0.3)' },
   acquaintance: { primary: '#60a5fa', glow: 'rgba(96,165,250,0.3)'  },

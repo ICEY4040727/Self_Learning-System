@@ -499,8 +499,14 @@ def refresh_user_profile(
 
     user_profile = get_or_create_user_profile(db, user.id)
 
-    return {
-        "success": True,
-        "data": user_profile.profile,
-        "computed_at": user_profile.computed_at.isoformat() if user_profile.computed_at else None
-    }
+    if request.force:
+        # 清除缓存时间戳以触发重新计算
+        user_profile.computed_at = None
+        db.commit()
+
+    # 使用与 GET 相同的 get_user_profile 来确保重新计算
+    from backend.services.user_profile import get_user_profile as compute_user_profile
+    profile = compute_user_profile(db, user.id)
+
+    # 与 GET /user/profile 保持一致：直接返回 profile
+    return profile

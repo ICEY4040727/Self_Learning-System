@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { EMOTION_COLORS, STAGE_LABELS } from '@/types'
+import { EMOTION_COLORS } from '@/types'
+import { RELATIONSHIP_STAGE_LABELS } from '@/constants/courseLevels'
 import type { RelationshipStage } from '@/types'
 
 const props = defineProps<{
@@ -26,7 +27,7 @@ const emit = defineEmits<{
 const emotionColor = computed(
   () => EMOTION_COLORS[props.emotion] ?? '#aaaaaa'
 )
-const stageLabel = computed(() => STAGE_LABELS[props.relationshipStage])
+const stageLabel = computed(() => RELATIONSHIP_STAGE_LABELS[props.relationshipStage] || props.relationshipStage)
 </script>
 
 <template>
