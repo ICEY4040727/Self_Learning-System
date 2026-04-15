@@ -100,12 +100,9 @@ const showError = (error: unknown) => {
 }
 
 const fetchWorlds = async () => {
-  console.log('[DEBUG] fetchWorlds called')
   loading.value = true
   try {
-    console.log('[DEBUG] calling client.get("worlds")')
     const { data } = await client.get('worlds')
-    console.log('[DEBUG] response data:', data)
     worlds.value = data.map((world: any) => ({
       ...world,
       sages: world.sages || [],
@@ -117,7 +114,7 @@ const fetchWorlds = async () => {
     }
   } catch (error) {
     worlds.value = []
-    console.error('[DEBUG] fetchWorlds error:', error)
+    showError(error)
   } finally {
     loading.value = false
   }

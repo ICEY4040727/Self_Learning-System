@@ -305,18 +305,7 @@
 }
 
 /* ============================================
-   Vue Transition Classes (for @vueuse/motion)
-   ============================================ */
-
-/* Page fade transition */
-.page-fade-enter-from,
-.page-fade-leave-to {
-  opacity: 0;
-}
-.page-fade-enter-active,
-.page-fade-leave-active {
-  transition: opacity 0.4s ease;
-}
+/* Page fade transition: 已统一到 frontend/src/assets/main.css */
 
 /* Dialog slide transition (translateY only, no opacity) */
 .dialog-slide-enter-from {

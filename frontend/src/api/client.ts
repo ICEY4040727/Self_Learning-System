@@ -47,8 +47,8 @@ export const userProfileApi = {
   /** 刷新用户画像 */
   refresh: async (force = false): Promise<UserProfile> => {
     const { data } = await client.post('/user/profile/refresh', { force })
-    // refresh 端点仍返回 { success, data } 格式
-    return data.data ?? data
+    // Phase 1.5 DD1 后端统一返回格式，不再需要兼容代码
+    return data
   },
 }
 
