@@ -130,9 +130,9 @@ def _build_start_response(
     traveler_character,
     relationship: dict,
     stage: str,
-):
+    ):
     """Build the standard response dict for start/resume session endpoints.
-    
+
     Phase 1.5 DD1: teacher_persona 已合并到 Character，直接使用 sage_character。
     """
     return {

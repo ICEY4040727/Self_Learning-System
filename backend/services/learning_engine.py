@@ -106,12 +106,7 @@ class LearningEngine:
                     Character.id == session.sage_character_id
                 ).first()
 
-            # 3. Get teacher persona (兼容旧代码，Phase 1.5 后逐渐废弃)
-            teacher_persona = None
-            if session.teacher_persona_id:
-                teacher_persona = db.query(TeacherPersona).filter(
-                    TeacherPersona.id == session.teacher_persona_id
-                ).first()
+            # Phase 1.5 DD1: teacher_persona_id 不再用于查询，仅保留用于兼容旧数据
 
             # 4. Get learner profile
             learner_profile = None

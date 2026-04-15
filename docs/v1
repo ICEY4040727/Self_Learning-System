@@ -1,53 +1,53 @@
-# 问题 04: `start_learning` 响应中 `sage_sprites` 与 `character_sprites` 完全相同
+# 新发现问题
 
-## 问题类型
-冗余字段 / 逻辑不清
+> 2026-04-14 在修复过程中发现的遗留问题和新增问题
 
-## 涉及文件
-- `backend/api/routes/learning.py` 第 122、124 行（existing session 路径）
-- `backend/api/routes/learning.py` 第 195、196 行（new session 路径）
-- `frontend/src/types/index.ts` 第 185 行（类型定义）
-- `frontend/src/stores/learning.ts` 第 127 行（实际使用）
+---
 
-## 前端使用情况调查（2026-04-14）
+## #34: save.py 的 stage_map 仍未统一到 RELATIONSHIP_STAGE_LABELS
 
-```typescript
-// frontend/src/types/index.ts:185
-character_sprites: Sprites | null     // legacy alias for sage_sprites
+### 问题描述
+#211 (PR #218) 统一了 `archive.py` 和 `save.py` 的关系阶段标签，但 `save.py` 中仍保留独立的 `stage_map` 局部变量定义，未改为从 `models.RELATIONSHIP_STAGE_LABELS` 引用。
 
-// frontend/src/stores/learning.ts:126-127
-// sage_sprites / character_sprites are aliases
-sageSprites.value = data.sage_sprites ?? data.character_sprites ?? {}
-```
+### 来源
+#211 修复时仅处理了 `archive.py`，`save.py` 的 `stage_map` 因遗留接口（#06）纠缠暂未处理。
 
-**结论**：前端已经优先使用 `sage_sprites`，`character_sprites` 只是 fallback。可以安全移除。
+### 严重程度
+中
 
-## ✅ 已确认修复方案
+### 建议修复
+- 随 #06（save.py 遗留接口删除）一并清理
+- 或单独将 `save.py` 的 `stage_map` 替换为 `from backend.models.models import RELATIONSHIP_STAGE_LABELS`
 
-### 步骤 1：后端删除 `character_sprites` 字段
+---
 
-```python
-# 删除这两处（learning.py 第 124、196 行）：
-"character_sprites": sage_character.sprites if sage_character else None,
-```
+## #35: 前端 client.ts refresh 方法兼容代码已无必要
 
-### 步骤 2：前端清理
+### 问题描述
+#213 修复后，`POST /user/profile/refresh` 已直接返回 profile dict，不再包装 `{ success, data }`。但 `frontend/src/api/client.ts` 中 `refresh` 方法仍保留 `data.data ?? data` 兼容逻辑。
 
-1. `frontend/src/types/index.ts` 第 185 行：删除 `character_sprites` 字段定义
-2. `frontend/src/stores/learning.ts` 第 127 行：简化为 `sageSprites.value = data.sage_sprites ?? {}`
+### 来源
+#213 修复后端响应格式，未同步清理前端兼容代码。
 
-### 步骤 3：验证无其他引用
+### 严重程度
+低
 
-确认前端无其他文件引用 `character_sprites`。
+### 建议修复
+将 `return data.data ?? data` 简化为 `return data`。
 
-### 影响面
+---
 
-| 文件 | 变更 | 风险 |
-|------|------|------|
-| `learning.py` | 删除 2 行 | 低（前端已优先用 sage_sprites） |
-| `frontend/src/types/index.ts` | 删除 1 个字段 | 低 |
-| `frontend/src/stores/learning.ts` | 简化 1 行 | 无 |
+## #36: _build_start_response 仍返回 character_sprites 作为 legacy alias
 
-### 联动
+### 问题描述
+#212 提取 `_build_start_response()` 时保留了 `character_sprites` 字段（值等于 `sage_sprites`），因为前端 `learning.ts` 有 `data.sage_sprites ?? data.character_sprites` fallback 引用。这个 legacy alias 增加了维护负担。
 
-- 与 #05（返回字典重复）一起修复，提取 `_build_start_response()` 时直接不含 `character_sprites`
+### 来源
+#212 折中方案：避免前端 breaking change 而保留冗余字段。
+
+### 严重程度
+低
+
+### 建议修复
+1. 确认前端 `learning.ts` 是否仍使用 `character_sprites`
+2. 如果前端统一使用 `sage_sprites`，从 `_build_start_response` 中删除 `character_sprites` 字段
