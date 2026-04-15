@@ -413,12 +413,9 @@ const fetchCourses = async () => {
 const fetchCharacters = async () => {
   try {
     const { data } = await client.get('/character')
-    console.log('[DEBUG] fetchCharacters API result:', data)
     // Use MOCK_CHARACTERS as fallback if API returns empty
     allCharacters.value = (data && data.length > 0) ? data : MOCK_CHARACTERS
-    console.log('[DEBUG] allCharacters after fetch:', allCharacters.value.length)
   } catch (error) {
-    console.error('[DEBUG] fetchCharacters error:', error)
     allCharacters.value = MOCK_CHARACTERS
     showError(error)
   }

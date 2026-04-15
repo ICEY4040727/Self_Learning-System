@@ -83,10 +83,6 @@ export function getTemplateByKey(key: string): PersonaTemplate | undefined {
   return PERSONA_TEMPLATES.find((t) => t.key === key)
 }
 
-export function buildTraitsPayload(sliders: Record<string, number>): Record<string, number> {
-  return { ...sliders }
-}
-
 export function buildCharacterPayload(form: {
   name: string
   title: string
