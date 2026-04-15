@@ -99,41 +99,30 @@ class LearningEngine:
             if not session:
                 return {"type": "error", "reply": "会话不存在"}
 
-            # 2. Get teacher persona
-            teacher_persona = None
-            if session.teacher_persona_id:
-                teacher_persona = db.query(TeacherPersona).filter(
-                    TeacherPersona.id == session.teacher_persona_id
+            # 2. Get sage character (Phase 1.5 DD1: 主要角色来源)
+            sage_character = None
+            if session.sage_character_id:
+                sage_character = db.query(Character).filter(
+                    Character.id == session.sage_character_id
                 ).first()
 
-            if not teacher_persona:
-                fallback_name = "老师"
-                if session.sage_character_id:
-                    sage_character = db.query(Character).filter(
-                        Character.id == session.sage_character_id
-                    ).first()
-                    if sage_character and sage_character.name:
-                        fallback_name = sage_character.name
-                teacher_persona = SimpleNamespace(
-                    name=f"{fallback_name}导师",
-                    system_prompt_template=None,
-                )
+            # Phase 1.5 DD1: teacher_persona_id 不再用于查询，仅保留用于兼容旧数据
 
-            # 3. Get learner profile
+            # 4. Get learner profile
             learner_profile = None
             if session.learner_profile_id:
                 learner_profile = db.query(LearnerProfile).filter(
                     LearnerProfile.id == session.learner_profile_id
                 ).first()
 
-            # 4. Get traveler character (for seed memory and context)
+            # 5. Get traveler character (for seed memory and context)
             traveler_character = None
             if session.traveler_character_id:
                 traveler_character = db.query(Character).filter(
                     Character.id == session.traveler_character_id
                 ).first()
 
-            # 5. Get previous emotion from last user message (DD13: prev_emotion bug fix)
+            # 6. Get previous emotion from last user message (DD13: prev_emotion bug fix)
             last_user_msg = (
                 db.query(ChatMessage)
                 .filter(ChatMessage.session_id == session_id, ChatMessage.sender_type == "user")
@@ -144,7 +133,7 @@ class LearningEngine:
             if last_user_msg and last_user_msg.emotion_analysis:
                 prev_emotion = last_user_msg.emotion_analysis
 
-            # 6. Build system prompt using modular PromptBuilder
+            # 7. Build system prompt using modular PromptBuilder
             # MemoryFactsModule 会自动从 memory_facts 检索相关记忆
             relationship = session.relationship or _default_relationship()
             relationship_stage = relationship.get("stage", "stranger")
@@ -170,14 +159,15 @@ class LearningEngine:
                 "user_message": user_message,  # 用于记忆检索
             }
 
+            # Phase 1.5 DD1: 使用 sage_character 替代 teacher_persona
             system_prompt = self.prompt_builder.build(
-                teacher_persona=teacher_persona,
+                character=sage_character,
                 scene=SceneConfig.LEARNING,
                 context=context,
                 traveler_character=traveler_character,
             )
 
-            # 7. Get recent chat history (limit to last 30 messages)
+            # 8. Get recent chat history (limit to last 30 messages)
             chat_history = (
                 db.query(ChatMessage)
                 .filter(ChatMessage.session_id == session_id)
@@ -198,7 +188,7 @@ class LearningEngine:
             # Add current message
             messages.append({"role": "user", "content": user_message})
 
-            # 8. Call LLM
+            # 9. Call LLM
             llm_adapter = get_llm_adapter(provider)
             llm_response = await llm_adapter.chat(
                 messages=messages,
@@ -206,7 +196,7 @@ class LearningEngine:
                 user_api_key=user_api_key
             )
 
-            # 9. Parse tool request
+            # 10. Parse tool request
             tool_request = self.parse_tool_request(llm_response)
             if tool_request:
                 return {
@@ -217,10 +207,10 @@ class LearningEngine:
                     "reply": llm_response
                 }
 
-            # 10. Analyze emotion
+            # 11. Analyze emotion
             emotion = await self.analyzer.analyze_emotion(user_message, user_api_key, provider)
 
-            # 11. Update relationship dimensions/stage
+            # 12. Update relationship dimensions/stage
             old_relationship = dict(session.relationship or _default_relationship())
             updated_relationship = self.relationship.update_dimensions(
                 session,
@@ -240,7 +230,7 @@ class LearningEngine:
                 db.add(stage_record)
             relationship_events = self.relationship.check_events(old_relationship, updated_relationship)
 
-            # 12. Extract and save memories from LLM response
+            # 13. Extract and save memories from LLM response
             used_memory_ids = []
             result = None
             if should_extract_memory(llm_response):
@@ -271,7 +261,7 @@ class LearningEngine:
                         source_message_id=ai_message.id if ai_message else None,
                     )
 
-            # 13. Update learner profile
+            # 14. Update learner profile
             await self.analyzer.update_learner_profile(
                 user_id=session.user_id,
                 world_id=session.world_id,
@@ -283,17 +273,17 @@ class LearningEngine:
                 db=db,
             )
 
-            # 14. Update UserProfile
+            # 15. Update UserProfile
             from backend.services.user_profile import update_user_profile_after_chat
             update_user_profile_after_chat(db, session.user_id, session.world_id)
 
-            # 15. Persist DB changes
+            # 16. Persist DB changes
             if own_db:
                 db.commit()
             else:
                 db.flush()
 
-            # 16. Return response (移除 <memory> 标签)
+            # 17. Return response (移除 <memory> 标签)
             clean_response = memory_extractor.strip_tags(llm_response)
 
             # 计算本次提取的 memory 数量 (Issue #192)

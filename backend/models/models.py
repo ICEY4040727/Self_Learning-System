@@ -152,10 +152,15 @@ class Character(Base):
     tags = Column(JSON, nullable=True, default=list)  # 角色标签列表
     experience_points = Column(Integer, nullable=False, default=0)  # 经验值
     level = Column(Integer, nullable=False, default=1)  # 等级
+    # Phase 1.5: TeacherPersona 合并 (DD1)
+    traits = Column(JSON, nullable=True, comment='性格参数 5 维 {strictness, pace, questioning, warmth, humor}')
+    system_prompt_template = Column(Text, nullable=True, comment='自定义 system prompt 模板')
+    template_name = Column(String(50), nullable=True, comment='角色模板 key，如 socrates/einstein')
+    is_active = Column(Boolean, default=True, comment='是否可用于教学（DD1: 替代 TeacherPersona.is_active）')
     created_at = Column(DateTime, default=_utcnow)
 
     user = orm_relationship("User", back_populates="characters")
-    teacher_personas = orm_relationship("TeacherPersona", back_populates="character", cascade="all, delete-orphan")
+    # Phase 1.5 DD1: TeacherPersona 已删除，相关字段合并到 Character
     world_links = orm_relationship("WorldCharacter", back_populates="character", cascade="all, delete-orphan")
     memory_facts = orm_relationship("MemoryFact", back_populates="character", cascade="all, delete-orphan")
 
@@ -174,21 +179,8 @@ class WorldCharacter(Base):
     character = orm_relationship("Character", back_populates="world_links")
 
 
-class TeacherPersona(Base):
-    __tablename__ = "teacher_personas"
-
-    id = Column(Integer, primary_key=True, index=True)
-    character_id = Column(Integer, ForeignKey("characters.id"), nullable=False)
-    name = Column(String(100), nullable=False)
-    version = Column(String(20), default="1.0")
-    traits = Column(JSON, nullable=True)
-    system_prompt_template = Column(Text, nullable=True)
-    is_active = Column(Boolean, default=False)
-    created_at = Column(DateTime, default=_utcnow)
-    updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow)
-
-    character = orm_relationship("Character", back_populates="teacher_personas")
-    sessions = orm_relationship("Session", back_populates="teacher_persona")
+# Phase 1.5 DD1: TeacherPersona 模型已删除
+# 人格数据直接存储在 Character 表中 (traits, system_prompt_template, template_name, is_active)
 
 
 # 学习者档案 (LearnerProfile):
@@ -310,7 +302,9 @@ class Session(Base):
     system_prompt = Column(Text, nullable=True)
     relationship = Column(JSON, nullable=False, default=_default_relationship)
     # Optional links: sessions may start without active persona/profile or branch parent.
-    teacher_persona_id = Column(Integer, ForeignKey("teacher_personas.id"), nullable=True)
+    # Phase 1.5 DD1: teacher_persona_id 保留用于向后兼容，不再引用 TeacherPersona 表
+    # 新代码应直接使用 sage_character_id + Character.system_prompt_template
+    teacher_persona_id = Column(Integer, nullable=True)
     learner_profile_id = Column(Integer, ForeignKey("learner_profiles.id"), nullable=True)
     parent_checkpoint_id = Column(Integer, ForeignKey("checkpoints.id"), nullable=True)
     branch_name = Column(String(120), nullable=True)
@@ -318,7 +312,7 @@ class Session(Base):
     course = orm_relationship("Course", back_populates="sessions")
     user = orm_relationship("User", back_populates="sessions")
     world = orm_relationship("World", back_populates="sessions")
-    teacher_persona = orm_relationship("TeacherPersona", back_populates="sessions")
+    # Phase 1.5 DD1: TeacherPersona 已删除，不再需要此 relationship
     learner_profile = orm_relationship("LearnerProfile", back_populates="sessions")
     chat_messages = orm_relationship("ChatMessage", back_populates="session", cascade="all, delete-orphan")
     relationship_stage_records = orm_relationship("RelationshipStageRecord", back_populates="session", cascade="all, delete-orphan")
