@@ -471,12 +471,7 @@ async def branch_from_checkpoint(
     # Phase 1.5 DD1: 不再使用 TeacherPersona，直接使用 Character.is_active
     # teacher_persona_id 字段保留用于向后兼容，但不再查询 TeacherPersona
     teacher_persona_id = None
-    if sage_character_id is not None:
-        character = db.query(Character).filter(
-            Character.id == int(sage_character_id),
-            Character.user_id == current_user.id,
-        ).first()
-        # Character.is_active 已直接存储在 Character 表中
+    # Character.is_active 已直接存储在 Character 表中，无需额外查询
 
     learner_profile = db.query(LearnerProfile).filter(
         LearnerProfile.user_id == current_user.id,
