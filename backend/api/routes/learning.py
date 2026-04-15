@@ -68,11 +68,6 @@ def _get_greeting(stage: str, persona_name: str | None) -> str:
     return template.format(name=persona_name or "老师")
 
 
-class ToolConfirmRequest(BaseModel):
-    tool: str
-    query: str
-    reason: str
-
 
 # ---------------------------------------------------------------------------
 # Issue #212 helpers: extract duplicated patterns
@@ -315,21 +310,6 @@ async def send_message(
         memory_extracted_count=result.get("memory_extracted_count", 0),
     )
 
-
-# Confirm tool call
-@router.post("/chat/tool_confirm")
-async def confirm_tool(
-    tool_request: ToolConfirmRequest,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    # Execute tool and return result
-    # This is a placeholder - will integrate actual tool execution
-    return {
-        "message": "Tool execution placeholder",
-        "tool": tool_request.tool,
-        "query": tool_request.query
-    }
 
 
 # End learning session
