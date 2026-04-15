@@ -145,7 +145,6 @@ def _build_start_response(
         "scenes": course.world.scenes if course.world and course.world.scenes else {},
         "sage_sprites": sage_character.sprites if sage_character else None,
         "traveler_sprites": traveler_character.sprites if traveler_character else None,
-        "character_sprites": sage_character.sprites if sage_character else None,
     }
 
 
