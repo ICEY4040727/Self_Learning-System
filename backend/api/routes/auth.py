@@ -3,17 +3,15 @@ import os
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from pydantic import BaseModel, Field
-from slowapi import Limiter
-from slowapi.util import get_remote_address
 from sqlalchemy.orm import Session
 
+from backend.core.rate_limit import limiter  # 统一 Limiter 实例
 from backend.core.security import create_access_token, decode_access_token, get_password_hash, verify_password
 from backend.db.database import get_db
 from backend.models.models import User
 
 router = APIRouter()
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
-limiter = Limiter(key_func=get_remote_address)
 
 
 # Pydantic schemas
