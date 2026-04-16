@@ -52,8 +52,7 @@
         </div>
       </div>
 
-      <p v-if="errorMessage" class="error-toast">{{ errorMessage }}</p>
-    </div>
+          </div>
 
     <!-- Create World Modal -->
     <CreateWorldModal
@@ -65,6 +64,7 @@
 </template>
 
 <script setup lang="ts">
+import { useToast } from '@/composables/useToast'
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import client from '@/api/client'
@@ -90,14 +90,10 @@ interface World {
 interface Course { id: number; name: string; description?: string; icon?: string; progress?: number; worldId?: number }
 
 const worlds = ref<World[]>([])
-const errorMessage = ref('')
 const loading = ref(false)
 const showCreateWorld = ref(false)
 
-const showError = (error: unknown) => {
-  errorMessage.value = parseApiError(error)
-  setTimeout(() => (errorMessage.value = ''), 4000)
-}
+const toast = useToast()
 
 const fetchWorlds = async () => {
   loading.value = true
@@ -114,7 +110,7 @@ const fetchWorlds = async () => {
     }
   } catch (error) {
     worlds.value = []
-    showError(error)
+    toast.error(parseApiError(error))
   } finally {
     loading.value = false
   }
@@ -135,7 +131,7 @@ const handleCreateWorld = async (data: { name: string; description: string; scen
     showCreateWorld.value = false
     router.push(`/home/worlds/${newWorld.id}`)
   } catch (error) {
-    showError(error)
+    toast.error(parseApiError(error))
   }
 }
 

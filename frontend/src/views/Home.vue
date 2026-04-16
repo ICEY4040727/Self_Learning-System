@@ -49,8 +49,7 @@
       </Transition>
     </router-view>
 
-    <p v-if="errorMessage" class="error-toast font-ui">{{ errorMessage }}</p>
-  </div>
+      </div>
 </template>
 
 <script setup lang="ts">
@@ -62,7 +61,6 @@ import { useAuthStore } from '@/stores/auth'
 const router = useRouter()
 const route = useRoute()
 const authStore = useAuthStore()
-const errorMessage = ref('')
 
 // Check if a child route is active (route has more than just /home)
 const hasChildRoute = computed(() => {
