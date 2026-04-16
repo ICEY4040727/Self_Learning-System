@@ -140,8 +140,7 @@
     </div>
 
     <!-- Error Toast -->
-    <p v-if="errorMessage" class="error-toast font-ui">{{ errorMessage }}</p>
-
+    
     <!-- Create Course Modal -->
     <CreateCourseModal
       :show="showCreateCourse"
@@ -277,6 +276,7 @@
 </template>
 
 <script setup lang="ts">
+import { useToast } from '@/composables/useToast'
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Edit3, Trash2 } from 'lucide-vue-next'
@@ -326,7 +326,6 @@ const worldId = computed(() => Number(route.params.worldId))
 const selectedWorld = ref<World | null>(null)
 const courses = ref<Course[]>([])
 const allCharacters = ref<Character[]>([])
-const errorMessage = ref('')
 const loading = ref(false)
 
 // Modal states
@@ -374,10 +373,6 @@ const availableSages = computed(() => {
 })
 
 // Error handler
-const showError = (error: unknown) => {
-  errorMessage.value = parseApiError(error)
-  setTimeout(() => (errorMessage.value = ''), 4000)
-}
 
 // Fetch world data
 const fetchWorld = async () => {
@@ -391,7 +386,7 @@ const fetchWorld = async () => {
       symbol: data.symbol || ''
     }
   } catch (error) {
-    showError(error)
+    toast.error(parseApiError(error))
   }
 }
 
@@ -403,7 +398,7 @@ const fetchCourses = async () => {
     courses.value = data
   } catch (error) {
     courses.value = []
-    showError(error)
+    toast.error(parseApiError(error))
   } finally {
     loading.value = false
   }
@@ -417,7 +412,7 @@ const fetchCharacters = async () => {
     allCharacters.value = (data && data.length > 0) ? data : MOCK_CHARACTERS
   } catch (error) {
     allCharacters.value = MOCK_CHARACTERS
-    showError(error)
+    toast.error(parseApiError(error))
   }
 }
 
@@ -433,7 +428,7 @@ const handleCreatePersona = async (data: Record<string, any>) => {
     await fetchWorld()
     showCreatePersona.value = false
   } catch (error) {
-    showError(error)
+    toast.error(parseApiError(error))
   }
 }
 
@@ -457,7 +452,7 @@ const selectTraveler = async (traveler: Character) => {
     await fetchWorld()
     showTravelerSelect.value = false
   } catch (error) {
-    showError(error)
+    toast.error(parseApiError(error))
   }
 }
 
@@ -473,7 +468,7 @@ const selectSage = async (sage: Character) => {
     await fetchCharacters()
     showSageSelect.value = false
   } catch (error) {
-    showError(error)
+    toast.error(parseApiError(error))
   }
 }
 
@@ -483,7 +478,7 @@ const confirmDeleteSage = async (sage: Character) => {
     await client.delete(`/worlds/${worldId.value}/characters/${sage.id}`)
     await fetchWorld()
   } catch (error) {
-    showError(error)
+    toast.error(parseApiError(error))
   }
 }
 
@@ -498,7 +493,7 @@ const handleUpdateWorld = async () => {
     await fetchWorld()
     showEditWorld.value = false
   } catch (error) {
-    showError(error)
+    toast.error(parseApiError(error))
   }
 }
 
@@ -513,7 +508,7 @@ const handleDeleteWorld = async () => {
     await client.delete(`/worlds/${worldId.value}`)
     router.push('/home/worlds')
   } catch (error) {
-    showError(error)
+    toast.error(parseApiError(error))
     showDeleteConfirm.value = false
   }
 }
@@ -535,7 +530,7 @@ const handleCreateCourse = async (data: {
     courses.value = [...courses.value, newCourse]
     showCreateCourse.value = false
   } catch (error) {
-    showError(error)
+    toast.error(parseApiError(error))
   }
 }
 
@@ -570,7 +565,7 @@ const handleStepCreate = async (data: Record<string, any>) => {
     await fetchWorld()
     showStepCreate.value = false
   } catch (error) {
-    showError(error)
+    toast.error(parseApiError(error))
   }
 }
 
@@ -579,6 +574,8 @@ onMounted(async () => {
   await fetchCourses()
   await fetchCharacters()
 })
+
+const toast = useToast()
 </script>
 
 <style scoped>
