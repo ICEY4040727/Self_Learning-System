@@ -1,5 +1,10 @@
 # 问题 01: `stage_map`（关系阶段中英文映射）在两处重复定义
 
+## ✅ 已解决
+
+**解决方案**: `RELATIONSHIP_STAGE_LABELS` 在 `backend/models/models.py` 统一定义
+**PR**: #211, #218
+
 ## 问题类型
 重复定义
 

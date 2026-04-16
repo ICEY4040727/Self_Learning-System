@@ -1,5 +1,10 @@
 # 问题 07: `archive.py` 中 `_ensure_world_knowledge` 是空操作但仍被多处调用
 
+## ✅ 已解决
+
+**解决方案**: 函数已删除
+**验证**: `grep "_ensure_world_knowledge" backend/` 无结果
+
 ## 问题类型
 死代码 / 逻辑不清
 

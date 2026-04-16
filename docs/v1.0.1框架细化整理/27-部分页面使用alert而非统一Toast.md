@@ -1,5 +1,9 @@
 # 问题 27: 部分页面使用 `alert()` 而非统一的 Toast 通知
 
+## ⚠️ 未解决
+
+**说明**: CoursePage.vue 和 Settings.vue 仍使用 alert()
+
 ## 问题类型
 UX 不一致（前端）
 

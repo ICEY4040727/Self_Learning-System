@@ -1,5 +1,12 @@
 # 问题 20: `ChatMessage` 查询逻辑在 `save.py` 中重复 6 次
 
+## ✅ 已解决
+
+**解决方案**: 提取 `_get_recent_messages` 和 `_get_message_count` 辅助函数
+**PR**: #210 → #217
+
+## 问题类型
+
 ## 问题类型
 重复查询逻辑（问题 #14 的加剧）
 

@@ -1,5 +1,10 @@
 # 问题 02: `Limiter` 实例在 `main.py` 和 `auth.py` 中重复创建
 
+## ✅ 已解决
+
+**解决方案**: 新建 `backend/core/rate_limit.py` 统一 Limiter 实例
+**PR**: #236
+
 ## 问题类型
 重复初始化 / 冗余实例
 

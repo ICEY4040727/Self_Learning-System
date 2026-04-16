@@ -1,5 +1,9 @@
 # 问题 31: 角色模板在 `characterPresets.ts` 和 `personaTemplates.ts` 中重复定义且 key 不同
 
+## ⚠️ 未解决
+
+**说明**: 两文件仍有各自的模板定义
+
 ## 问题类型
 重复定义 + key 不一致
 

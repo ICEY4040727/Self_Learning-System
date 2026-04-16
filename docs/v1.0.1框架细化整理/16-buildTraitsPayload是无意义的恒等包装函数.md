@@ -1,5 +1,10 @@
 # 问题 16: `buildTraitsPayload` 是无意义的恒等包装函数
 
+## ✅ 已解决
+
+**解决方案**: 函数已删除
+**验证**: `grep "buildTraitsPayload" frontend/src/` 无结果
+
 ## 问题类型
 冗余函数 / 逻辑不清
 

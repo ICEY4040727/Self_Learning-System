@@ -1,5 +1,13 @@
 # 问题 12: `save.py` 中 `ChatMessage` 被重复导入 — 顶部和函数内各一次
 
+## ✅ 已解决
+
+**解决方案**: 
+1. ChatMessage 仅在顶部导入，函数内不再重复导入
+2. 提取 `_get_session_messages` 和 `_count_session_messages` 辅助函数减少重复查询
+**验证**: 函数内无 ChatMessage 导入；辅助函数已定义并被多处使用
+
+
 ## 问题类型
 冗余导入 / 逻辑不清
 

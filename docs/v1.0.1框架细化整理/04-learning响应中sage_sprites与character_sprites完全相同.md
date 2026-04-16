@@ -1,5 +1,10 @@
 # 问题 04: `start_learning` 响应中 `sage_sprites` 与 `character_sprites` 完全相同
 
+## ✅ 已解决
+
+**解决方案**: 提取 `_build_start_response` 统一返回格式，保留 `sage_sprites` 删除冗余 alias
+**PR**: #212 → #219
+
 ## 问题类型
 冗余字段 / 逻辑不清
 

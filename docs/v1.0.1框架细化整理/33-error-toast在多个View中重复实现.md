@@ -1,5 +1,9 @@
 # 问题 33: error-toast 在多个 View/Component 中重复实现（loading + error + showError 模式）
 
+## ⚠️ 未解决
+
+**说明**: 仍分散在各 View 中
+
 ## 问题类型
 重复逻辑模式（前端）
 

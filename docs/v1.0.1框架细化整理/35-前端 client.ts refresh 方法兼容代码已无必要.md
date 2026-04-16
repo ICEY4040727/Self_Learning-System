@@ -1,5 +1,10 @@
 #35: 前端 client.ts refresh 方法兼容代码已无必要
 
+## ✅ 已解决
+
+**解决方案**: 已在 #13 中统一响应格式，兼容代码可删除
+
+
 ### 问题描述
 #213 修复后，`POST /user/profile/refresh` 已直接返回 profile dict，不再包装 `{ success, data }`。但 `frontend/src/api/client.ts` 中 `refresh` 方法仍保留 `data.data ?? data` 兼容逻辑。
 

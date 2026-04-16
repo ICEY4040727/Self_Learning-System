@@ -1,5 +1,10 @@
 # 问题 08: 前端关系阶段标签在 `types/index.ts` 和 `constants/courseLevels.ts` 中重复定义
 
+## ✅ 已解决
+
+**解决方案**: 删除 `types/index.ts` 中的 `STAGE_LABELS`，仅保留 `constants/courseLevels.ts` 中的 `RELATIONSHIP_STAGE_LABELS`
+**PR**: #213 → #220
+
 ## 问题类型
 重复定义（前端）
 
