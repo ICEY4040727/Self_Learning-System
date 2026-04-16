@@ -1,11 +1,12 @@
 # 问题 18: 服务层自管数据库连接绕过 FastAPI 依赖注入
 
-## ✅ 已解决
+## ⚠️ 部分解决
 
-**解决方案**: 
-1. `update_relationship_stage` 方法已删除（#17）
-2. `update_learner_profile` 签名已改为 `db` 必填参数，无自管连接
-**验证**: `grep "SessionLocal" backend/services/dynamic_analyzer.py` 无结果
+**说明**: 
+1. `dynamic_analyzer.py` 中已清理（无 SessionLocal）
+2. `learning_engine.py` 中仍有自管连接模式（第 32、93 行）
+**验证**: `grep "SessionLocal" backend/services/learning_engine.py` 有结果
+
 
 ## 问题类型
 架构问题 / 潜在资源泄漏
