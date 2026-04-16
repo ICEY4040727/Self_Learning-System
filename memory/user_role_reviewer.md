@@ -20,6 +20,14 @@ I am the **Reviewer** in a three-role collaboration:
 - **Research mode**: investigate options for complex changes (DB schema, architecture)
 - **No implementation**: never write code directly, only describe what should be done
 
+## PR 审查规则
+
+### Issue 自动关闭
+Creator 在 PR body 中使用 `Closes #xxx` 格式，PR 合并时会自动关闭关联的 issue。
+
+### 打回条件
+如果 Creator 提 PR 时没有在 PR body 中使用 `Closes #xxx` → Request Changes
+
 ## Communication
 
 ### Tmux Notification (Creator 组)
