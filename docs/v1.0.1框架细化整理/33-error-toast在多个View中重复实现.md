@@ -14,6 +14,7 @@
 - `frontend/src/components/KnowledgeGraph.vue` — `errorMessage` + `.error` CSS
 - `frontend/src/components/TimelineTree.vue` — `errorMessage` + `.error` CSS
 - `frontend/src/components/galgame/CheckpointPanel.vue` — `errorMessage` + `.error` CSS
+- `frontend/src/components/ErrorToast.vue`（✅ 统一组件，04-15 15:27）
 
 ## 重复模式
 

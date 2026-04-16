@@ -9,22 +9,28 @@
 
 ## 涉及文件
 
-| 根目录 `components/` | `components/galgame/` | 功能关系 |
+| 根目录 `components/` | `components/galgame/` | 备注 |
 |---|---|---|
-| `BacklogPanel.vue` | `galgame/BacklogPanel.vue` | 可能功能重叠 |
-| `DialogBox.vue` | `galgame/DialogBox.vue` | 可能功能重叠 |
-| `HudBar.vue` | `galgame/HudBar.vue` | 可能功能重叠 |
-| `SaveLoadPanel.vue` | `galgame/CheckpointPanel.vue` | 存档/检查点功能重叠 |
+| `BacklogPanel.vue` | `galgame/BacklogPanel.vue` | 时间戳相同，需进一步分析 |
+| `DialogBox.vue` | `galgame/DialogBox.vue` | 时间戳相同，需进一步分析 |
+| `HudBar.vue` (04-14 13:35) | `galgame/HudBar.vue` (04-14 13:23) | ✅ 根目录更新 |
+| `SaveLoadPanel.vue` | `galgame/CheckpointPanel.vue` | 文件名不同，需进一步分析 |
+
+## ⚠️ 惯性偏好提醒
+
+**不要假设 galgame 子目录是新版**。应根据实际时间戳判断：
+- `HudBar.vue`：根目录（04-14 13:35）比 galgame（04-14 13:23）**更新 12 分钟**
+- 应保留根目录版本
 
 ## 影响分析
 
 1. **导入歧义**：开发者导入时容易混淆 `@/components/DialogBox` 和 `@/components/galgame/DialogBox`
-2. **功能重叠风险**：根目录的组件可能是旧版，galgame 下的是新版（重构后遗留）
+2. **惯性偏好风险**：错误地认为 galgame 目录是新版，导致保留旧代码
 3. **维护浪费**：修改同一功能时可能改了错误的文件
 
 ## 建议修复方向
 
-1. 确认根目录的 BacklogPanel、DialogBox、HudBar 是否仍被引用
-2. 如果无引用 → 删除根目录版本
-3. 如果仍有引用 → 迁移引用到 galgame 版本后删除根目录版本
-4. 如果两版本功能不同 → 重命名以消除歧义（如 `LegacyDialogBox.vue`）
+1. 检查各同名组件的时间戳，确认哪个是新版
+2. 确认根目录的 BacklogPanel、DialogBox、HudBar 是否仍被引用
+3. 如果无引用 → 删除旧版本
+4. 如果仍有引用 → 迁移引用到新版后删除旧版本
