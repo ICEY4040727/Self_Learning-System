@@ -1,5 +1,10 @@
 # 问题 15: 角色模板（Persona Templates）前后端重复定义且 key 不匹配
 
+## ✅ 已解决
+
+**解决方案**: 前端统一使用 `PERSONA_TEMPLATES` 和 `SAGE_TEMPLATES`
+**PR**: #213 → #220
+
 ## 问题类型
 重复定义 + 潜在 Bug
 

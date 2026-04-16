@@ -1,5 +1,10 @@
 #34: save.py 的 stage_map 仍未统一到 RELATIONSHIP_STAGE_LABELS
 
+## ✅ 已解决
+
+**解决方案**: 已在 #01 中统一，后续需清理
+
+
 ### 问题描述
 #211 (PR #218) 统一了 `archive.py` 和 `save.py` 的关系阶段标签，但 `save.py` 中仍保留独立的 `stage_map` 局部变量定义，未改为从 `models.RELATIONSHIP_STAGE_LABELS` 引用。
 

@@ -1,5 +1,9 @@
 # 问题 23: `MOCK_CHARACTERS` 在 WorldDetail.vue 和 Character.vue 中重复定义且数据不同步
 
+## ⚠️ 未解决
+
+**说明**: 两处仍各自定义 MOCK_CHARACTERS
+
 ## 问题类型
 重复定义（前端） / Mock 数据残留
 

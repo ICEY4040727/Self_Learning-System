@@ -1,5 +1,10 @@
 # 问题 11: `archive.py` 中 `_get_world_sages` 是冗余的向后兼容包装
 
+## ✅ 已解决
+
+**解决方案**: 函数已删除
+**验证**: `grep "_get_world_sages" backend/api/routes/archive.py` 无结果
+
 ## 问题类型
 冗余包装函数
 

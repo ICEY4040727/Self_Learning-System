@@ -1,5 +1,9 @@
 # 问题 32: `useWorldStore` 定义了完整的 CRUD 但 Views 全部绕过直接调 API
 
+## ⚠️ 未解决
+
+**说明**: worldStore 仍存在但 Views 直接调 API
+
 ## 问题类型
 架构不一致 / 死代码（前端 Store 层）
 
