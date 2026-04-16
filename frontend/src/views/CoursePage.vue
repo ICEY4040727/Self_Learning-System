@@ -261,7 +261,7 @@ const goBack = () => {
 
 const handleStartLearning = () => {
   if (sages.value.length === 0) {
-    alert('请先添加知者')
+    toast.warning('请先添加知者')
     return
   }
   if (sages.value.length === 1) {
@@ -293,7 +293,7 @@ const startLearningWithSage = async (sageId: number) => {
     })
   } catch (error) {
     console.error('Failed to start session:', error)
-    alert('启动学习会话失败')
+    toast.error('启动学习会话失败')
   }
 }
 
