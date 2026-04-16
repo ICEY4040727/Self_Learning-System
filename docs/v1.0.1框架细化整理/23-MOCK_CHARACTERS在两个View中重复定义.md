@@ -48,6 +48,76 @@ const MOCK_CHARACTERS: Character[] = [
 
 ## 建议修复方向
 
-1. 如果 mock 数据不再需要（后端已完善），删除两处 `MOCK_CHARACTERS` 及 fallback 逻辑，改为显示"暂无数据"或错误提示
-2. 如果仍需 fallback，提取到 `constants/mockCharacters.ts` 统一管理
-3. 在 fallback 时至少显示一个提示（如"离线模式，显示示例数据"）
+### 方案 A：删除 mock 数据（推荐）
+
+如果后端 API 已完善，直接删除 mock 数据和 fallback 逻辑：
+
+```typescript
+// 删除前
+const characters = ref<Character[]>([])
+onMounted(async () => {
+  characters.value = await api.getCharacters() || MOCK_CHARACTERS  // ❌ fallback 到假数据
+})
+
+// 改为
+const characters = ref<Character[]>([])
+const hasError = ref(false)
+onMounted(async () => {
+  try {
+    characters.value = await api.getCharacters()
+    if (!characters.value.length) hasError.value = true
+  } catch (e) {
+    hasError.value = true
+  }
+})
+```
+
+### 方案 B：统一到 constants（保留 fallback）
+
+1. 创建 `frontend/src/constants/mockCharacters.ts`：
+```typescript
+export const MOCK_CHARACTERS: Character[] = [
+  { id: 10, name: '苏格拉底', title: '哲学之父', type: 'sage', color: 'rgba(245, 158, 11, 0.35)' },
+  { id: 11, name: '柏拉图', title: '理念论者', type: 'sage', color: 'rgba(139, 92, 246, 0.35)' },
+  // ...
+]
+
+// 导出统一的类型定义
+export interface MockCharacter {
+  id: number
+  name: string
+  title: string
+  type: 'sage' | 'traveler'
+  color: string
+  is_builtin?: boolean
+}
+```
+
+2. 两处 View 统一引用：
+```typescript
+import { MOCK_CHARACTERS } from '@/constants/mockCharacters'
+```
+
+3. fallback 时显示提示：
+```vue
+<div v-if="isOfflineMode" class="offline-notice">
+  ⚠️ 离线模式，显示示例数据
+</div>
+```
+
+## 修复完成要求
+
+### PR 提交检查清单
+
+- [ ] 删除两处重复的 `MOCK_CHARACTERS` 定义
+- [ ] 统一引用来源（方案 A 或 B）
+- [ ] API 失败时正确处理（显示错误而非静默 fallback）
+- [ ] **提供前端样式截图**（修复后的页面截图）
+- [ ] 更新相关常量导出文件（如有）
+
+### 截图要求
+
+修复完成后在 PR 中提供：
+1. WorldDetail 页面正常显示截图
+2. Character 页面正常显示截图
+3. API 错误情况下的提示截图（如果采用方案 A）
