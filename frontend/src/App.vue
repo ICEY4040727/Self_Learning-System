@@ -1,5 +1,6 @@
 <template>
   <div id="app">
+    <ToastContainer />
     <router-view v-slot="{ Component }">
       <Transition name="page-fade">
         <component :is="Component" />
@@ -9,7 +10,11 @@
 </template>
 
 <script setup lang="ts">
-// Root component — just provides page-level fade transition
+/**
+ * Root component
+ * Issue #27 + #33: 统一 Toast 通知系统
+ */
+import ToastContainer from '@/components/ToastContainer.vue'
 </script>
 
 <style>
