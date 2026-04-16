@@ -1,15 +1,17 @@
 # 问题 18: 服务层自管数据库连接绕过 FastAPI 依赖注入
 
-## ⚠️ 部分解决
+## ✅ 已解决
 
-**说明**: 
-1. `dynamic_analyzer.py` 中已清理（无 SessionLocal）
-2. `learning_engine.py` 中仍有自管连接模式（第 32、93 行）
-3. 新建 #242 跟踪 learning_engine.py 的修复
+**解决方案**: 
+1. `dynamic_analyzer.py` 中已清理（SessionLocal 已移除）
+2. `learning_engine.py` 中已清理（PR #243）
+   - 删除 SessionLocal 导入
+   - db 参数改为必填
+   - 删除 own_db fallback 逻辑
 
-**验证**: `grep "SessionLocal" backend/services/learning_engine.py` 有结果
+**验证**: `grep "SessionLocal" backend/services/learning_engine.py` 无结果
 
-**关联**: #242 — learning_engine.py 移除 SessionLocal 自管连接
+**关联**: #242 — 已合并
 
 
 ## 问题类型
