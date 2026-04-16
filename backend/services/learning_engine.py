@@ -29,13 +29,11 @@ from types import SimpleNamespace
 
 from sqlalchemy.orm import Session
 
-from backend.db.database import SessionLocal
 from backend.models.models import (
     Character,
     ChatMessage,
     LearnerProfile,
     RelationshipStageRecord,
-    TeacherPersona,
     _default_relationship,
 )
 from backend.models.models import (
@@ -83,15 +81,11 @@ class LearningEngine:
         self,
         session_id: int,
         user_message: str,
+        db: Session,
         user_api_key: str = None,
         provider: str = "claude",
-        db: Session | None = None,
     ) -> dict:
         """Process user message and generate teacher response"""
-        own_db = False
-        if db is None:
-            db = SessionLocal()
-            own_db = True
 
         try:
             # 1. Get session context
@@ -278,10 +272,7 @@ class LearningEngine:
             update_user_profile_after_chat(db, session.user_id, session.world_id)
 
             # 16. Persist DB changes
-            if own_db:
-                db.commit()
-            else:
-                db.flush()
+            db.flush()
 
             # 17. Return response (移除 <memory> 标签)
             clean_response = memory_extractor.strip_tags(llm_response)
@@ -307,9 +298,6 @@ class LearningEngine:
                 "type": "error",
                 "reply": "处理消息时出错，请重试"
             }
-        finally:
-            if own_db:
-                db.close()
 
     async def create_seed_memories(
         self,
