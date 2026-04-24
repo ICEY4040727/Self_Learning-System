@@ -40,9 +40,14 @@ from backend.models.models import (
     Session as SessionModel,
 )
 from backend.services.dynamic_analyzer import DynamicAnalyzer
+from backend.services.gamification import gamification_engine
 from backend.services.llm.adapter import get_llm_adapter
-from backend.services.memory_extractor import memory_extractor, should_extract_memory
+from backend.services.mastery_tracker import mastery_tracker
+from backend.services.memory_extractor import memory_extractor
 from backend.services.memory_facts import memory_facts_service
+from backend.services.memory_manager import memory_manager
+from backend.services.narrative_engine import narrative_engine
+from backend.services.profile_aggregator import profile_aggregator
 from backend.services.prompt_builder import PromptBuilder, SceneConfig
 from backend.services.relationship import relationship_service
 
@@ -161,23 +166,8 @@ class LearningEngine:
                 traveler_character=traveler_character,
             )
 
-            # 8. Get recent chat history (limit to last 30 messages)
-            chat_history = (
-                db.query(ChatMessage)
-                .filter(ChatMessage.session_id == session_id)
-                .order_by(ChatMessage.timestamp.desc())
-                .limit(30)
-                .all()
-            )
-            chat_history.reverse()  # restore chronological order
-
-            # Convert to messages format for LLM
-            messages = []
-            for msg in chat_history:
-                messages.append({
-                    "role": self.ROLE_MAP.get(msg.sender_type, "user"),
-                    "content": msg.content
-                })
+            # 8. Get chat history via MemoryManager (Token-aware budget)
+            messages = memory_manager.get_working_context(db, session_id)
 
             # Add current message
             messages.append({"role": "user", "content": user_message})
@@ -224,36 +214,17 @@ class LearningEngine:
                 db.add(stage_record)
             relationship_events = self.relationship.check_events(old_relationship, updated_relationship)
 
-            # 13. Extract and save memories from LLM response
+            # 13. Extract and save memories via MemoryManager (dual-channel)
             used_memory_ids = []
-            result = None
-            if should_extract_memory(llm_response):
-                result = memory_extractor.extract(llm_response)
-                if result.memories:
-                    # 保存 AI 回复消息
-                    ai_message = (
-                        db.query(ChatMessage)
-                        .filter(ChatMessage.session_id == session_id, ChatMessage.sender_type == "assistant")
-                        .order_by(ChatMessage.timestamp.desc())
-                        .first()
-                    )
-
-                    # 写入记忆
-                    memory_data = [{
-                        "fact_type": m.fact_type,
-                        "content": m.content,
-                        "concept_tags": m.concept_tags,
-                        "salience": m.salience,
-                        "expires_at": m.expires_at,
-                    } for m in result.memories]
-
-                    used_memory_ids = memory_facts_service.write_memory_facts(
-                        db=db,
-                        character_id=session.sage_character_id,
-                        world_id=session.world_id,
-                        memories=memory_data,
-                        source_message_id=ai_message.id if ai_message else None,
-                    )
+            result = memory_manager.extract_and_store(
+                db,
+                llm_response,
+                user_message,
+                character_id=session.sage_character_id,
+                world_id=session.world_id,
+            )
+            if result and result.memories:
+                used_memory_ids = [m.fact_type for m in result.memories]
 
             # 14. Update learner profile
             await self.analyzer.update_learner_profile(
@@ -267,14 +238,66 @@ class LearningEngine:
                 db=db,
             )
 
-            # 15. Update UserProfile
+            # 15. Run ProfileAggregator (dimension_scores, learning_stats)
+            profile_aggregator.aggregate(
+                db,
+                character_id=session.sage_character_id,
+                world_id=session.world_id,
+                user_id=session.user_id,
+            )
+
+            # 16. Update UserProfile
             from backend.services.user_profile import update_user_profile_after_chat
             update_user_profile_after_chat(db, session.user_id, session.world_id)
 
-            # 16. Persist DB changes
+            # 17. Persist DB changes
             db.flush()
 
-            # 17. Return response (移除 <memory> 标签)
+            # 17.5 Prepare recent facts for downstream observers
+            recent_facts = result.memories if result else []
+
+            # 17.6 Mastery tracking: MemoryFact → 概念掌握度 → 自适应推进 (Phase 3 Step 4)
+            mastery_result = mastery_tracker.update_from_memories(
+                db=db,
+                memories=recent_facts,
+                course_id=session.course_id,
+                world_id=session.world_id,
+            )
+
+            # 18. Narrative events (观察者，不调 LLM)
+            narrative_events = narrative_engine.check_triggers(
+                db,
+                user_id=session.user_id,
+                character_id=session.sage_character_id,
+                world_id=session.world_id,
+                recent_facts=recent_facts,
+                current_stage=new_stage,
+                prev_stage=old_stage,
+            )
+
+            # 19. Achievement check (观察者，不调 LLM)
+            lp = db.query(LearnerProfile).filter(
+                LearnerProfile.user_id == session.user_id,
+                LearnerProfile.world_id == session.world_id,
+            ).first()
+            dim_scores = {}
+            learn_stats = {}
+            if lp and lp.profile:
+                dim_scores = lp.profile.get("dimension_scores", {})
+                learn_stats = lp.profile.get("learning_stats", {})
+
+            new_achievements = gamification_engine.check_achievements(
+                db,
+                user_id=session.user_id,
+                character_id=session.sage_character_id,
+                world_id=session.world_id,
+                stats=learn_stats,
+                dimension_scores=dim_scores,
+                current_stage=new_stage,
+                recent_facts=recent_facts,
+            )
+
+            # 20. Return response (移除 <memory> 标签)
             clean_response = memory_extractor.strip_tags(llm_response)
 
             # 计算本次提取的 memory 数量 (Issue #192)
@@ -289,6 +312,8 @@ class LearningEngine:
                 "relationship_events": relationship_events,
                 "used_memory_ids": used_memory_ids,
                 "memory_extracted_count": memory_extracted_count,  # Issue #192
+                "narrative_events": narrative_events,
+                "new_achievements": new_achievements,
             }
 
         except Exception:

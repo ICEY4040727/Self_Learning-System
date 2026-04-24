@@ -158,14 +158,16 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import client from '@/api/client'
+import { courseApi } from '@/api/course'
 import ProgressBar from '@/components/course/ProgressBar.vue'
 import SageRelationCard from '@/components/course/SageRelationCard.vue'
 import { DOMAIN_ICONS } from '@/constants/courseLevels'
 import { getLevelIndex } from '@/constants/courseLevels'
-import charBg from '@/assets/char-bg.jpg'
+import { PAGE_BACKGROUNDS } from '@/constants/ui'
+import { useToast } from '@/composables/useToast'
 
-const BG_URL = charBg
+const BG_URL = PAGE_BACKGROUNDS.coursePage
+const toast = useToast()
 
 const route = useRoute()
 const router = useRouter()
@@ -222,23 +224,23 @@ const fetchData = async () => {
   loading.value = true
   try {
     const [courseRes, sagesRes, sessionsRes, statsRes] = await Promise.allSettled([
-      client.get(`/courses/${courseId.value}`),
-      client.get(`/courses/${courseId.value}/sages`),
-      client.get(`/courses/${courseId.value}/sessions`),
-      client.get(`/courses/${courseId.value}/memory-facts?stats_only=true`),
+      courseApi.get(courseId.value),
+      courseApi.getSages(courseId.value),
+      courseApi.getSessions(courseId.value),
+      courseApi.getMemoryFacts(courseId.value, true),
     ])
 
     if (courseRes.status === 'fulfilled') {
-      course.value = courseRes.value.data
+      course.value = courseRes.value
     }
     if (sagesRes.status === 'fulfilled') {
-      sages.value = sagesRes.value.data
+      sages.value = sagesRes.value
     }
     if (sessionsRes.status === 'fulfilled') {
-      sessions.value = sessionsRes.value.data
+      sessions.value = sessionsRes.value
     }
     if (statsRes.status === 'fulfilled') {
-      const stats = statsRes.value.data
+      const stats = statsRes.value
       memoryStats.value = {
         student_state: stats.by_type?.student_state || 0,
         concept_mastered: stats.by_type?.concept_mastered || 0,
@@ -283,10 +285,8 @@ const confirmSageSelect = (sage: any) => {
 
 const startLearningWithSage = async (sageId: number) => {
   try {
-    const res = await client.post(`/courses/${courseId.value}/start`, {
-      sage_id: sageId,
-    })
-    const sessionId = res.data.session_id
+    const result = await courseApi.start(courseId.value, sageId)
+    const sessionId = result.session_id
     router.push({
       path: `/home/worlds/${worldId.value}/courses/${courseId.value}`,
       query: { session_id: sessionId }

@@ -1,53 +1,186 @@
-# 新发现问题
+# 系统五：游戏化系统（GamificationEngine）— 详细设计
 
-> 2026-04-14 在修复过程中发现的遗留问题和新增问题
-
----
-
-## #34: save.py 的 stage_map 仍未统一到 RELATIONSHIP_STAGE_LABELS
-
-### 问题描述
-#211 (PR #218) 统一了 `archive.py` 和 `save.py` 的关系阶段标签，但 `save.py` 中仍保留独立的 `stage_map` 局部变量定义，未改为从 `models.RELATIONSHIP_STAGE_LABELS` 引用。
-
-### 来源
-#211 修复时仅处理了 `archive.py`，`save.py` 的 `stage_map` 因遗留接口（#06）纠缠暂未处理。
-
-### 严重程度
-中
-
-### 建议修复
-- 随 #06（save.py 遗留接口删除）一并清理
-- 或单独将 `save.py` 的 `stage_map` 替换为 `from backend.models.models import RELATIONSHIP_STAGE_LABELS`
+> **版本**：v1.0.2 | **日期**：2026-04-24 | **状态**：设计中
+> **理论参考**：SDT 自我决定理论、PBL 框架、Octalysis 八种核心驱动力
 
 ---
 
-## #35: 前端 client.ts refresh 方法兼容代码已无必要
+## 一、理论基础
 
-### 问题描述
-#213 修复后，`POST /user/profile/refresh` 已直接返回 profile dict，不再包装 `{ success, data }`。但 `frontend/src/api/client.ts` 中 `refresh` 方法仍保留 `data.data ?? data` 兼容逻辑。
+### 1.1 自我决定理论（SDT, Deci & Ryan 1985）
 
-### 来源
-#213 修复后端响应格式，未同步清理前端兼容代码。
+| 需求 | 游戏化对应 |
+|------|-----------|
+| 自主性 | 学生选择导师角色、自定义学习路径 |
+| 胜任感 | 维度提升、概念掌握、成就解锁 |
+| 归属感 | 与导师的关系系统、好感度 |
 
-### 严重程度
-低
+**关键原则**：成就不应该是"外部奖励"（积分、代币），那会**削弱**内在动机（过度理由效应）。成就应该是对学习过程的**里程碑标记**。
 
-### 建议修复
-将 `return data.data ?? data` 简化为 `return data`。
+### 1.2 PBL 框架与局限
+
+- **不使用积分和排行榜**——催生外在动机，与深度学习目标冲突
+- 成就解锁应该是**不可预见的惊喜**——隐藏成就
+- 成就条件应反映**真实学习进步**——不是"学了 10 分钟"而是"克服了长期困难"
+
+### 1.3 八种核心驱动力（Octalysis）
+
+| 驱动力 | 应用 |
+|--------|------|
+| 史诗意义 | "历险"叙事包装 |
+| 进步感 | 维度提升、成就解锁 |
+| 创造力 | 学生画像 |
+| 所有权 | 学习档案积累 |
+| 社交影响 | 导师关系 |
+| 稀缺性 | 隐藏/稀有成就 |
+| 不可预见性 | 惊喜成就 |
+| 亏损规避 | 连续学习天数 |
 
 ---
 
-## #36: _build_start_response 仍返回 character_sprites 作为 legacy alias
+## 二、定位
 
-### 问题描述
-#212 提取 `_build_start_response()` 时保留了 `character_sprites` 字段（值等于 `sage_sprites`），因为前端 `learning.ts` 有 `data.sage_sprites ?? data.character_sprites` fallback 引用。这个 legacy alias 增加了维护负担。
+**观察者，不直接影响教学策略。** 检测成就条件，记录解锁，通过前端通知产生成就感。
 
-### 来源
-#212 折中方案：避免前端 breaking change 而保留冗余字段。
+---
 
-### 严重程度
-低
+## 三、设计方案
 
-### 建议修复
-1. 确认前端 `learning.ts` 是否仍使用 `character_sprites`
-2. 如果前端统一使用 `sage_sprites`，从 `_build_start_response` 中删除 `character_sprites` 字段
+### 3.1 可配置的成就定义
+
+**新增表：achievement_defs**
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| id | Integer PK | 自增 |
+| key | String(50) UNIQUE | 成就标识 |
+| display_name | String(100) | 显示名 |
+| description | Text | 描述 |
+| category | String(20) | 分类 |
+| condition_type | String(30) | 条件类型 |
+| condition_params | JSON | 条件参数 |
+| rarity | String(10) | "common"/"rare"/"legendary" |
+| icon | String(50) | 图标 |
+| hidden | Boolean | 解锁前是否可见 |
+| enabled | Boolean | 是否启用 |
+
+#### category 枚举
+
+| category | 含义 | 对应驱动力 |
+|----------|------|-----------|
+| milestone | 里程碑 | 进步感 |
+| growth | 成长 | 胜任感 |
+| relationship | 关系 | 社交影响 |
+| resilience | 韧性 | 史诗意义 |
+| exploration | 探索 | 创造力 |
+| hidden | 隐藏 | 不可预见性 |
+
+#### condition_type 枚举
+
+| condition_type | 含义 |
+|---------------|------|
+| stat_threshold | 学习统计达到阈值 |
+| dimension_crossing | 画像维度跨越阈值 |
+| relationship_stage | 关系达到指定阶段 |
+| fact_transition | 记忆类型转化（struggle→mastered） |
+| fact_count_threshold | 特定类型记忆达到数量 |
+| consecutive_days | 连续学习天数 |
+
+### 3.2 种子数据
+
+**里程碑**：初入世界(1次学习)、常客(10次)、小有所成(5概念)、学有所长(20概念)
+
+**成长**：抽象思维觉醒(维度跨越)、问题解决者
+
+**韧性**：吃一堑长一智(struggle→mastered)、百折不挠(10次转化)
+
+**关系**：心意相通(friend)、亦师亦友(trusted_partner)
+
+**隐藏**：夜猫子(23点后学习)、马拉松选手(单次50条消息)
+
+**新增成就 = 新增一行数据。**
+
+### 3.3 解锁记录
+
+**新增表：achievements**
+
+| 字段 | 说明 |
+|------|------|
+| user_id | 用户 |
+| character_id | 角色 |
+| achievement_key | 关联 achievement_defs.key |
+| unlocked_at | 解锁时间 |
+| context | 解锁上下文（如哪个概念） |
+
+唯一约束：`(user_id, character_id, achievement_key)` 防重复。
+
+### 3.4 GamificationEngine 工作流程
+
+```
+1. 查询 achievement_defs（enabled=True）
+2. 排除已解锁的
+3. 对每条未解锁的：检查条件 → 满足则插入记录
+4. 返回新解锁列表
+```
+
+**幂等保证**：唯一约束防止重复解锁。
+**不调 LLM**，零 API 成本。
+
+### 3.5 与叙事系统协作
+
+成就解锁可触发叙事事件——通过 narrative_trigger_rules 数据配置，不改代码：
+
+```
+trigger_type: "achievement_unlocked"
+condition_params: {"achievement_key": "learn_from_setback"}
+event_template: "你从失败中站了起来！"
+```
+
+### 3.6 与前端交互
+
+```json
+{"response": "...", "new_achievements": [{"key": "learn_from_setback", "display_name": "吃一堑长一智", "rarity": "rare", "context": {"concept": "递归"}}]}
+```
+
+展示策略：rare/legendary 全屏庆祝动画，common 用 toast，隐藏成就额外标签。
+
+### 3.7 学生成就 API
+
+```
+GET /api/worlds/{world_id}/achievements
+返回：{unlocked: [...], locked_visible: [...], total_unlocked, total_available}
+```
+
+---
+
+## 四、新增/修改文件
+
+| 文件 | 操作 |
+|------|------|
+| gamification.py | 新建 ~120 行 |
+| models.py | 修改（新增 AchievementDef, Achievement） |
+| learning_engine.py | 修改（末尾调用 GamificationEngine） |
+| API route | 新增 GET achievements |
+
+---
+
+## 五、测试计划
+
+| 测试 | 验证什么 |
+|------|---------|
+| test_stat_threshold | total_sessions >= 1 触发 |
+| test_dimension_crossing | prev=0.3→current=0.6 检测 |
+| test_idempotent | 不重复解锁 |
+| test_hidden_not_in_locked | 隐藏成就不在 locked_visible |
+
+---
+
+## 六、设计原则
+
+| 原则 | 做法 | 反面 |
+|------|------|------|
+| 内在动机优先 | 标记真实进步 | "登录送积分" |
+| 惊喜感 | 隐藏成就 | 透明成就列表 |
+| 不破坏学习节奏 | 观察者模式 | 检测需调 LLM |
+| 数据驱动 | DB 配置 | if/elif 硬编码 |
+| 低 API 成本 | 基于已有数据 | 额外 LLM 调用 |

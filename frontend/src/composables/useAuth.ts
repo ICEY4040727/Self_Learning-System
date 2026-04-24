@@ -4,19 +4,17 @@
  */
 import { ref } from 'vue'
 import { authApi } from '@/api/auth'
-import type { LoginRequest, RegisterRequest } from '@/types'
 
 export function useAuth() {
   const user = ref<unknown>(null)
   const loading = ref(false)
   const error = ref<string | null>(null)
 
-  async function login(data: LoginRequest) {
+  async function login(username: string, password: string) {
     loading.value = true
     error.value = null
     try {
-      const result = await authApi.login(data)
-      // 假设登录成功后返回用户信息或 token
+      const result = await authApi.login(username, password)
       user.value = result
       return result
     } catch (e: unknown) {
@@ -27,11 +25,11 @@ export function useAuth() {
     }
   }
 
-  async function register(data: RegisterRequest) {
+  async function register(username: string, password: string) {
     loading.value = true
     error.value = null
     try {
-      const result = await authApi.register(data)
+      const result = await authApi.register({ username, password })
       return result
     } catch (e: unknown) {
       error.value = e instanceof Error ? e.message : '注册失败'

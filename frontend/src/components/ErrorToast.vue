@@ -7,7 +7,7 @@ import { ref, watch } from 'vue'
 
 const props = defineProps<{
   message: string
-  type?: 'error' | 'success' | 'warning'
+  type?: 'error' | 'success' | 'warning' | 'info'
   duration?: number
 }>()
 
@@ -29,10 +29,11 @@ const emit = defineEmits<{
   close: []
 }>()
 
-const typeColors = {
+const typeColors: Record<string, string> = {
   error: 'rgba(223, 74, 74, 0.9)',
   success: 'rgba(34, 197, 94, 0.9)',
-  warning: 'rgba(251, 191, 36, 0.9)'
+  warning: 'rgba(251, 191, 36, 0.9)',
+  info: 'rgba(96, 165, 250, 0.9)',
 }
 </script>
 

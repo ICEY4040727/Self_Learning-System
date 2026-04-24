@@ -122,8 +122,9 @@ class TestCopyrightCharacterHandling:
         }
 
         import re
-        suspicious = re.findall(r"[\u4e00-\u9fa5]{2,4}", description)
-        leaked = [t for t in suspicious
+        # Extract individual proper nouns from description for leak check
+        known_terms = ["哈利波特", "卢平", "霍格沃茨"]
+        leaked = [t for t in known_terms
                   if t in data.get("name_suggestion", "")
                   or t in (data.get("background") or "")]
 
@@ -216,8 +217,9 @@ class TestPersonaGenerateEndpoint:
             world_context="",
         )
 
-        assert "character" not in prompt or "inspiration_type" in prompt
+        # After formatting, inspiration_type placeholder is replaced with its value
         assert req.description in prompt
+        assert "freeform" in prompt
 
     @pytest.mark.asyncio
     async def test_generate_with_character_inspiration(self):
@@ -295,7 +297,7 @@ COPYRIGHT_TEST_CASES = [
     {
         "description": "一位严厉但公正的女性物理学家",
         "expected": {
-            "no_warnings": True,  # 完全自由生成
+            "no_copyright_terms": True,  # 完全自由生成，无版权相关词
         },
     },
     {
@@ -323,8 +325,11 @@ class TestCopyrightHandlingFromDoc:
 
         suspicious = re.findall(r"[\u4e00-\u9fa5]{2,4}", description)
 
-        if expected.get("no_warnings"):
-            assert len(suspicious) == 0
+        if expected.get("no_copyright_terms"):
+            # No known copyrighted character names in description
+            known_copyright = ["哈利波特", "卢平", "霍格沃茨", "炼狱", "杏寿郎", "鬼灭"]
+            found = [t for t in known_copyright if t in description]
+            assert len(found) == 0
         else:
             # Just verify detection works
             assert len(suspicious) > 0

@@ -24,7 +24,6 @@ class TestSeedMemories:
         sage = Character(
             id=1,
             user_id=user_id,
-            world_id=world.id,
             name="SageMaster",
             type="sage",
         )
@@ -34,7 +33,6 @@ class TestSeedMemories:
         traveler = Character(
             id=2,
             user_id=user_id,
-            world_id=world.id,
             name="TestStudent",
             type="traveler",
             tags=["Python", "机器学习"],
@@ -80,8 +78,8 @@ class TestSeedMemories:
         world = World(id=1, user_id=user_id, name="TestWorld")
         db_session.add(world)
 
-        sage = Character(id=1, user_id=user_id, world_id=world.id, name="SageMaster", type="sage")
-        traveler = Character(id=2, user_id=user_id, world_id=world.id, name="Student2", type="traveler")
+        sage = Character(id=1, user_id=user_id, name="SageMaster", type="sage")
+        traveler = Character(id=2, user_id=user_id, name="Student2", type="traveler")
         db_session.add(sage)
         db_session.add(traveler)
 
@@ -138,8 +136,8 @@ class TestSeedMemories:
         world = World(id=1, user_id=user_id, name="TestWorld")
         db_session.add(world)
 
-        sage = Character(id=1, user_id=user_id, world_id=world.id, name="Sage", type="sage")
-        traveler = Character(id=2, user_id=user_id, world_id=world.id, name="Student", type="traveler")
+        sage = Character(id=1, user_id=user_id, name="Sage", type="sage")
+        traveler = Character(id=2, user_id=user_id, name="Student", type="traveler")
         db_session.add(sage)
         db_session.add(traveler)
         db_session.commit()

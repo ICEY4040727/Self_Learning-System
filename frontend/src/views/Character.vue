@@ -115,21 +115,13 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import client from '@/api/client'
+import { characterApi } from '@/api/character'
+import { FALLBACK_CHARACTERS, CHARACTER_COLORS } from '@/constants/characterPresets'
 import CharacterCard from '@/components/CharacterCard.vue'
 import StepCreateModal from '@/components/StepCreateModal.vue'
 import EditCharacterModal from '@/components/EditCharacterModal.vue'
 
 const router = useRouter()
-
-const COLORS = [
-  'rgba(245, 158, 11, 0.35)',
-  'rgba(139, 92, 246, 0.35)',
-  'rgba(16, 185, 129, 0.35)',
-  'rgba(220, 38, 38, 0.35)',
-  'rgba(59, 130, 246, 0.35)',
-  'rgba(6, 182, 212, 0.35)',
-]
 
 interface Character {
   id: number
@@ -138,15 +130,15 @@ interface Character {
   description?: string
   avatar?: string
   type: 'sage' | 'traveler'
-  is_builtin: boolean
+  is_builtin?: boolean
   color?: string
   tags?: string[]
   personality?: string
 }
 
-import charBg from '@/assets/char-bg.jpg'
+import { PAGE_BACKGROUNDS } from '@/constants/ui'
 
-const BG_URL = charBg
+const BG_URL = PAGE_BACKGROUNDS.character
 
 const characters = ref<Character[]>([])
 const loading = ref(false)
@@ -159,15 +151,8 @@ const editingCharacter = ref<Character | null>(null)
 const showDeleteConfirm = ref(false)
 const deleteTarget = ref<Character | null>(null)
 
-// Mock data for preview
-const MOCK_CHARACTERS: Character[] = [
-  { id: 1, name: '苏格拉底', title: '哲学之父', type: 'sage', is_builtin: true, color: COLORS[0] },
-  { id: 2, name: '柏拉图', title: '理念论者', type: 'sage', is_builtin: true, color: COLORS[1] },
-  { id: 3, name: '亚里士多德', title: '百科全书', type: 'sage', is_builtin: true, color: COLORS[2] },
-  { id: 4, name: '孙子', title: '兵圣', type: 'sage', is_builtin: true, color: COLORS[3] },
-  { id: 101, name: '旅者', title: '求知者', type: 'traveler', is_builtin: true, color: COLORS[4] },
-  { id: 102, name: '行者', title: '探索者', type: 'traveler', is_builtin: true, color: COLORS[5] },
-]
+// Fallback characters when API is unavailable
+const MOCK_CHARACTERS: Character[] = FALLBACK_CHARACTERS as Character[]
 
 const sages = computed(() => characters.value.filter(c => c.type === 'sage'))
 const travelers = computed(() => characters.value.filter(c => c.type === 'traveler'))
@@ -175,11 +160,10 @@ const travelers = computed(() => characters.value.filter(c => c.type === 'travel
 const fetchCharacters = async () => {
   loading.value = true
   try {
-    const { data } = await client.get('/character')
-    // 修复字段名：后端返回 avatar_url，前端使用 avatar
+    const data = await characterApi.list()
     characters.value = data.map((c: any) => ({
       ...c,
-      avatar: c.avatar || c.avatar_url
+      avatar: c.avatar || c.avatar_url,
     }))
     if (characters.value.length === 0) {
       characters.value = MOCK_CHARACTERS
@@ -206,19 +190,14 @@ const handleEdit = (character: Character) => {
   showEditModal.value = true
 }
 
+const resolveColor = (colorKey: string, fallbackIdx: number) => {
+  const found = CHARACTER_COLORS.find(c => c.key === colorKey)
+  return found?.color || CHARACTER_COLORS[fallbackIdx]?.color || CHARACTER_COLORS[0].color
+}
+
 const handleCreate = async (data: any) => {
   try {
-    // 适配新的数据格式
     const colorKey = data.colorKey || 'gold'
-    const colorMap: Record<string, string> = {
-      gold: COLORS[0],
-      purple: COLORS[1],
-      green: COLORS[2],
-      red: COLORS[3],
-      blue: COLORS[4],
-      cyan: COLORS[5],
-    }
-
     const payload: any = {
       name: data.name,
       type: data.type,
@@ -229,24 +208,22 @@ const handleCreate = async (data: any) => {
       personality: data.personality || '',
     }
 
-    // Sage 特有的字段
     if (data.type === 'sage') {
-      payload.color = colorMap[colorKey] || COLORS[0]
+      payload.color = resolveColor(colorKey, 0)
       payload.traits = data.traits
       payload.speech_styles = data.speechStyles
       payload.template_name = data.template_name
       payload.greeting = data.greeting
     } else {
-      payload.color = colorMap[colorKey] || COLORS[4]
+      payload.color = resolveColor(colorKey, 4)
     }
 
-    const response = await client.post('/character', payload)
+    const newChar = await characterApi.create(payload)
     characters.value.push({
-      ...response.data,
-      avatar: response.data.avatar || response.data.avatar_url
+      ...newChar,
+      avatar: (newChar as any).avatar || (newChar as any).avatar_url,
     })
   } catch {
-    // Mock mode: 添加到本地
     const newChar: Character = {
       id: Date.now(),
       name: data.name,
@@ -255,7 +232,7 @@ const handleCreate = async (data: any) => {
       avatar: data.avatar,
       type: data.type,
       is_builtin: false,
-      color: COLORS[4],
+      color: resolveColor(data.colorKey || 'blue', 4),
       tags: data.tags || [],
       personality: data.personality || '',
     }
@@ -277,45 +254,25 @@ const handleUpdate = async (data: {
 }) => {
   if (!editingCharacter.value) return
   
+  const updatedFields = {
+    name: data.name,
+    title: data.title,
+    description: data.description,
+    avatar: data.avatar,
+    color: CHARACTER_COLORS[data.colorIdx]?.color || CHARACTER_COLORS[0].color,
+    tags: data.tags,
+    personality: data.personality,
+  }
+
   try {
-    await client.put(`/character/${editingCharacter.value.id}`, {
-      name: data.name,
-      title: data.title,
-      description: data.description,
-      avatar: data.avatar,
-      tags: data.tags,
-      personality: data.personality
-    })
-    
-    // 更新本地数据
-    const idx = characters.value.findIndex(c => c.id === editingCharacter.value!.id)
-    if (idx !== -1) {
-      characters.value[idx] = {
-        ...characters.value[idx],
-        name: data.name,
-        title: data.title,
-        description: data.description,
-        avatar: data.avatar,
-        color: COLORS[data.colorIdx],
-        tags: data.tags,
-        personality: data.personality
-      }
-    }
+    await characterApi.update(editingCharacter.value.id, updatedFields)
   } catch {
-    // Mock mode: 更新本地数据
-    const idx = characters.value.findIndex(c => c.id === editingCharacter.value!.id)
-    if (idx !== -1) {
-      characters.value[idx] = {
-        ...characters.value[idx],
-        name: data.name,
-        title: data.title,
-        description: data.description,
-        avatar: data.avatar,
-        color: COLORS[data.colorIdx],
-        tags: data.tags,
-        personality: data.personality
-      }
-    }
+    // Mock mode: continue with local update
+  }
+
+  const idx = characters.value.findIndex(c => c.id === editingCharacter.value!.id)
+  if (idx !== -1) {
+    characters.value[idx] = { ...characters.value[idx], ...updatedFields }
   }
   showEditModal.value = false
   editingCharacter.value = null
@@ -330,9 +287,9 @@ const handleDelete = async () => {
   if (!deleteTarget.value) return
   
   try {
-    await client.delete(`/character/${deleteTarget.value.id}`)
+    await characterApi.delete(deleteTarget.value.id)
   } catch {
-    // Mock mode: 本地删除
+    // Mock mode: continue with local delete
   }
   
   // 从列表中移除

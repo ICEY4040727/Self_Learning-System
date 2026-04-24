@@ -53,7 +53,7 @@ def get_mastery_trends_by_user(db: Session, user_id: int) -> dict[str, Any]:
     declined_count = 0
 
     for world in worlds:
-        # 获取该世界的记忆事实 (P1 #183: 使用 MemoryFact 替代 Knowledge)
+        # 获取该世界的记忆事实 (P1 #183: 已迁移至 MemoryFact)
         memory_facts = db.query(MemoryFact).filter(MemoryFact.world_id == world.id).all()
 
         if not memory_facts:
@@ -108,7 +108,7 @@ def get_world_mastery_trends(db: Session, world_id: int, user_id: int) -> list[d
         {"date": "2026-04-02", "average_mastery": 0.35, "concepts_learned": 8},
     ]
     """
-    # 获取该世界的记忆事实 (P1 #183: 使用 MemoryFact 替代 Knowledge)
+    # 获取该世界的记忆事实 (P1 #183: 已迁移至 MemoryFact)
     memory_facts = db.query(MemoryFact).filter(MemoryFact.world_id == world_id).all()
 
     if not memory_facts:
@@ -305,7 +305,7 @@ def build_world_comparison(db: Session, user_id: int) -> list[dict[str, Any]]:
             .count()
         )
 
-        # 获取记忆事实统计 (P1 #183: 使用 MemoryFact 替代 Knowledge)
+        # 获取记忆事实统计 (P1 #183: 已迁移至 MemoryFact)
         memory_facts = db.query(MemoryFact).filter(MemoryFact.world_id == world.id).all()
         total_concepts = 0
         average_mastery = 0.0

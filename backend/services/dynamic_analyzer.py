@@ -276,10 +276,13 @@ class DynamicAnalyzer:
         if isinstance(confidence, (int, float)):
             metacognition["self_confidence"] = round(float(confidence), 3)
 
-        profile_row.profile = {
+        # Merge write (P5 fix): preserve fields written by other systems
+        existing = profile_row.profile if isinstance(profile_row.profile, dict) else {}
+        existing.update({
             "preferences": preferences,
             "affect": affect,
             "metacognition": metacognition,
-        }
+        })
+        profile_row.profile = existing
         db.flush()
         return profile_row.profile

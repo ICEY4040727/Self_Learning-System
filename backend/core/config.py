@@ -45,6 +45,43 @@ class Settings(BaseSettings):
     # Application version (single source of truth)
     app_version: str = "1.0.0"
 
+    # Learning system tunable parameters
+    learning_system: dict = {
+        "memory": {
+            "dedup_window_hours": 24,
+            "max_working_context_tokens": 4000,
+            "max_working_context_messages": 50,
+            "salience_base_decay": 0.1,
+            "salience_recall_factor": 0.5,
+            "default_retrieve_limit": 10,
+            "observe_recent_limit": 20,
+        },
+        "profile": {
+            "hallucination_guard_min_facts": 3,
+            "strength_threshold": 0.7,
+            "weakness_threshold": 0.4,
+        },
+        "extraction": {
+            "channel2_enabled": True,
+            "confusion_keywords": ["不懂", "没看明白", "什么意思", "不理解", "不明白"],
+            "mastery_keywords": ["明白了", "懂了", "原来如此", "学会了", "理解了"],
+            "emotion_negative_keywords": ["好难", "崩溃", "累了", "头疼", "放弃"],
+            "preference_keywords": {
+                "example_first": ["举个例子", "能举个例子吗", "比如呢"],
+                "step_by_step": ["详细步骤", "一步一步", "能详细讲讲步骤吗"],
+            },
+            "confusion_question_mark_threshold": 0.3,
+        },
+        "salience_type_multiplier": {
+            "concept_struggle": 0.0,
+            "concept_mastered": 0.3,
+            "preference": 0.0,
+            "student_state": 1.5,
+            "event": 0.8,
+            "commitment": 0.5,
+        },
+    }
+
     model_config = SettingsConfigDict(
         env_file=".env",
         extra="ignore",

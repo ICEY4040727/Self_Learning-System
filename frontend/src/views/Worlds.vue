@@ -67,9 +67,11 @@
 import { useToast } from '@/composables/useToast'
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import client from '@/api/client'
+import { worldApi } from '@/api/world'
 
-import homeBg from '@/assets/home-bg.png'
+import { PAGE_BACKGROUNDS } from '@/constants/ui'
+
+const homeBg = PAGE_BACKGROUNDS.worlds
 import { parseApiError } from '@/utils/error'
 import CreateWorldModal from '@/components/CreateWorldModal.vue'
 
@@ -98,16 +100,13 @@ const toast = useToast()
 const fetchWorlds = async () => {
   loading.value = true
   try {
-    const { data } = await client.get('worlds')
-    worlds.value = data.map((world: any) => ({
+    const data = await worldApi.list()
+    worlds.value = (data as any[]).map((world: any) => ({
       ...world,
       sages: world.sages || [],
       courses: world.courses || [],
       stageLabel: world.stageLabel || '初识',
     }))
-    if (worlds.value.length === 0) {
-      worlds.value = []
-    }
   } catch (error) {
     worlds.value = []
     toast.error(parseApiError(error))
@@ -122,11 +121,10 @@ const selectWorld = (world: World) => {
 
 const handleCreateWorld = async (data: { name: string; description: string; scenes: Record<string, any> }) => {
   try {
-    const { data: newWorld } = await client.post('/worlds', {
+    const newWorld = await worldApi.create({
       name: data.name,
       description: data.description,
-      scenes: data.scenes,
-    })
+    }) as any
     worlds.value = [...worlds.value, { ...newWorld, sages: [], courses: [], stageLabel: '初识' }]
     showCreateWorld.value = false
     router.push(`/home/worlds/${newWorld.id}`)

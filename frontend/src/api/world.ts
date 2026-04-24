@@ -43,6 +43,12 @@ export const worldApi = {
     client.get(`/worlds/${id}/courses`).then(res => res.data),
 
   /**
+   * 创建课程
+   */
+  createCourse: (worldId: number, data: Record<string, any>) =>
+    client.post(`/worlds/${worldId}/courses`, data).then(res => res.data),
+
+  /**
    * 获取世界的角色列表
    */
   getCharacters: (id: number) =>

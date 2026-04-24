@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { RelationshipStage } from '@/types'
 import { RELATIONSHIP_STAGE_LABELS } from '@/constants/courseLevels'
-import { STAGE_COLORS } from '@/types'
+import { STAGE_COLORS } from '@/constants/ui'
 import { computed } from 'vue'
 
 const props = defineProps<{

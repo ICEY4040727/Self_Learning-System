@@ -3,19 +3,22 @@
  * Issue #29: 统一 API 调用层
  */
 import client from './client'
-import type { LoginRequest, RegisterRequest } from '@/types'
 
 export const authApi = {
   /**
-   * 用户登录
+   * 用户登录（OAuth2 password flow — requires FormData）
    */
-  login: (data: LoginRequest) =>
-    client.post('/auth/login', data).then(res => res.data),
+  login: (username: string, password: string) => {
+    const formData = new FormData()
+    formData.append('username', username)
+    formData.append('password', password)
+    return client.post('/auth/login', formData).then(res => res.data)
+  },
 
   /**
    * 用户注册
    */
-  register: (data: RegisterRequest) =>
+  register: (data: { username: string; password: string }) =>
     client.post('/auth/register', data).then(res => res.data),
 
   /**

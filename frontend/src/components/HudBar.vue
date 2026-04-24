@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { EMOTION_COLORS } from '@/types'
+import { EMOTION_COLORS } from '@/constants/ui'
 import { RELATIONSHIP_STAGE_LABELS } from '@/constants/courseLevels'
 import type { RelationshipStage } from '@/types'
 

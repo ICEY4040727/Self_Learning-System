@@ -179,14 +179,15 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import client from '@/api/client'
+import { archiveApi } from '@/api/archive'
 import { parseApiError } from '@/utils/error'
 import EmotionTrajectory from '@/components/EmotionTrajectory.vue'
 import ParticleBackground from '@/components/ParticleBackground.vue'
 
 const router = useRouter()
 
-const BG_URL = 'https://images.unsplash.com/photo-1675371708731-50d9c04eb530?w=1920&q=80'
+import { PAGE_BACKGROUNDS } from '@/constants/ui'
+const BG_URL = PAGE_BACKGROUNDS.archive
 
 interface Diary { id: number; course_id: number; date: string; content: string; reflection?: string; emotion?: string }
 interface Progress { id: number; topic: string; mastery_level: number; next_review?: string }
@@ -262,21 +263,19 @@ const getProgressColor = (level: number) => {
 
 const fetchDiaries = async () => {
   try {
-    const { data } = await client.get('learning_diary', )
-    diaries.value = data
+    diaries.value = await archiveApi.getDiaries()
   } catch {}
 }
 
 const fetchProgress = async () => {
   try {
-    const { data } = await client.get('progress', )
-    progressList.value = data
+    progressList.value = await archiveApi.getProgress()
   } catch {}
 }
 
 const fetchSessions = async () => {
   try {
-    const { data } = await client.get('sessions', )
+    const data = await archiveApi.getSessions()
     sessions.value = data
     if (data.length > 0) {
       selectedSessionId.value = data[0].id
@@ -288,21 +287,19 @@ const fetchSessions = async () => {
 const fetchEmotionTrajectory = async () => {
   if (!selectedSessionId.value) return
   try {
-    const { data } = await client.get(`/sessions/${selectedSessionId.value}/emotion_trajectory`)
-    emotionData.value = data
+    emotionData.value = await archiveApi.getEmotionTrajectory(selectedSessionId.value)
   } catch {}
 }
 
 const fetchCourses = async () => {
   try {
-    const { data } = await client.get('courses')
-    courses.value = data
+    courses.value = await archiveApi.getCourses()
   } catch {}
 }
 
 const fetchWorlds = async () => {
   try {
-    const { data } = await client.get('worlds', )
+    const data = await archiveApi.getWorlds()
     worlds.value = data
     if (data.length > 0) selectedWorldId.value = data[0].id
   } catch {}
@@ -311,10 +308,7 @@ const fetchWorlds = async () => {
 const submitDiary = async () => {
   if (!diaryContent.value.trim()) return
   try {
-    await client.post('learning_diary', {
-      content: diaryContent.value.trim(),
-      date: new Date().toISOString(),
-    }, )
+    await archiveApi.createDiary(diaryContent.value.trim())
     diaryContent.value = ''
     diaryOpen.value = false
     await fetchDiaries()

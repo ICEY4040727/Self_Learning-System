@@ -14,11 +14,16 @@ from backend.services.prompt_builder.base import ContextProvider, MemoryModule
 from backend.services.prompt_builder.contexts.relationship import RelationshipContext
 from backend.services.prompt_builder.contexts.scaffold import ScaffoldContext
 from backend.services.prompt_builder.modules.affect import AffectModule
+from backend.services.prompt_builder.modules.course_content import CourseContentModule
 from backend.services.prompt_builder.modules.episode import EpisodeModule
 from backend.services.prompt_builder.modules.memory_facts import MemoryFactsModule
 from backend.services.prompt_builder.modules.metacognition import MetacognitionModule
 from backend.services.prompt_builder.modules.misconception import MisconceptionModule
+from backend.services.prompt_builder.modules.narrative import NarrativeModule
 from backend.services.prompt_builder.modules.preference import PreferenceModule
+from backend.services.prompt_builder.modules.recall_context import RecallContextModule
+from backend.services.prompt_builder.modules.strategy import StrategyModule
+from backend.services.prompt_builder.modules.world_setting import WorldSettingModule
 
 if TYPE_CHECKING:
     from backend.models.models import Character
@@ -34,15 +39,25 @@ class SceneConfig:
     ASSESSMENT = "assessment"
 
     # 场景配置：定义每个场景使用的模块
-    # 优先级顺序：Misconception(30) → Episode(40) → Preference(50) → Affect(60) → MemoryFacts(70) → Metacognition(80)
+    # ─── 固定层（always_include=True）按 priority 排序 ───
+    # WorldSetting(5) → Narrative(10) → Misconception(30) → Preference(50) → Metacognition(80)
+    # ─── 动态层（always_include=False）按 priority 排序 ───
+    # Strategy(25) → Episode(40) → Affect(60) → MemoryFacts(70) → RecallContext(75)
     MODULE_CONFIGS = {
         LEARNING: [
-            MisconceptionModule,
-            EpisodeModule,
-            PreferenceModule,
-            AffectModule,
-            MemoryFactsModule,
-            MetacognitionModule,
+            # 固定层：始终注入
+            WorldSettingModule,   #  5: 世界氛围
+            NarrativeModule,      # 10: 历险叙事
+            CourseContentModule,  # 12: 课程内容与教学计划 (Phase 3 Step 3)
+            MisconceptionModule,  # 30: 误解模式
+            PreferenceModule,     # 50: 学习偏好
+            MetacognitionModule,  # 80: 元认知
+            # 动态层：按条件注入
+            StrategyModule,       # 25: 教学策略（ZPD 调整）
+            EpisodeModule,        # 40: 情景记忆
+            AffectModule,         # 60: 情感状态
+            MemoryFactsModule,    # 70: 记忆事实检索
+            RecallContextModule,  # 75: 前置概念关联
         ],
         REVIEW: [
             MemoryFactsModule,
@@ -103,16 +118,6 @@ class PromptBuilder:
         # 如果传入的是 Character 对象
         if isinstance(character_or_id, Character):
             return character_or_id
-
-        # 如果传入的是 TeacherPersona 对象（兼容旧代码）
-        from backend.models.models import TeacherPersona
-        if isinstance(character_or_id, TeacherPersona):
-            character_id = getattr(character_or_id, 'character_id', None)
-            if character_id:
-                target_db = db or self.db
-                if target_db is not None:
-                    return target_db.query(Character).filter(Character.id == character_id).first()
-            return None
 
         return None
 
@@ -247,10 +252,17 @@ class PromptBuilder:
                 except Exception as e:
                     logger.warning(f"ContextProvider {ctx_class.__name__} failed: {e}")
 
-        # 2. MemoryModules（按 priority 排序）
-        for module_class in SceneConfig.get_modules(scene):
-            module = module_class()
-            if module.should_include(context):
+        # 2. MemoryModules（固定层 + 动态层，按 priority 排序）
+        module_classes = SceneConfig.get_modules(scene)
+        instantiated = [(cls, cls()) for cls in module_classes]
+
+        # 按 priority 排序
+        instantiated.sort(key=lambda pair: pair[1].get_priority())
+
+        for module_class, module in instantiated:
+            # 固定层：always_include=True 时跳过 should_include 检查
+            should = module.always_include or module.should_include(context)
+            if should:
                 try:
                     content = module.assemble(context)
                     if content:

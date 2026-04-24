@@ -67,7 +67,7 @@
             <label class="field-label">或 选 择 模 板</label>
             <div class="template-grid">
               <div
-                v-for="tpl in PERSONA_TEMPLATES"
+                v-for="tpl in SAGE_TEMPLATES"
                 :key="tpl.key"
                 class="template-card"
                 :class="{ selected: form.templateKey === tpl.key }"
@@ -75,7 +75,7 @@
               >
                 <span class="template-icon">{{ tpl.icon }}</span>
                 <span class="template-name">{{ tpl.name }}</span>
-                <span class="template-desc">{{ tpl.description }}</span>
+                <span class="template-desc">{{ tpl.shortDesc }}</span>
               </div>
             </div>
           </div>
@@ -147,20 +147,20 @@
             <div class="sliders">
               <div v-for="slider in TRAIT_SLIDERS" :key="slider.key" class="slider-item">
                 <div class="slider-header">
-                  <span class="slider-name">{{ slider.name }}</span>
-                  <span class="slider-value">{{ form.traits[slider.key] || slider.default }}</span>
+                  <span class="slider-name">{{ slider.label }}</span>
+                  <span class="slider-value">{{ form.traits[slider.key] || slider.defaultValue }}</span>
                 </div>
                 <input
                   type="range"
                   :min="slider.min"
                   :max="slider.max"
-                  :value="form.traits[slider.key] || slider.default"
+                  :value="form.traits[slider.key] || slider.defaultValue"
                   class="trait-slider"
                   @input="form.traits[slider.key] = Number(($event.target as HTMLInputElement).value)"
                 />
                 <div class="slider-labels">
-                  <span>{{ slider.minLabel }}</span>
-                  <span>{{ slider.maxLabel }}</span>
+                  <span>{{ slider.leftLabel }}</span>
+                  <span>{{ slider.rightLabel }}</span>
                 </div>
               </div>
             </div>
@@ -202,14 +202,14 @@
               <div class="traits-label">性格特质</div>
               <div class="traits-grid">
                 <div v-for="slider in TRAIT_SLIDERS" :key="slider.key" class="trait-row">
-                  <span class="trait-name">{{ slider.name }}</span>
+                  <span class="trait-name">{{ slider.label }}</span>
                   <div class="trait-bar">
-                    <div 
-                      class="trait-fill" 
-                      :style="{ width: `${((form.traits[slider.key] || slider.default) / slider.max) * 100}%`, background: form.color }"
+                    <div
+                      class="trait-fill"
+                      :style="{ width: `${((form.traits[slider.key] || slider.defaultValue) / slider.max) * 100}%`, background: form.color }"
                     ></div>
                   </div>
-                  <span class="trait-value">{{ form.traits[slider.key] || slider.default }}</span>
+                  <span class="trait-value">{{ form.traits[slider.key] || slider.defaultValue }}</span>
                 </div>
               </div>
             </div>
@@ -232,13 +232,13 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import {
-  PERSONA_TEMPLATES,
+  SAGE_TEMPLATES,
   TRAIT_SLIDERS,
   AVATAR_OPTIONS,
   COLOR_OPTIONS,
-  getTemplateByKey,
-  buildCharacterPayload,
-} from '@/constants/personaTemplates'
+  getSageTemplate,
+  buildSagePayload,
+} from '@/constants/characterPresets'
 import client from '@/api/client'
 
 interface Props {
@@ -265,12 +265,12 @@ const form = ref({
   title: '',
   avatar: '☉',
   color: '#ffd700',
-  templateKey: 'socrates',
+  templateKey: 'socratic',
   description: '',
-  traits: Object.fromEntries(TRAIT_SLIDERS.map(s => [s.key, s.default])),
+  traits: Object.fromEntries(TRAIT_SLIDERS.map(s => [s.key, s.defaultValue])),
 })
 
-const selectedTemplate = computed(() => getTemplateByKey(form.value.templateKey))
+const selectedTemplate = computed(() => getSageTemplate(form.value.templateKey))
 
 const goToStep2 = () => {
   if (form.value.name.trim()) {
@@ -310,7 +310,7 @@ const handleCreate = async () => {
   
   creating.value = true
   try {
-    const payload = buildCharacterPayload({
+    const payload = buildSagePayload({
       name: form.value.name.trim(),
       title: form.value.title.trim(),
       avatar: form.value.avatar,
@@ -336,9 +336,9 @@ watch(() => props.show, (newVal) => {
       title: '',
       avatar: '☉',
       color: '#ffd700',
-      templateKey: 'socrates',
+      templateKey: 'socratic',
       description: '',
-      traits: Object.fromEntries(TRAIT_SLIDERS.map(s => [s.key, s.default])),
+      traits: Object.fromEntries(TRAIT_SLIDERS.map(s => [s.key, s.defaultValue])),
     }
   }
 })

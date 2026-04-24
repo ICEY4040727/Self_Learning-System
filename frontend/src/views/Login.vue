@@ -119,10 +119,12 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
-import loginBg from '@/assets/login-bg.jpg'
+import { PAGE_BACKGROUNDS } from '@/constants/ui'
 import { useRouter } from 'vue-router'
+
+const loginBg = PAGE_BACKGROUNDS.login
 import { Eye, EyeOff } from 'lucide-vue-next'
-import client from '@/api/client'
+import { authApi } from '@/api/auth'
 import { useAuthStore } from '@/stores/auth'
 import { parseApiError } from '@/utils/error'
 
@@ -152,21 +154,15 @@ const handleSubmit = async () => {
   loading.value = true
   try {
     if (mode.value === 'login') {
-      // OAuth2 password flow — requires FormData
-      const formData = new FormData()
-      formData.append('username', username.value.trim())
-      formData.append('password', password.value)
-      const { data } = await client.post('/auth/login', formData)
+      const data = await authApi.login(username.value.trim(), password.value)
       authStore.token = data.access_token
       authStore.user = data
-      // Persist token
       localStorage.setItem('token', authStore.token!)
       router.push('/home')
     } else {
-      // Register — JSON payload
-      await client.post('/auth/register', {
+      await authApi.register({
         username: username.value.trim(),
-        password: password.value
+        password: password.value,
       })
       error.value = '注册成功，请登录'
       mode.value = 'login'

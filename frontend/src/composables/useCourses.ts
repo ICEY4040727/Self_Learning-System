@@ -7,8 +7,9 @@ import { courseApi } from '@/api/course'
 
 export function useCourses() {
   const course = ref<unknown>(null)
-  const courses = ref<unknown[]>([])
+  const sages = ref<unknown[]>([])
   const sessions = ref<unknown[]>([])
+  const memoryStats = ref<unknown>(null)
   const loading = ref(false)
   const error = ref<string | null>(null)
 
@@ -25,47 +26,53 @@ export function useCourses() {
     }
   }
 
-  async function fetchCourses() {
-    loading.value = true
-    error.value = null
+  async function fetchSages(courseId: number) {
     try {
-      courses.value = await courseApi.get(courseId)
+      sages.value = await courseApi.getSages(courseId)
     } catch (e: unknown) {
-      error.value = e instanceof Error ? e.message : '获取课程列表失败'
-      console.error('fetchCourses error:', e)
-    } finally {
-      loading.value = false
+      error.value = e instanceof Error ? e.message : '获取导师列表失败'
+      console.error('fetchSages error:', e)
+    }
+  }
+
+  async function fetchSessions(courseId: number) {
+    try {
+      sessions.value = await courseApi.getSessions(courseId)
+    } catch (e: unknown) {
+      error.value = e instanceof Error ? e.message : '获取会话列表失败'
+      console.error('fetchSessions error:', e)
+    }
+  }
+
+  async function fetchMemoryFacts(courseId: number, statsOnly = true) {
+    try {
+      memoryStats.value = await courseApi.getMemoryFacts(courseId, statsOnly)
+    } catch (e: unknown) {
+      error.value = e instanceof Error ? e.message : '获取记忆事实失败'
+      console.error('fetchMemoryFacts error:', e)
     }
   }
 
   async function startCourse(courseId: number, sageId: number) {
     try {
-      const result = await courseApi.start(courseId, sageId)
-      return result
+      return await courseApi.start(courseId, sageId)
     } catch (e: unknown) {
       error.value = e instanceof Error ? e.message : '开始课程失败'
       throw e
     }
   }
 
-  async function getMemoryFacts(courseId: number, statsOnly = true) {
-    try {
-      return await courseApi.getMemoryFacts(courseId, statsOnly)
-    } catch (e: unknown) {
-      error.value = e instanceof Error ? e.message : '获取记忆事实失败'
-      throw e
-    }
-  }
-
   return {
     course,
-    courses,
+    sages,
     sessions,
+    memoryStats,
     loading,
     error,
     fetchCourse,
-    fetchCourses,
+    fetchSages,
+    fetchSessions,
+    fetchMemoryFacts,
     startCourse,
-    getMemoryFacts,
   }
 }

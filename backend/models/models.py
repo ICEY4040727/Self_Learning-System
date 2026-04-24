@@ -63,6 +63,7 @@ class User(Base):
     progress_trackings = orm_relationship("ProgressTracking", back_populates="user", cascade="all, delete-orphan")
     sessions = orm_relationship("Session", back_populates="user", cascade="all, delete-orphan")
     checkpoints = orm_relationship("Checkpoint", back_populates="user", cascade="all, delete-orphan")
+    textbooks = orm_relationship("Textbook", back_populates="user", cascade="all, delete-orphan")
     user_profile = orm_relationship("UserProfile", back_populates="user", uselist=False, cascade="all, delete-orphan")
 
 
@@ -219,6 +220,7 @@ class Course(Base):
     learning_diaries = orm_relationship("LearningDiary", back_populates="course", cascade="all, delete-orphan")
     progress_trackings = orm_relationship("ProgressTracking", back_populates="course", cascade="all, delete-orphan")
     sessions = orm_relationship("Session", back_populates="course", cascade="all, delete-orphan")
+    textbooks = orm_relationship("Textbook", back_populates="course", cascade="all, delete-orphan")
 
 
 class LessonPlan(Base):
@@ -356,6 +358,110 @@ class RelationshipStageRecord(Base):
     updated_at = Column(DateTime, default=_utcnow)
 
     session = orm_relationship("Session", back_populates="relationship_stage_records")
+
+
+class StrategyRule(Base):
+    """教学策略规则表 - 根据画像维度值匹配教学指令"""
+    __tablename__ = "strategy_rules"
+
+    id = Column(Integer, primary_key=True, index=True)
+    dimension_key = Column(String(50), nullable=False)  # 关联 profile_dimension_defs.key
+    low_instruction = Column(Text, nullable=True)   # 维度值 < 0.4
+    mid_instruction = Column(Text, nullable=True)   # 0.4-0.7 (null = 不干预)
+    high_instruction = Column(Text, nullable=True)  # > 0.7
+    priority = Column(Integer, default=0)
+    scene = Column(String(20), default="all")  # learning/review/all
+    enabled = Column(Boolean, default=True)
+
+
+class ProfileDimensionDef(Base):
+    """可扩展的画像维度定义表 - 新增维度 = 新增一行数据"""
+    __tablename__ = "profile_dimension_defs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    key = Column(String(50), unique=True, nullable=False)
+    display_name = Column(String(100), nullable=False)
+    category = Column(String(30), nullable=False)  # cognitive/metacognitive/affective
+    source_fact_types = Column(JSON, nullable=True, default=list)
+    aggregation_method = Column(String(20), nullable=False)  # ratio/count/conversion_rate/keyword_extract/emotion_balance
+    aggregation_params = Column(JSON, nullable=True, default=dict)
+    value_range = Column(JSON, nullable=True, default=lambda: {"min": 0.0, "max": 1.0})
+    enabled = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=_utcnow)
+
+
+class NarrativeTriggerRule(Base):
+    """叙事触发规则表 - 可配置的叙事事件触发器"""
+    __tablename__ = "narrative_trigger_rules"
+
+    id = Column(Integer, primary_key=True, index=True)
+    trigger_type = Column(String(50), unique=True, nullable=False)
+    display_name = Column(String(100), nullable=False)
+    condition_type = Column(String(30), nullable=False)  # fact_created/fact_count_threshold/relationship_stage_change/profile_shift/session_event/time_gap
+    condition_params = Column(JSON, nullable=True, default=dict)
+    priority = Column(String(10), default="medium")  # high/medium/low
+    writeback_memory = Column(Boolean, default=False)
+    cooldown_minutes = Column(Integer, default=60)
+    event_template = Column(Text, nullable=True)
+    prompt_template = Column(Text, nullable=True)
+    ui_template = Column(String(20), default="toast")  # toast/modal/badge
+    enabled = Column(Boolean, default=True)
+
+
+class AchievementDef(Base):
+    """成就定义表 - 新增成就 = 新增一行数据"""
+    __tablename__ = "achievement_defs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    key = Column(String(50), unique=True, nullable=False)
+    display_name = Column(String(100), nullable=False)
+    description = Column(Text, nullable=True)
+    category = Column(String(20), nullable=False)  # milestone/growth/relationship/resilience/exploration/hidden
+    condition_type = Column(String(30), nullable=False)  # stat_threshold/dimension_crossing/relationship_stage/fact_transition/fact_count_threshold/consecutive_days
+    condition_params = Column(JSON, nullable=True, default=dict)
+    rarity = Column(String(10), default="common")  # common/rare/legendary
+    icon = Column(String(50), nullable=True)
+    hidden = Column(Boolean, default=False)  # 解锁前是否可见
+    enabled = Column(Boolean, default=True)
+
+
+class Achievement(Base):
+    """成就解锁记录"""
+    __tablename__ = "achievements"
+    __table_args__ = (UniqueConstraint("user_id", "character_id", "achievement_key", name="uq_user_char_achievement"),)
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    character_id = Column(Integer, ForeignKey("characters.id"), nullable=False)
+    achievement_key = Column(String(50), nullable=False)
+    unlocked_at = Column(DateTime, default=_utcnow)
+    context = Column(JSON, nullable=True)  # 解锁上下文（如哪个概念）
+
+
+class Textbook(Base):
+    """教材上传记录
+
+    存储用户上传的教材文件信息，关联到 Course。
+    Phase 3 Step 2: 教材上传 + AI 课程生成
+    """
+    __tablename__ = "textbooks"
+
+    id = Column(Integer, primary_key=True, index=True)
+    course_id = Column(Integer, ForeignKey("courses.id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    filename = Column(String(255), nullable=False)
+    file_path = Column(String(512), nullable=False)
+    file_size = Column(Integer, nullable=True)
+    content_type = Column(String(100), nullable=True)
+    extracted_text = Column(Text, nullable=True, comment="提取的文本内容，用于 AI 处理")
+    page_count = Column(Integer, nullable=True)
+    # 状态: uploaded → extracting → extracted → processing → processed / error
+    status = Column(String(20), default="uploaded")
+    error_message = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=_utcnow)
+
+    course = orm_relationship("Course", back_populates="textbooks")
+    user = orm_relationship("User", back_populates="textbooks")
 
 
 class Checkpoint(Base):

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { Character, Expression } from '@/types'
-import { EXPRESSION_SYMBOLS, EXPRESSION_COLORS } from '@/types'
+import { EXPRESSION_SYMBOLS, EXPRESSION_COLORS } from '@/constants/ui'
 import { computed } from 'vue'
 
 const props = withDefaults(defineProps<{

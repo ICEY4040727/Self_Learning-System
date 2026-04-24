@@ -204,7 +204,10 @@ const router = useRouter()
 const authStore = useAuthStore()
 const settingsStore = useSettingsStore()
 
-const BG_URL = 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=1920&q=80'
+import { PAGE_BACKGROUNDS } from '@/constants/ui'
+import { useToast } from '@/composables/useToast'
+const BG_URL = PAGE_BACKGROUNDS.settings
+const toast = useToast()
 
 const providers: Array<{ value: LLMProvider; label: string }> = [
   { value: 'claude', label: 'Claude' },

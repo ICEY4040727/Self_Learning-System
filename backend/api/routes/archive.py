@@ -1193,10 +1193,12 @@ def get_course_sessions(
     ).order_by(SessionModel.started_at.desc()).all()
 
     # Aggregate message count for each session
+    from sqlalchemy import func as sa_func
+
     session_ids = [s.id for s in sessions]
     message_counts: dict[int, int] = {}
     if session_ids:
-        counts = db.query(ChatMessage.session_id, db.func.count(ChatMessage.id)).filter(
+        counts = db.query(ChatMessage.session_id, sa_func.count(ChatMessage.id)).filter(
             ChatMessage.session_id.in_(session_ids)
         ).group_by(ChatMessage.session_id).all()
         message_counts = dict(counts)

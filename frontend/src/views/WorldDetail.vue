@@ -280,15 +280,17 @@ import { useToast } from '@/composables/useToast'
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Edit3, Trash2 } from 'lucide-vue-next'
-import client from '@/api/client'
-import charBg from '@/assets/char-bg.jpg'
+import { worldApi } from '@/api/world'
+import { characterApi } from '@/api/character'
+import { FALLBACK_CHARACTERS } from '@/constants/characterPresets'
+import { PAGE_BACKGROUNDS } from '@/constants/ui'
 
 import { parseApiError } from '@/utils/error'
 import CreateCourseModal from '@/components/CreateCourseModal.vue'
 import CreatePersonaModal from '@/components/CreatePersonaModal.vue'
 import StepCreateModal from '@/components/StepCreateModal.vue'
 
-const BG_URL = charBg
+const BG_URL = PAGE_BACKGROUNDS.worldDetail
 
 const route = useRoute()
 const router = useRouter()
@@ -338,15 +340,8 @@ const showTravelerSelect = ref(false)
 const showSageSelect = ref(false)
 const showDeleteConfirm = ref(false)
 
-// Mock characters for fallback (matching database IDs for user_id=2)
-const MOCK_CHARACTERS: Character[] = [
-  { id: 10, name: '苏格拉底', title: '哲学之父', type: 'sage', color: 'rgba(245, 158, 11, 0.35)' },
-  { id: 11, name: '柏拉图', title: '理念论者', type: 'sage', color: 'rgba(139, 92, 246, 0.35)' },
-  { id: 12, name: '亚里士多德', title: '百科全书', type: 'sage', color: 'rgba(16, 185, 129, 0.35)' },
-  { id: 13, name: '孙子', title: '兵圣', type: 'sage', color: 'rgba(220, 38, 38, 0.35)' },
-  { id: 110, name: '旅者', title: '求知者', type: 'traveler', color: 'rgba(59, 130, 246, 0.35)' },
-  { id: 111, name: '行者', title: '探索者', type: 'traveler', color: 'rgba(6, 182, 212, 0.35)' },
-]
+// Fallback characters when API is unavailable
+const MOCK_CHARACTERS: Character[] = FALLBACK_CHARACTERS as Character[]
 
 // Edit forms
 const editWorldForm = ref({
@@ -377,13 +372,13 @@ const availableSages = computed(() => {
 // Fetch world data
 const fetchWorld = async () => {
   try {
-    const { data } = await client.get(`/worlds/${worldId.value}`)
-    selectedWorld.value = data
+    const data = await worldApi.get(worldId.value)
+    selectedWorld.value = data as any
     // Initialize edit form
     editWorldForm.value = {
       name: data.name || '',
       description: data.description || '',
-      symbol: data.symbol || ''
+      symbol: (data as any).symbol || ''
     }
   } catch (error) {
     toast.error(parseApiError(error))
@@ -394,8 +389,7 @@ const fetchWorld = async () => {
 const fetchCourses = async () => {
   loading.value = true
   try {
-    const { data } = await client.get(`/worlds/${worldId.value}/courses`)
-    courses.value = data
+    courses.value = await worldApi.getCourses(worldId.value)
   } catch (error) {
     courses.value = []
     toast.error(parseApiError(error))
@@ -407,9 +401,8 @@ const fetchCourses = async () => {
 // Fetch all characters
 const fetchCharacters = async () => {
   try {
-    const { data } = await client.get('/character')
-    // Use MOCK_CHARACTERS as fallback if API returns empty
-    allCharacters.value = (data && data.length > 0) ? data : MOCK_CHARACTERS
+    const data = await characterApi.list()
+    allCharacters.value = (data && data.length > 0) ? data as any : MOCK_CHARACTERS
   } catch (error) {
     allCharacters.value = MOCK_CHARACTERS
     toast.error(parseApiError(error))
@@ -419,12 +412,8 @@ const fetchCharacters = async () => {
 // Create sage persona
 const handleCreatePersona = async (data: Record<string, any>) => {
   try {
-    const { data: newCharacter } = await client.post('/character', data)
-    await client.post(`/worlds/${worldId.value}/characters`, {
-      character_id: newCharacter.id,
-      role: 'sage',
-      is_primary: !selectedWorld.value?.sages?.length,
-    })
+    const newCharacter = await characterApi.create(data as any)
+    await worldApi.addCharacter(worldId.value, newCharacter.id)
     await fetchWorld()
     showCreatePersona.value = false
   } catch (error) {
@@ -447,8 +436,7 @@ const handleEditTraveler = (traveler: Character) => {
 // Select traveler
 const selectTraveler = async (traveler: Character) => {
   try {
-    // Set as primary traveler for this world
-    await client.put(`/worlds/${worldId.value}/characters/${traveler.id}/set-primary`)
+    await worldApi.addCharacter(worldId.value, traveler.id)
     await fetchWorld()
     showTravelerSelect.value = false
   } catch (error) {
@@ -459,11 +447,7 @@ const selectTraveler = async (traveler: Character) => {
 // Select sage (link existing sage to this world)
 const selectSage = async (sage: Character) => {
   try {
-    await client.post(`/worlds/${worldId.value}/characters`, {
-      character_id: sage.id,
-      role: 'sage',
-      is_primary: !selectedWorld.value?.sages?.length,
-    })
+    await worldApi.addCharacter(worldId.value, sage.id)
     await fetchWorld()
     await fetchCharacters()
     showSageSelect.value = false
@@ -475,7 +459,7 @@ const selectSage = async (sage: Character) => {
 // Confirm delete sage
 const confirmDeleteSage = async (sage: Character) => {
   try {
-    await client.delete(`/worlds/${worldId.value}/characters/${sage.id}`)
+    await worldApi.removeCharacter(worldId.value, sage.id)
     await fetchWorld()
   } catch (error) {
     toast.error(parseApiError(error))
@@ -485,11 +469,10 @@ const confirmDeleteSage = async (sage: Character) => {
 // Update world
 const handleUpdateWorld = async () => {
   try {
-    await client.put(`/worlds/${worldId.value}`, {
+    await worldApi.update(worldId.value, {
       name: editWorldForm.value.name,
       description: editWorldForm.value.description,
-      symbol: editWorldForm.value.symbol,
-    })
+    } as any)
     await fetchWorld()
     showEditWorld.value = false
   } catch (error) {
@@ -505,7 +488,7 @@ const confirmDelete = () => {
 // Delete world
 const handleDeleteWorld = async () => {
   try {
-    await client.delete(`/worlds/${worldId.value}`)
+    await worldApi.delete(worldId.value)
     router.push('/home/worlds')
   } catch (error) {
     toast.error(parseApiError(error))
@@ -521,7 +504,7 @@ const handleCreateCourse = async (data: {
   meta: Record<string, any>
 }) => {
   try {
-    const { data: newCourse } = await client.post(`/worlds/${worldId.value}/courses`, {
+    const newCourse = await worldApi.createCourse(worldId.value, {
       name: data.name,
       description: data.description,
       target_level: data.target_level,
@@ -553,15 +536,8 @@ const openStepCreate = (type: 'sage' | 'traveler') => {
 // Handle step create (from StepCreateModal)
 const handleStepCreate = async (data: Record<string, any>) => {
   try {
-    const role = data.type === 'traveler' ? 'traveler' : 'sage'
-    const { data: newCharacter } = await client.post('/character', data)
-    await client.post(`/worlds/${worldId.value}/characters`, {
-      character_id: newCharacter.id,
-      role,
-      is_primary: role === 'traveler' 
-        ? !selectedWorld.value?.travelers?.length 
-        : !selectedWorld.value?.sages?.length,
-    })
+    const newCharacter = await characterApi.create(data as any)
+    await worldApi.addCharacter(worldId.value, newCharacter.id)
     await fetchWorld()
     showStepCreate.value = false
   } catch (error) {

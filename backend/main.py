@@ -75,13 +75,15 @@ async def health_check():
 
 
 # Import and include routers
-from backend.api.routes import archive, auth, learning, report, save  # noqa: E402
+from backend.api.routes import achievements, archive, auth, learning, report, save, textbook  # noqa: E402
 
 app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 app.include_router(archive.router, prefix="/api", tags=["archive"])
 app.include_router(learning.router, prefix="/api", tags=["learning"])
 app.include_router(save.router, prefix="/api", tags=["checkpoints"])
 app.include_router(report.router, prefix="/api/report", tags=["report"])
+app.include_router(achievements.router, prefix="/api", tags=["achievements"])
+app.include_router(textbook.router, prefix="/api", tags=["textbook"])
 
 # Static files
 static_dir = os.path.join(os.path.dirname(__file__), "static")

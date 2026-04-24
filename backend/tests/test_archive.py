@@ -1,9 +1,10 @@
 """Tests for archive CRUD endpoints (character, world, course)."""
 
+import pytest
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import sessionmaker
 
-from backend.models.models import Knowledge
+# Knowledge model was removed; tests that use it are skipped below
 
 
 class TestCharacterCRUD:
@@ -178,6 +179,7 @@ class TestWorldCharacterCRUD:
         assert second.status_code == 409
 
 
+@pytest.mark.skip(reason="Knowledge model removed - knowledge graph not in current schema")
 class TestWorldKnowledgeInitialization:
     def _create_character(self, client, auth_headers, name: str):
         resp = client.post(

@@ -186,9 +186,9 @@ def should_extract_memory(llm_response: str) -> bool:
     Returns:
         True 如果应该提取
     """
-    # 移除 <memory> 标签后检查长度
+    # 移除 <memory> 标签后检查长度，且必须包含 <memory> 标签
     clean_text = strip_memory_tags(llm_response)
-    return len(clean_text.strip()) > 20
+    return len(clean_text.strip()) > 20 and "<memory>" in llm_response
 
 
 class MemoryExtractor:

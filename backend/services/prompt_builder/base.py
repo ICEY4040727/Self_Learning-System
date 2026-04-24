@@ -17,7 +17,12 @@ class MemoryModule(ABC):
     - get_priority(): 返回组装顺序（越小越靠前）
     - should_include(): 判断是否包含此模块
     - assemble(): 组装模块内容
+
+    类属性：
+    - always_include: True 时跳过 should_include 检查，始终注入（固定层）
     """
+
+    always_include: bool = False
 
     @abstractmethod
     def get_section_name(self) -> str:

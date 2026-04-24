@@ -53,9 +53,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import homeBg from '@/assets/home-bg.png'
+import { PAGE_BACKGROUNDS } from '@/constants/ui'
+
+const homeBg = PAGE_BACKGROUNDS.home
 import { useAuthStore } from '@/stores/auth'
 
 const router = useRouter()

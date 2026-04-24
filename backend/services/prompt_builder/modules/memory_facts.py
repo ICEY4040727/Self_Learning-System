@@ -7,7 +7,7 @@
 import logging
 from typing import Any
 
-from backend.services.memory_facts import memory_facts_service
+from backend.services.memory_manager import memory_manager
 from backend.services.prompt_builder.base import MemoryModule
 
 logger = logging.getLogger(__name__)
@@ -38,20 +38,17 @@ class MemoryFactsModule(MemoryModule):
         db = context.get("db")
         character_id = context.get("character_id")
         world_id = context.get("world_id")
-        current_topic = context.get("user_message", "")
 
         if not db or not character_id:
             return None
 
         try:
-            # 检索记忆
-            memories = memory_facts_service.retrieve_memories(
+            # Retrieve memories via MemoryManager (updates recall_count)
+            memories = memory_manager.retrieve(
                 db=db,
                 character_id=character_id,
                 world_id=world_id,
-                query=current_topic if len(current_topic) > 5 else None,
                 limit=8,
-                min_salience=0.4,
             )
 
             if not memories:

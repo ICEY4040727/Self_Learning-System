@@ -2,6 +2,23 @@
 // 建议：新代码优先从 @/constants/ui 导入，types/index.ts 保留 re-export 兼容
 import type { RelationshipStage, Expression } from '@/types'
 
+// ==================== 页面背景图片 ====================
+// 集中管理所有页面背景，Views 统一从此处引用
+import loginBg from '@/assets/login-bg.jpg'
+import homeBg from '@/assets/home-bg.png'
+import charBg from '@/assets/char-bg.jpg'
+
+export const PAGE_BACKGROUNDS = {
+  login: loginBg,
+  home: homeBg,
+  worlds: homeBg,
+  character: charBg,
+  worldDetail: charBg,
+  coursePage: charBg,
+  archive: 'https://images.unsplash.com/photo-1675371708731-50d9c04eb530?w=1920&q=80',
+  settings: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=1920&q=80',
+} as const
+
 // Sprite/Image upload constants
 export const ALLOWED_SPRITE_STEMS = ['default', 'happy', 'thinking', 'concerned'] as const
 export const ALLOWED_SPRITE_MIMES = ['image/png', 'image/jpeg', 'image/webp'] as const
@@ -89,4 +106,19 @@ export const EXPRESSION_COLORS: Record<Expression, string> = {
   thinking:  '#60a5fa',
   concerned: '#f97316',
   surprised: '#a78bfa',
+}
+
+// Milestone type labels & icons
+import type { MilestoneEventType } from '@/types'
+
+export const MILESTONE_TYPE_LABELS: Record<MilestoneEventType, string> = {
+  relationship_upgrade: '关系进阶',
+  concept_mastered: '概念掌握',
+  session_completed: '会话完成',
+}
+
+export const MILESTONE_TYPE_ICONS: Record<MilestoneEventType, string> = {
+  relationship_upgrade: '🎭',
+  concept_mastered: '📚',
+  session_completed: '✅',
 }

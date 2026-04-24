@@ -14,13 +14,22 @@ class WorldSettingModule(MemoryModule):
 
     从 World.scenes 中读取 mood/theme_preset/background 等信息，
     生成世界氛围描述，注入静态层影响 AI 行为。
+    固定层：始终注入，优先级 5（最高）。
     """
+
+    always_include = True
 
     def get_section_name(self) -> str:
         return "【当前世界】"
 
+    def get_priority(self) -> int:
+        return 5
+
     def is_applicable(self, context: dict) -> bool:
         """需要有 world_id 才能获取世界信息"""
+        return context.get("world_id") is not None
+
+    def should_include(self, context: dict) -> bool:
         return context.get("world_id") is not None
 
     def assemble(self, context: dict) -> str:
