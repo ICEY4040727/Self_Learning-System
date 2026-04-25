@@ -66,6 +66,50 @@
         />
       </div>
 
+      <!-- Textbooks (Phase 2C) -->
+      <div class="section-group">
+        <div class="section-header">
+          <span class="section-label">教 材</span>
+          <span class="section-sublabel">TEXTBOOKS</span>
+        </div>
+        <div class="section-line"></div>
+        <div class="textbook-area">
+          <!-- Upload zone -->
+          <div class="textbook-upload" @dragover.prevent @drop.prevent="handleDrop">
+            <input
+              ref="fileInput"
+              type="file"
+              accept=".pdf,.txt,.md,.epub"
+              style="display:none"
+              @change="handleFileSelect"
+            />
+            <button class="upload-btn" @click="(fileInput as any)?.click()" :disabled="uploading">
+              {{ uploading ? `上传中 ${uploadProgress}%` : '📎 上传教材' }}
+            </button>
+            <span class="upload-hint">支持 PDF / TXT / MD / EPUB</span>
+          </div>
+          <!-- Textbook list -->
+          <div v-if="textbooks.length > 0" class="textbook-list">
+            <div v-for="tb in textbooks" :key="tb.id" class="textbook-item">
+              <span class="tb-icon">📄</span>
+              <span class="tb-name">{{ tb.filename }}</span>
+              <span class="tb-size">{{ formatSize(tb.file_size) }}</span>
+              <button class="tb-delete" @click="handleDeleteTextbook(tb.id)">✕</button>
+            </div>
+          </div>
+          <div v-else class="empty-state">暂未上传教材</div>
+          <!-- Generate course button -->
+          <button
+            v-if="textbooks.length > 0 && !hasGeneratedContent"
+            class="generate-btn"
+            :disabled="generating"
+            @click="handleGenerateCourse"
+          >
+            {{ generating ? '生成中…' : '✨ 基于教材生成课程' }}
+          </button>
+        </div>
+      </div>
+
       <!-- Sages -->
       <div class="section-group">
         <div class="section-header">
@@ -180,6 +224,14 @@ const sessions = ref<any[]>([])
 const memoryStats = ref<any>(null)
 const showSageSelect = ref(false)
 const selectedSageForStart = ref<any>(null)
+
+// Textbook state (Phase 2C)
+const textbooks = ref<any[]>([])
+const uploading = ref(false)
+const uploadProgress = ref(0)
+const generating = ref(false)
+const hasGeneratedContent = ref(false)
+const fileInput = ref<HTMLInputElement | null>(null)
 
 // Computed
 const worldId = computed(() => Number(route.params.worldId))
@@ -320,9 +372,82 @@ const formatSessionTime = (session: any) => {
   return date.toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric' })
 }
 
+// ── Textbook handlers (Phase 2C) ──────────────────────────────
+const fetchTextbooks = async () => {
+  try {
+    textbooks.value = await courseApi.listTextbooks(courseId.value)
+    // Check if course already has generated content
+    if (course.value?.meta?.lessons && course.value.meta.lessons.length > 0) {
+      hasGeneratedContent.value = true
+    }
+  } catch { /* ignore */ }
+}
+
+const handleFileSelect = async (e: Event) => {
+  const file = (e.target as HTMLInputElement).files?.[0]
+  if (!file) return
+  await doUpload(file)
+}
+
+const handleDrop = async (e: DragEvent) => {
+  const file = e.dataTransfer?.files?.[0]
+  if (!file) return
+  await doUpload(file)
+}
+
+const doUpload = async (file: File) => {
+  uploading.value = true
+  uploadProgress.value = 0
+  try {
+    await courseApi.uploadTextbook(courseId.value, file, (pct) => {
+      uploadProgress.value = pct
+    })
+    toast.success('教材上传成功')
+    await fetchTextbooks()
+  } catch (error: any) {
+    toast.error(error?.response?.data?.detail || '上传失败')
+  } finally {
+    uploading.value = false
+    uploadProgress.value = 0
+  }
+}
+
+const handleDeleteTextbook = async (id: number) => {
+  try {
+    await courseApi.deleteTextbook(courseId.value, id)
+    textbooks.value = textbooks.value.filter((t: any) => t.id !== id)
+    toast.success('已删除')
+  } catch {
+    toast.error('删除失败')
+  }
+}
+
+const handleGenerateCourse = async () => {
+  generating.value = true
+  try {
+    const result = await courseApi.generateCourse(courseId.value)
+    hasGeneratedContent.value = true
+    toast.success(`课程已生成：${result.lessons?.length || 0} 个课时`)
+    // Refresh course data to show new lessons
+    await fetchData()
+  } catch (error: any) {
+    toast.error(error?.response?.data?.detail || '生成失败')
+  } finally {
+    generating.value = false
+  }
+}
+
+const formatSize = (bytes: number) => {
+  if (!bytes) return ''
+  if (bytes < 1024) return `${bytes}B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)}KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)}MB`
+}
+
 // Lifecycle
 onMounted(() => {
   fetchData()
+  fetchTextbooks()
 })
 </script>
 
@@ -706,4 +831,86 @@ onMounted(() => {
   border-color: rgba(255, 215, 0, 0.4);
   color: #ffd700;
 }
+
+/* Textbook area (Phase 2C) */
+.textbook-area {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.textbook-upload {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0;
+}
+
+.upload-btn {
+  padding: 8px 18px;
+  background: rgba(96, 165, 250, 0.12);
+  border: 1px solid rgba(96, 165, 250, 0.3);
+  border-radius: 8px;
+  color: #93c5fd;
+  font-family: "Noto Sans SC", sans-serif;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.upload-btn:hover:not(:disabled) {
+  background: rgba(96, 165, 250, 0.2);
+  border-color: rgba(96, 165, 250, 0.5);
+}
+.upload-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.upload-hint {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.35);
+}
+
+.textbook-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.textbook-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 215, 0, 0.08);
+  border-radius: 8px;
+  font-size: 13px;
+}
+.tb-icon { font-size: 16px; flex-shrink: 0; }
+.tb-name { flex: 1; color: rgba(255, 255, 255, 0.7); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tb-size { font-size: 11px; color: rgba(255, 255, 255, 0.3); }
+.tb-delete {
+  background: none; border: none; color: rgba(239, 68, 68, 0.5);
+  cursor: pointer; font-size: 14px; padding: 2px 6px;
+  border-radius: 4px; transition: all 0.2s ease;
+}
+.tb-delete:hover { color: #ef4444; background: rgba(239, 68, 68, 0.1); }
+
+.generate-btn {
+  margin-top: 8px;
+  padding: 12px 24px;
+  background: linear-gradient(135deg, rgba(168, 85, 247, 0.2), rgba(96, 165, 250, 0.2));
+  border: 1px solid rgba(168, 85, 247, 0.4);
+  border-radius: 10px;
+  color: #c4b5fd;
+  font-family: "Noto Sans SC", sans-serif;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.generate-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, rgba(168, 85, 247, 0.3), rgba(96, 165, 250, 0.3));
+  border-color: rgba(168, 85, 247, 0.6);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(168, 85, 247, 0.2);
+}
+.generate-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 </style>

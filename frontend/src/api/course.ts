@@ -34,4 +34,56 @@ export const courseApi = {
    */
   start: (courseId: number, sageId: number) =>
     client.post(`/courses/${courseId}/start`, { sage_id: sageId }).then(res => res.data),
+
+  // ── Textbook / Course Generation (Phase 2C) ──────────────────
+
+  /**
+   * 上传教材到课程
+   */
+  uploadTextbook: (courseId: number, file: File, onProgress?: (pct: number) => void) => {
+    const form = new FormData()
+    form.append('file', file)
+    return client.post(`/courses/${courseId}/textbooks`, form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      onUploadProgress: (e) => {
+        if (onProgress && e.total) onProgress(Math.round((e.loaded / e.total) * 100))
+      },
+    }).then(res => res.data)
+  },
+
+  /**
+   * 列出课程的教材
+   */
+  listTextbooks: (courseId: number) =>
+    client.get(`/courses/${courseId}/textbooks`).then(res => res.data),
+
+  /**
+   * 删除教材
+   */
+  deleteTextbook: (courseId: number, textbookId: number) =>
+    client.delete(`/courses/${courseId}/textbooks/${textbookId}`).then(res => res.data),
+
+  /**
+   * 基于教材生成课程结构
+   */
+  generateCourse: (courseId: number) =>
+    client.post(`/courses/${courseId}/generate`).then(res => res.data),
+
+  /**
+   * 获取课程进度（课程列表）
+   */
+  getProgress: (courseId: number) =>
+    client.get(`/courses/${courseId}/progress`).then(res => res.data),
+
+  /**
+   * 推进到下一课
+   */
+  advanceLesson: (courseId: number) =>
+    client.post(`/courses/${courseId}/advance`).then(res => res.data),
+
+  /**
+   * 获取课程精通度
+   */
+  getMastery: (courseId: number) =>
+    client.get(`/courses/${courseId}/mastery`).then(res => res.data),
 }
