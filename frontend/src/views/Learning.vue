@@ -149,6 +149,7 @@
       :facts="memoryFacts"
       :stats="memoryStats"
       :loading="memoryLoading"
+      :profile-data="learnerProfile"
       @close="memoryDrawerOpen = false"
     />
 
@@ -187,6 +188,7 @@ import KnowledgeGraphModal from '@/components/KnowledgeGraphModal.vue'
 import RelationshipStageOverlay from '@/components/RelationshipStageOverlay.vue'
 import MemoryFactsDrawer from '@/components/course/MemoryFactsDrawer.vue'
 import { memoryApi } from '@/api/memory'
+import { courseApi } from '@/api/course'
 import type { Checkpoint } from '@/types'
 
 const router = useRouter()
@@ -213,6 +215,7 @@ const memoryDrawerOpen = ref(false)
 const memoryFacts = ref<any[]>([])
 const memoryStats = ref({ total: 0, by_type: {} as Record<string, number> })
 const memoryLoading = ref(false)
+const learnerProfile = ref<any>(null)
 
 // v1.0 #192 fetch memory facts
 async function fetchMemoryFacts() {
@@ -238,6 +241,15 @@ function onMemoryFresh() {
 // v1.0 #191 open memory drawer
 async function openMemoryDrawer() {
   await fetchMemoryFacts()
+  // Also fetch learner profile if not yet loaded
+  if (!learnerProfile.value && store.worldId) {
+    try {
+      const profile = await courseApi.getLearnerProfile(store.worldId)
+      if (profile?.dimension_scores && Object.keys(profile.dimension_scores).length > 0) {
+        learnerProfile.value = profile
+      }
+    } catch { /* profile not yet available */ }
+  }
   memoryDrawerOpen.value = true
 }
 

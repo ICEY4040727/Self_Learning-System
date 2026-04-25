@@ -31,8 +31,22 @@
           </div>
         </div>
 
-        <!-- Filter Tabs -->
-        <div class="filter-tabs">
+        <!-- View Tabs: Memory / Profile -->
+        <div class="view-switch">
+          <button
+            class="view-tab"
+            :class="{ active: viewMode === 'memory' }"
+            @click="viewMode = 'memory'"
+          >记忆</button>
+          <button
+            class="view-tab"
+            :class="{ active: viewMode === 'profile' }"
+            @click="viewMode = 'profile'"
+          >画像</button>
+        </div>
+
+        <!-- Filter Tabs (only in memory view) -->
+        <div v-if="viewMode === 'memory'" class="filter-tabs">
           <button
             v-for="tab in tabs"
             :key="tab.value"
@@ -45,8 +59,19 @@
           </button>
         </div>
 
-        <!-- Facts List -->
-        <div class="facts-container">
+        <!-- Profile View -->
+        <div v-if="viewMode === 'profile'" class="facts-container">
+          <LearnerProfilePanel
+            :dimension-scores="profileData?.dimension_scores || {}"
+            :strengths="profileData?.strengths || []"
+            :weaknesses="profileData?.weaknesses || []"
+            :learning-stats="profileData?.learning_stats"
+            :last-updated="profileData?.last_updated"
+          />
+        </div>
+
+        <!-- Facts List (memory view) -->
+        <div v-else class="facts-container">
           <div v-if="loading" class="loading-state">
             <span class="loading-spinner"></span>
             加载中...
@@ -94,6 +119,7 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
+import LearnerProfilePanel from './LearnerProfilePanel.vue'
 
 interface MemoryFact {
   id: number
@@ -120,6 +146,13 @@ const props = defineProps<{
   facts: MemoryFact[]
   stats: Stats
   loading?: boolean
+  profileData?: {
+    dimension_scores?: Record<string, number>
+    strengths?: string[]
+    weaknesses?: string[]
+    learning_stats?: { total_sessions?: number; concepts_mastered?: number; concepts_struggling?: number }
+    last_updated?: string
+  }
 }>()
 
 defineEmits<{
@@ -127,6 +160,7 @@ defineEmits<{
 }>()
 
 const activeFilter = ref('all')
+const viewMode = ref<'memory' | 'profile'>('memory')
 
 const tabs = [
   { value: 'all', label: '全部' },
@@ -257,6 +291,33 @@ const formatDate = (dateStr: string) => {
 .stat-label {
   font-size: 10px;
   color: rgba(255, 255, 255, 0.5);
+}
+
+/* View Switch */
+.view-switch {
+  display: flex;
+  gap: 0;
+  padding: 8px 24px 0;
+}
+
+.view-tab {
+  flex: 1;
+  padding: 8px 0;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.view-tab:first-child { border-radius: 8px 0 0 8px; }
+.view-tab:last-child { border-radius: 0 8px 8px 0; }
+
+.view-tab.active {
+  background: rgba(167, 139, 250, 0.2);
+  border-color: rgba(167, 139, 250, 0.4);
+  color: #a78bfa;
 }
 
 /* Filter Tabs */
