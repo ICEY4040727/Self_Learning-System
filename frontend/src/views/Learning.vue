@@ -151,6 +151,25 @@
       :loading="memoryLoading"
       @close="memoryDrawerOpen = false"
     />
+
+    <!-- Phase 3: Narrative Event Toast -->
+    <Transition name="narrative-fade">
+      <div v-if="activeNarrative" class="narrative-toast">
+        <div class="narrative-icon">📖</div>
+        <div class="narrative-text">{{ activeNarrative.description }}</div>
+      </div>
+    </Transition>
+
+    <!-- Phase 3: Achievement Toast -->
+    <Transition name="achievement-fade">
+      <div v-if="activeAchievement" class="achievement-toast">
+        <div class="achievement-icon">{{ activeAchievement.icon || '🏆' }}</div>
+        <div class="achievement-info">
+          <div class="achievement-name">{{ activeAchievement.name }}</div>
+          <div class="achievement-desc">{{ activeAchievement.description }}</div>
+        </div>
+      </div>
+    </Transition>
   </div>
 </template>
 
@@ -334,6 +353,28 @@ function handleSceneClick() {
   if (anyPanelOpen.value) return
   hideUI.value = !hideUI.value
 }
+
+// ── Phase 3: Narrative & Achievement toasts ────────────────────
+const activeNarrative = ref<{ event_type: string; description: string; scene?: string } | null>(null)
+const activeAchievement = ref<{ id: string; name: string; description: string; icon?: string } | null>(null)
+
+// Watch for new narrative events — show as toast, auto-dismiss
+watch(() => store.narrativeEvents.length, (newLen, oldLen) => {
+  if (newLen > oldLen) {
+    const evt = store.narrativeEvents[newLen - 1]
+    activeNarrative.value = evt
+    setTimeout(() => { activeNarrative.value = null }, 4000)
+  }
+})
+
+// Watch for new achievements — show as toast, auto-dismiss
+watch(() => store.newAchievements.length, (newLen, oldLen) => {
+  if (newLen > oldLen) {
+    const ach = store.newAchievements[newLen - 1]
+    activeAchievement.value = ach
+    setTimeout(() => { activeAchievement.value = null }, 5000)
+  }
+})
 </script>
 
 <style scoped>
@@ -423,4 +464,63 @@ function handleSceneClick() {
 .pointer-events-none {
   pointer-events: none;
 }
+
+/* Phase 3: Narrative & Achievement toasts */
+.narrative-toast {
+  position: absolute;
+  top: 60px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 20px;
+  background: rgba(99, 102, 241, 0.18);
+  border: 1px solid rgba(99, 102, 241, 0.4);
+  border-radius: 8px;
+  font-family: var(--font-ui);
+  color: #c7d2fe;
+  font-size: 14px;
+  z-index: 200;
+  backdrop-filter: blur(8px);
+  max-width: 420px;
+}
+.narrative-icon { font-size: 20px; flex-shrink: 0; }
+.narrative-text { line-height: 1.4; }
+
+.achievement-toast {
+  position: absolute;
+  top: 110px;
+  right: 24px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 18px;
+  background: rgba(234, 179, 8, 0.15);
+  border: 1px solid rgba(234, 179, 8, 0.45);
+  border-radius: 10px;
+  font-family: var(--font-ui);
+  color: #fde68a;
+  z-index: 200;
+  backdrop-filter: blur(8px);
+  animation: achievement-pop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.achievement-icon { font-size: 24px; flex-shrink: 0; }
+.achievement-name { font-size: 14px; font-weight: 600; }
+.achievement-desc { font-size: 12px; color: rgba(253, 230, 138, 0.8); margin-top: 2px; }
+
+@keyframes achievement-pop {
+  from { transform: scale(0.7) translateX(20px); opacity: 0; }
+  to   { transform: scale(1) translateX(0); opacity: 1; }
+}
+
+.narrative-fade-enter-from { opacity: 0; transform: translateX(-50%) translateY(-10px); }
+.narrative-fade-enter-active { transition: opacity 0.4s ease, transform 0.4s ease; }
+.narrative-fade-leave-to { opacity: 0; }
+.narrative-fade-leave-active { transition: opacity 0.3s ease; }
+
+.achievement-fade-enter-from { opacity: 0; }
+.achievement-fade-enter-active { transition: opacity 0.4s ease; }
+.achievement-fade-leave-to { opacity: 0; }
+.achievement-fade-leave-active { transition: opacity 0.3s ease; }
 </style>
