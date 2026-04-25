@@ -86,4 +86,10 @@ export const courseApi = {
    */
   getMastery: (courseId: number) =>
     client.get(`/courses/${courseId}/mastery`).then(res => res.data),
+
+  /**
+   * 获取学习者画像 (dimension_scores, strengths, weaknesses, learning_stats)
+   */
+  getLearnerProfile: (worldId: number) =>
+    client.get(`/worlds/${worldId}/learner_profile`).then(res => res.data),
 }

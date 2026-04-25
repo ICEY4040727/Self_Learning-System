@@ -175,6 +175,17 @@
           </div>
         </div>
       </div>
+
+      <!-- Learner Profile -->
+      <div v-if="learnerProfile" class="section-group">
+        <LearnerProfilePanel
+          :dimension-scores="learnerProfile.dimension_scores || {}"
+          :strengths="learnerProfile.strengths || []"
+          :weaknesses="learnerProfile.weaknesses || []"
+          :learning-stats="learnerProfile.learning_stats"
+          :last-updated="learnerProfile.last_updated"
+        />
+      </div>
     </template>
     </div>
 
@@ -205,6 +216,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { courseApi } from '@/api/course'
 import ProgressBar from '@/components/course/ProgressBar.vue'
 import SageRelationCard from '@/components/course/SageRelationCard.vue'
+import LearnerProfilePanel from '@/components/course/LearnerProfilePanel.vue'
 import { DOMAIN_ICONS } from '@/constants/courseLevels'
 import { getLevelIndex } from '@/constants/courseLevels'
 import { PAGE_BACKGROUNDS } from '@/constants/ui'
@@ -224,6 +236,7 @@ const sessions = ref<any[]>([])
 const memoryStats = ref<any>(null)
 const showSageSelect = ref(false)
 const selectedSageForStart = ref<any>(null)
+const learnerProfile = ref<any>(null)
 
 // Textbook state (Phase 2C)
 const textbooks = ref<any[]>([])
@@ -445,9 +458,15 @@ const formatSize = (bytes: number) => {
 }
 
 // Lifecycle
-onMounted(() => {
-  fetchData()
-  fetchTextbooks()
+onMounted(async () => {
+  await Promise.all([fetchData(), fetchTextbooks()])
+  // Fetch learner profile after main data loads
+  try {
+    const profile = await courseApi.getLearnerProfile(worldId.value)
+    if (profile?.dimension_scores && Object.keys(profile.dimension_scores).length > 0) {
+      learnerProfile.value = profile
+    }
+  } catch { /* profile not yet available */ }
 })
 </script>
 
