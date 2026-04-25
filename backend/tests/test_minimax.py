@@ -43,19 +43,19 @@ async def test_minimax():
             system_prompt="你是一个友好的AI助手。",
             max_tokens=100
         )
-        print("✓ 请求成功!")
+        print("[v] 请求成功!")
         print(f"响应: {response}")
         return True
 
     except Exception as e:
-        print(f"✗ 错误: {type(e).__name__}: {e}")
+        print(f"[x] 错误: {type(e).__name__}: {e}")
         return False
 
 
 async def main():
     success = await test_minimax()
     print("\n" + "="*60)
-    print(f"结果: {'✓ 通过' if success else '✗ 失败'}")
+    print(f"结果: {'[v] 通过' if success else '[x] 失败'}")
     print("="*60)
 
 

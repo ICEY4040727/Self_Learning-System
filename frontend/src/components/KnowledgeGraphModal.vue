@@ -34,7 +34,7 @@ function nodeColor(n: KnowledgeNode) {
 }
 
 function nodeLabel(n: KnowledgeNode) {
-  if (n.type === 'misconception') return '⚠ 误解'
+  if (n.type === 'misconception') return '[!] 误解'
   if (n.mastery >= 0.65) return '已掌握'
   if (n.mastery >= 0.40) return '学习中'
   if (n.mastery >= 0.20) return '初识'
@@ -69,11 +69,11 @@ function getEdgePoints(edge: { source: string; target: string }) {
             style="padding:14px 20px;border-bottom:1px solid rgba(255,215,0,0.15);"
           >
             <div>
-              <span style="color:#ffd700;font-size:15px;letter-spacing:2px;">📊 知识网络</span>
+              <span style="color:#ffd700;font-size:15px;letter-spacing:2px;"> 知识网络</span>
               <span style="color:rgba(255,255,255,0.4);font-size:12px;margin-left:10px;">— {{ worldName }}</span>
             </div>
             <button style="color:rgba(255,255,255,0.5);cursor:pointer;" @click="emit('close')">
-              ✕
+              
             </button>
           </div>
 

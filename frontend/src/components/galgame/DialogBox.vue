@@ -12,7 +12,7 @@
         <span v-if="isTyping" class="cursor">▊</span>
       </div>
       <div v-if="!isTyping && displayContent" class="next-indicator">
-        {{ hasMoreSegments ? '▼ 下一段' : '▶ 点击继续' }}
+        {{ hasMoreSegments ? '▼ 下一段' : '> 点击继续' }}
       </div>
     </div>
 

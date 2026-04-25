@@ -33,7 +33,7 @@
       </div>
     </div>
     <div v-else class="empty-state">
-      <div class="empty-icon">📝</div>
+      <div class="empty-icon"></div>
       <div class="empty-text">暂无会话记录</div>
       <div class="empty-hint">开始学习后，这里将显示你的会话历史</div>
     </div>

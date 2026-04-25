@@ -55,9 +55,9 @@ const spriteUrl = computed(() => {
 // Expression visual feedback on placeholder (when no sprites)
 const EXPRESSION_LABELS: Record<string, string> = {
   default: '',
-  happy: '😊',
-  thinking: '🤔',
-  concerned: '😟',
+  happy: '',
+  thinking: '',
+  concerned: '',
 }
 
 const expressionLabel = computed(() => EXPRESSION_LABELS[currentExpression.value] || '')

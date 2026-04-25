@@ -28,11 +28,11 @@ async def test_claude_adapter():
 
     try:
         adapter = get_llm_adapter("claude")
-        print(f"✓ Adapter 创建成功: provider={adapter.provider}, model={adapter.model}")
+        print(f"[v] Adapter 创建成功: provider={adapter.provider}, model={adapter.model}")
 
         # 获取模型信息
         model_info = adapter.get_model_info()
-        print(f"✓ 模型信息: {model_info.name}, max_tokens={model_info.max_tokens}")
+        print(f"[v] 模型信息: {model_info.name}, max_tokens={model_info.max_tokens}")
 
         # 发送测试请求
         response = await adapter.chat(
@@ -40,15 +40,15 @@ async def test_claude_adapter():
             system_prompt="你是一个友好的AI助手。",
             max_tokens=100
         )
-        print("✓ 请求成功!")
+        print("[v] 请求成功!")
         print(f"  响应: {response[:200]}...")
         return True
 
     except LLMError as e:
-        print(f"✗ LLM 错误: [{e.provider}] {e.code.value}: {e.message}")
+        print(f"[x] LLM 错误: [{e.provider}] {e.code.value}: {e.message}")
         return False
     except Exception as e:
-        print(f"✗ 错误: {type(e).__name__}: {e}")
+        print(f"[x] 错误: {type(e).__name__}: {e}")
         return False
 
 
@@ -60,25 +60,25 @@ async def test_openai_adapter():
 
     try:
         adapter = get_llm_adapter("openai")
-        print(f"✓ Adapter 创建成功: provider={adapter.provider}, model={adapter.model}")
+        print(f"[v] Adapter 创建成功: provider={adapter.provider}, model={adapter.model}")
 
         model_info = adapter.get_model_info()
-        print(f"✓ 模型信息: {model_info.name}, max_tokens={model_info.max_tokens}")
+        print(f"[v] 模型信息: {model_info.name}, max_tokens={model_info.max_tokens}")
 
         response = await adapter.chat(
             messages=[{"role": "user", "content": "你好，请用一句话介绍自己"}],
             system_prompt="你是一个友好的AI助手。",
             max_tokens=100
         )
-        print("✓ 请求成功!")
+        print("[v] 请求成功!")
         print(f"  响应: {response[:200]}...")
         return True
 
     except LLMError as e:
-        print(f"✗ LLM 错误: [{e.provider}] {e.code.value}: {e.message}")
+        print(f"[x] LLM 错误: [{e.provider}] {e.code.value}: {e.message}")
         return False
     except Exception as e:
-        print(f"✗ 错误: {type(e).__name__}: {e}")
+        print(f"[x] 错误: {type(e).__name__}: {e}")
         return False
 
 
@@ -90,25 +90,25 @@ async def test_local_adapter():
 
     try:
         adapter = get_llm_adapter("local")
-        print(f"✓ Adapter 创建成功: provider={adapter.provider}, model={adapter.model}")
+        print(f"[v] Adapter 创建成功: provider={adapter.provider}, model={adapter.model}")
 
         model_info = adapter.get_model_info()
-        print(f"✓ 模型信息: {model_info.name}")
+        print(f"[v] 模型信息: {model_info.name}")
 
         response = await adapter.chat(
             messages=[{"role": "user", "content": "你好"}],
             system_prompt="你是一个友好的AI助手。",
             max_tokens=50
         )
-        print("✓ 请求成功!")
+        print("[v] 请求成功!")
         print(f"  响应: {response[:200]}...")
         return True
 
     except LLMError as e:
-        print(f"✗ LLM 错误: [{e.provider}] {e.code.value}: {e.message}")
+        print(f"[x] LLM 错误: [{e.provider}] {e.code.value}: {e.message}")
         return False
     except Exception as e:
-        print(f"✗ 错误: {type(e).__name__}: {e}")
+        print(f"[x] 错误: {type(e).__name__}: {e}")
         print("  (这可能是正常的，如果 Ollama 没有运行)")
         return False
 
@@ -121,7 +121,7 @@ async def test_streaming():
 
     try:
         adapter = get_llm_adapter("claude")
-        print(f"✓ 使用 {adapter.provider} 进行流式测试")
+        print(f"[v] 使用 {adapter.provider} 进行流式测试")
 
         full_response = ""
         chunk_count = 0
@@ -135,15 +135,15 @@ async def test_streaming():
             chunk_count += 1
             print(f"  Chunk {chunk_count}: {chunk[:20]}...")
 
-        print(f"✓ 流式完成! 共 {chunk_count} 个块")
+        print(f"[v] 流式完成! 共 {chunk_count} 个块")
         print(f"  完整响应: {full_response[:100]}...")
         return True
 
     except LLMError as e:
-        print(f"✗ LLM 错误: [{e.provider}] {e.code.value}: {e.message}")
+        print(f"[x] LLM 错误: [{e.provider}] {e.code.value}: {e.message}")
         return False
     except Exception as e:
-        print(f"✗ 错误: {type(e).__name__}: {e}")
+        print(f"[x] 错误: {type(e).__name__}: {e}")
         return False
 
 
@@ -155,7 +155,7 @@ def test_providers_and_models():
 
     # 测试 Provider 列表
     providers = list_providers()
-    print(f"✓ 支持的 Provider ({len(providers)} 个):")
+    print(f"[v] 支持的 Provider ({len(providers)} 个):")
     for p in providers[:5]:
         print(f"  - {p['value']}: {p['label']} ({p['api_format']})")
     if len(providers) > 5:
@@ -164,11 +164,11 @@ def test_providers_and_models():
     # 测试获取特定 Provider
     deepseek = get_provider_info("deepseek")
     if deepseek:
-        print(f"✓ DeepSeek 信息: {deepseek}")
+        print(f"[v] DeepSeek 信息: {deepseek}")
 
     # 测试 Model 信息
     model = get_model_info("claude-3-5-sonnet-20241022")
-    print("✓ Claude 3.5 Sonnet 信息:")
+    print("[v] Claude 3.5 Sonnet 信息:")
     print(f"  - 名称: {model.name}")
     print(f"  - max_tokens: {model.max_tokens}")
     print(f"  - context_window: {model.context_window}")
@@ -207,7 +207,7 @@ async def main():
     print("="*60)
 
     for name, passed in results.items():
-        status = "✓ 通过" if passed else "✗ 失败"
+        status = "[v] 通过" if passed else "[x] 失败"
         print(f"  {name}: {status}")
 
     total = len(results)

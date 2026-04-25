@@ -7,7 +7,7 @@
           class="step-dot"
           :class="{ active: currentStep === step, completed: currentStep > step }"
         >
-          <span v-if="currentStep > step">✓</span>
+          <span v-if="currentStep > step">[v]</span>
           <span v-else>{{ step }}</span>
         </div>
         <span class="step-name">{{ stepNames[step - 1] }}</span>
@@ -68,11 +68,11 @@
           :disabled="!aiPrompt.trim() || generating"
           @click="callPersonaGenerate"
         >
-          {{ generating ? '生成中…' : '✨ 让 AI 生成' }}
+          {{ generating ? '生成中…' : '* 让 AI 生成' }}
         </button>
         <div v-if="aiGenerated && aiResult" class="ai-result">
           <div class="result-header">
-            <span>✨ AI 生成结果</span>
+            <span>* AI 生成结果</span>
             <button class="btn-retry" @click="callPersonaGenerate">重新生成</button>
           </div>
           <div class="result-content">
@@ -127,7 +127,7 @@
             :style="{ background: c.color }"
             @click="form.colorKey = c.key"
           >
-            <span v-if="form.colorKey === c.key">✓</span>
+            <span v-if="form.colorKey === c.key">[v]</span>
           </button>
         </div>
       </div>
@@ -213,7 +213,7 @@
 
       <div class="preview-card">
         <div class="preview-avatar" :style="{ background: selectedColor?.color }">
-          {{ getTemplate()?.icon || '📖' }}
+          {{ getTemplate()?.icon || '' }}
         </div>
         <div class="preview-info">
           <div class="preview-name">{{ form.name || '未命名知者' }}</div>
@@ -284,9 +284,9 @@ const generating = ref(false)
 const submitting = ref(false)
 
 const inspirationOptions = [
-  { type: 'template' as const, icon: '🎲', title: '从模板开始', desc: '选择一个预设人格，快速上手' },
-  { type: 'ai' as const, icon: '🎬', title: 'AI 智能生成', desc: '描述你的想法，AI 帮你设计' },
-  { type: 'custom' as const, icon: '✍️', title: '完全自定义', desc: '从零开始塑造角色' },
+  { type: 'template' as const, icon: '', title: '从模板开始', desc: '选择一个预设人格，快速上手' },
+  { type: 'ai' as const, icon: '', title: 'AI 智能生成', desc: '描述你的想法，AI 帮你设计' },
+  { type: 'custom' as const, icon: '', title: '完全自定义', desc: '从零开始塑造角色' },
 ]
 
 const form = reactive({

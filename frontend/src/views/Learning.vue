@@ -155,7 +155,7 @@
     <!-- Phase 3: Narrative Event Toast -->
     <Transition name="narrative-fade">
       <div v-if="activeNarrative" class="narrative-toast">
-        <div class="narrative-icon">📖</div>
+        <div class="narrative-icon"></div>
         <div class="narrative-text">{{ activeNarrative.description }}</div>
       </div>
     </Transition>
@@ -163,7 +163,7 @@
     <!-- Phase 3: Achievement Toast -->
     <Transition name="achievement-fade">
       <div v-if="activeAchievement" class="achievement-toast">
-        <div class="achievement-icon">{{ activeAchievement.icon || '🏆' }}</div>
+        <div class="achievement-icon">{{ activeAchievement.icon || '' }}</div>
         <div class="achievement-info">
           <div class="achievement-name">{{ activeAchievement.name }}</div>
           <div class="achievement-desc">{{ activeAchievement.description }}</div>

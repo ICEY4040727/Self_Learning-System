@@ -1,6 +1,6 @@
 <template>
   <div v-if="motivation" class="motivation-banner">
-    <div class="motivation-icon">💡</div>
+    <div class="motivation-icon"></div>
     <div class="motivation-content">
       <div class="motivation-label">我学这门课是为了：{{ motivationLabel }}</div>
       <div v-if="motivationDetail" class="motivation-detail">"{{ motivationDetail }}"</div>

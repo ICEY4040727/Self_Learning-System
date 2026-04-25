@@ -29,7 +29,7 @@
         <div class="panel full-width">
           <div class="panel-header">
             <div class="header-left">
-              <span class="icon">📈</span>
+              <span class="icon"></span>
               <span class="panel-title">情感轨迹</span>
             </div>
             <span class="header-sub font-ui">{{ selectedWorldName }} · {{ selectedCourseName }}</span>
@@ -106,7 +106,7 @@
         <div class="panel full-width">
           <div class="panel-header">
             <div class="header-left">
-              <span class="icon">📚</span>
+              <span class="icon"></span>
               <span class="panel-title">学习进度</span>
             </div>
             <span class="header-sub font-ui">{{ selectedCourseName }}</span>
@@ -135,11 +135,11 @@
         <div class="panel full-width">
           <div class="panel-header">
             <div class="header-left">
-              <span class="icon">✏️</span>
+              <span class="icon"></span>
               <span class="panel-title">学习日记</span>
             </div>
             <button class="galgame-hud-btn diary-btn" @click="diaryOpen = !diaryOpen">
-              <span>✏️</span> 写日记
+              <span></span> 写日记
             </button>
           </div>
 
@@ -163,7 +163,7 @@
           <div v-else class="diary-list">
             <div v-for="entry in diaries" :key="entry.id" class="diary-entry">
               <div class="entry-header font-ui">
-                <span class="entry-icon">📅</span>
+                <span class="entry-icon"></span>
                 <span class="entry-date">{{ formatDate(entry.date) }}</span>
                 <span class="entry-emotion">{{ entry.emotion }}</span>
               </div>

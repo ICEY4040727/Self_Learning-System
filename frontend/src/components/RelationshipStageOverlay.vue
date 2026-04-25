@@ -50,7 +50,7 @@ const stageLabel = computed(() => RELATIONSHIP_STAGE_LABELS[props.newStage] || p
           <!-- Star row -->
           <div class="flex gap-3">
             <span
-              v-for="(s, i) in ['✦','✧','✦','✧','✦']"
+              v-for="(s, i) in ['','','','','']"
               :key="i"
               :style="{
                 color: colors.primary, fontSize: '14px', opacity: 0.7,

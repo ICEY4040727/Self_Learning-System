@@ -2,7 +2,7 @@
   <Transition name="backlog-slide">
     <div v-if="visible" class="backlog-overlay" @click="$emit('close')">
       <div class="backlog-panel galgame-panel" @click.stop>
-        <h3 class="backlog-title">📖 回忆录</h3>
+        <h3 class="backlog-title"> 回忆录</h3>
         <div class="backlog-list galgame-scrollbar" ref="listRef">
           <div
             v-for="msg in messages"

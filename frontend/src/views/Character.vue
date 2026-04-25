@@ -96,7 +96,7 @@
     <Transition name="modal-fade">
       <div v-if="showDeleteConfirm" class="modal-overlay" @click.self="showDeleteConfirm = false">
         <div class="confirm-dialog">
-          <div class="confirm-icon">⚠</div>
+          <div class="confirm-icon">[!]</div>
           <div class="confirm-title">确认删除</div>
           <div class="confirm-message">
             确定要删除角色 <span class="confirm-name">{{ deleteTarget?.name }}</span> 吗？<br />

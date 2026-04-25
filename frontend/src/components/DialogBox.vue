@@ -2,7 +2,7 @@
 /**
  * DialogBox.vue
  * ─────────────────────────────────────────────────────────────
- * ⚠️ backdrop-filter 规则：
+ * [!] backdrop-filter 规则：
  *   父层（.galgame-dialog）永远保持 opacity:1。
  *   Transition 只驱动 translateY，绝不对此组件的父层使用 opacity。
  *   进入/离开动画由调用方的 <Transition name="dialog-slide"> 控制。
@@ -129,7 +129,7 @@ function choiceDelay(i: number) {
 }
 
 const canSend = computed(() => inputValue.value.trim().length > 0)
-const isHint  = (c: string) => c.startsWith('💡')
+const isHint  = (c: string) => c.startsWith('')
 </script>
 
 <template>

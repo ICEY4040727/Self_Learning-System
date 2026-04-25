@@ -118,7 +118,7 @@ export const MILESTONE_TYPE_LABELS: Record<MilestoneEventType, string> = {
 }
 
 export const MILESTONE_TYPE_ICONS: Record<MilestoneEventType, string> = {
-  relationship_upgrade: '🎭',
-  concept_mastered: '📚',
-  session_completed: '✅',
+  relationship_upgrade: '',
+  concept_mastered: '',
+  session_completed: '',
 }

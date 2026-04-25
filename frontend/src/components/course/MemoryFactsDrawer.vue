@@ -3,29 +3,29 @@
     <div v-if="show" class="memory-drawer-overlay" @click.self="$emit('close')">
       <div class="memory-drawer">
         <div class="drawer-header">
-          <h3 class="drawer-title">📋 学习档案</h3>
-          <button class="close-btn" @click="$emit('close')">✕</button>
+          <h3 class="drawer-title"> 学习档案</h3>
+          <button class="close-btn" @click="$emit('close')"></button>
         </div>
 
         <!-- Stats Summary -->
         <div class="stats-summary">
           <div class="stat-card">
-            <span class="stat-icon">🧠</span>
+            <span class="stat-icon"></span>
             <span class="stat-value">{{ stats.total || 0 }}</span>
             <span class="stat-label">记忆总数</span>
           </div>
           <div class="stat-card">
-            <span class="stat-icon">✅</span>
+            <span class="stat-icon"></span>
             <span class="stat-value">{{ stats.concept_mastered || 0 }}</span>
             <span class="stat-label">已掌握</span>
           </div>
           <div class="stat-card">
-            <span class="stat-icon">⚠️</span>
+            <span class="stat-icon">[!]</span>
             <span class="stat-value">{{ stats.concept_struggle || 0 }}</span>
             <span class="stat-label">薄弱点</span>
           </div>
           <div class="stat-card">
-            <span class="stat-icon">💡</span>
+            <span class="stat-icon"></span>
             <span class="stat-value">{{ stats.preference || 0 }}</span>
             <span class="stat-label">偏好</span>
           </div>
@@ -52,7 +52,7 @@
             加载中...
           </div>
           <div v-else-if="filteredFacts.length === 0" class="empty-state">
-            <div class="empty-icon">📭</div>
+            <div class="empty-icon"></div>
             <div class="empty-text">暂无相关记忆</div>
           </div>
           <div v-else class="facts-list">

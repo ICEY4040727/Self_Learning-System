@@ -16,7 +16,7 @@
           :transition="{ delay: 200, duration: 800 }"
         >
           <h1 class="title-text-hover title-text">知遇</h1>
-          <div class="font-ui subtitle-text">✦ &nbsp; ZHĪ YÙ · 愿求知者皆得其道 &nbsp; ✦</div>
+          <div class="font-ui subtitle-text"> &nbsp; ZHĪ YÙ · 愿求知者皆得其道 &nbsp; </div>
           <div class="gold-divider"></div>
         </div>
 

@@ -81,7 +81,7 @@ ACHIEVEMENT_SEEDS = [
         "condition_type": "stat_threshold",
         "condition_params": '{"stat": "total_sessions", "threshold": 1}',
         "rarity": "common",
-        "icon": "🌱",
+        "icon": "",
     },
     {
         "key": "regular_visitor",
@@ -91,7 +91,7 @@ ACHIEVEMENT_SEEDS = [
         "condition_type": "stat_threshold",
         "condition_params": '{"stat": "total_sessions", "threshold": 10}',
         "rarity": "common",
-        "icon": "📚",
+        "icon": "",
     },
     {
         "key": "knowledge_seeker",
@@ -101,7 +101,7 @@ ACHIEVEMENT_SEEDS = [
         "condition_type": "stat_threshold",
         "condition_params": '{"stat": "concepts_mastered", "threshold": 5}',
         "rarity": "common",
-        "icon": "🎯",
+        "icon": "",
     },
     {
         "key": "abstract_awakening",
@@ -111,7 +111,7 @@ ACHIEVEMENT_SEEDS = [
         "condition_type": "dimension_crossing",
         "condition_params": '{"dimension": "abstract_thinking", "threshold": 0.5}',
         "rarity": "rare",
-        "icon": "🧠",
+        "icon": "",
     },
     {
         "key": "learn_from_setback",
@@ -121,7 +121,7 @@ ACHIEVEMENT_SEEDS = [
         "condition_type": "fact_transition",
         "condition_params": '{"from": "concept_struggle", "to": "concept_mastered"}',
         "rarity": "rare",
-        "icon": "💪",
+        "icon": "",
     },
     {
         "key": "kindred_spirit",
@@ -131,7 +131,7 @@ ACHIEVEMENT_SEEDS = [
         "condition_type": "relationship_stage",
         "condition_params": '{"stage": "friend"}',
         "rarity": "rare",
-        "icon": "🤝",
+        "icon": "",
     },
     {
         "key": "night_owl",
@@ -141,7 +141,7 @@ ACHIEVEMENT_SEEDS = [
         "condition_type": "stat_threshold",
         "condition_params": '{"stat": "late_night_session", "threshold": 1}',
         "rarity": "rare",
-        "icon": "🦉",
+        "icon": "",
         "hidden": True,
     },
 ]

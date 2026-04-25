@@ -85,11 +85,11 @@ class CourseContentModule(MemoryModule):
             prerequisites = lesson.get("prerequisites", [])
 
             if i == current_idx:
-                marker = "▶ **[当前章节]**"
+                marker = "> **[当前章节]**"
             elif i < current_idx:
-                marker = "✓ [已完成]"
+                marker = "[v] [已完成]"
             else:
-                marker = "○ [待学习]"
+                marker = "[ ] [待学习]"
 
             line = f"{marker} **第{i+1}课: {title}**"
             if desc:

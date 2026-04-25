@@ -2,7 +2,7 @@
   <div class="dialog-overlay">
     <div class="confirm-dialog">
       <div class="dialog-header">
-        <span class="tool-icon">🔧</span>
+        <span class="tool-icon"></span>
         <h3>工具调用请求</h3>
       </div>
 

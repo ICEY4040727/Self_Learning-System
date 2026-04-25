@@ -16,56 +16,56 @@ export const COURSE_DOMAINS: CourseDomain[] = [
   {
     key: 'math',
     name: '数学',
-    icon: '📐',
+    icon: '',
     color: '#3b82f6',
     description: '代数/几何/微积分',
   },
   {
     key: 'language',
     name: '语言',
-    icon: '🗣️',
+    icon: '',
     color: '#8b5cf6',
     description: '英语/日语/古文',
   },
   {
     key: 'programming',
     name: '编程',
-    icon: '💻',
+    icon: '',
     color: '#10b981',
     description: 'Python/JavaScript/算法',
   },
   {
     key: 'art',
     name: '艺术',
-    icon: '🎨',
+    icon: '',
     color: '#ec4899',
     description: '绘画/音乐/设计',
   },
   {
     key: 'history',
     name: '历史',
-    icon: '📜',
+    icon: '',
     color: '#f59e0b',
     description: '中外历史/文化',
   },
   {
     key: 'science',
     name: '科学',
-    icon: '🔬',
+    icon: '',
     color: '#06b6d4',
     description: '物理/化学/生物',
   },
   {
     key: 'philosophy',
     name: '哲学',
-    icon: '🤔',
+    icon: '',
     color: '#6366f1',
     description: '思想/伦理/逻辑',
   },
   {
     key: 'custom',
     name: '自定义',
-    icon: '✨',
+    icon: '*',
     color: '#6b7280',
     description: '自由设定',
   },
@@ -100,11 +100,11 @@ export interface MotivationOption {
 }
 
 export const MOTIVATIONS: MotivationOption[] = [
-  { key: 'interest', label: '出于兴趣', icon: '💡' },
-  { key: 'exam', label: '考试所需', icon: '📝' },
-  { key: 'work', label: '工作所需', icon: '💼' },
-  { key: 'problem', label: '解决问题', icon: '🎯' },
-  { key: 'companion', label: '陪伴学习', icon: '👨‍👩‍👧' },
+  { key: 'interest', label: '出于兴趣', icon: '' },
+  { key: 'exam', label: '考试所需', icon: '' },
+  { key: 'work', label: '工作所需', icon: '' },
+  { key: 'problem', label: '解决问题', icon: '' },
+  { key: 'companion', label: '陪伴学习', icon: '' },
 ]
 
 // ==================== 学习节奏 ====================

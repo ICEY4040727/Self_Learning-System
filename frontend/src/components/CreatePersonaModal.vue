@@ -16,7 +16,7 @@
               class="step-dot"
               :class="{ active: currentStep === step, completed: currentStep > step }"
             >
-              <span v-if="currentStep > step">✓</span>
+              <span v-if="currentStep > step">[v]</span>
               <span v-else>{{ step }}</span>
             </div>
           </div>
@@ -31,7 +31,7 @@
         <form v-if="currentStep === 1" class="modal-body step-content" @submit.prevent="goToStep2">
           <!-- AI Generate Section -->
           <div class="field-group">
-            <label class="field-label">💫 AI 一键生成（可选）</label>
+            <label class="field-label"> AI 一键生成（可选）</label>
             <div class="ai-generate-section">
               <textarea
                 v-model="aiDescription"
@@ -47,7 +47,7 @@
                 @click="handleAIGenerate"
               >
                 <span v-if="generating">生成中…</span>
-                <span v-else>✨ 智能生成</span>
+                <span v-else>* 智能生成</span>
               </button>
             </div>
             <div v-if="generatedSuggestion" class="ai-suggestion">
@@ -263,7 +263,7 @@ const generatedSuggestion = ref<{ name_suggestion: string; title_suggestion?: st
 const form = ref({
   name: '',
   title: '',
-  avatar: '☉',
+  avatar: '',
   color: '#ffd700',
   templateKey: 'socratic',
   description: '',
@@ -334,7 +334,7 @@ watch(() => props.show, (newVal) => {
     form.value = {
       name: '',
       title: '',
-      avatar: '☉',
+      avatar: '',
       color: '#ffd700',
       templateKey: 'socratic',
       description: '',

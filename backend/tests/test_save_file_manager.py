@@ -85,8 +85,8 @@ class TestSaveFileManager:
         assert user_dir.name == "99"
 
     def test_unicode_content(self, tmp_save_dir: Path):
-        data = {"content": "你好世界 🌍", "emoji": "🎮"}
+        data = {"content": "你好世界 ", "emoji": ""}
         rel_path = SaveFileManager.write_save_file(user_id=1, checkpoint_id=10, data=data)
         read_data = SaveFileManager.read_save_file(rel_path)
-        assert read_data["content"] == "你好世界 🌍"
-        assert read_data["emoji"] == "🎮"
+        assert read_data["content"] == "你好世界 "
+        assert read_data["emoji"] == ""

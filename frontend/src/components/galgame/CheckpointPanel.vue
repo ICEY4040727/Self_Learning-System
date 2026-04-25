@@ -3,7 +3,7 @@
     <div class="checkpoint-panel galgame-panel">
       <div class="header">
         <h3>Checkpoint</h3>
-        <button class="close-btn" @click="$emit('close')">✕</button>
+        <button class="close-btn" @click="$emit('close')"></button>
       </div>
 
       <div class="tabs">

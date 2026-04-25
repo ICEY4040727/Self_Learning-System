@@ -22,7 +22,7 @@ export const WORLD_THEMES: WorldTheme[] = [
     description: '知识殿堂，智者云集',
     background: '/themes/academy.jpg',
     themeColor: '#f59e0b',
-    icon: '🎓',
+    icon: '',
   },
   {
     key: 'library',
@@ -31,7 +31,7 @@ export const WORLD_THEMES: WorldTheme[] = [
     description: '卷帙浩繁，静谧求知',
     background: '/themes/library.jpg',
     themeColor: '#8b5cf6',
-    icon: '📚',
+    icon: '',
   },
   {
     key: 'lab',
@@ -40,7 +40,7 @@ export const WORLD_THEMES: WorldTheme[] = [
     description: '探索未知，验证真理',
     background: '/themes/lab.jpg',
     themeColor: '#10b981',
-    icon: '🔬',
+    icon: '',
   },
   {
     key: 'mountain',
@@ -49,7 +49,7 @@ export const WORLD_THEMES: WorldTheme[] = [
     description: '隐世修行，问道自然',
     background: '/themes/mountain.jpg',
     themeColor: '#06b6d4',
-    icon: '⛰️',
+    icon: '',
   },
   {
     key: 'cyber',
@@ -58,7 +58,7 @@ export const WORLD_THEMES: WorldTheme[] = [
     description: '数字世界，代码织梦',
     background: '/themes/cyber.jpg',
     themeColor: '#ec4899',
-    icon: '💻',
+    icon: '',
   },
   {
     key: 'blank',
@@ -67,7 +67,7 @@ export const WORLD_THEMES: WorldTheme[] = [
     description: '白纸一张，由你书写',
     background: '',
     themeColor: '#6b7280',
-    icon: '✨',
+    icon: '*',
   },
 ]
 
@@ -79,14 +79,14 @@ export interface MoodTag {
 }
 
 export const MOOD_TAGS: MoodTag[] = [
-  { key: 'warm', label: '温暖', icon: '☀️' },
-  { key: 'cold', label: '冷峻', icon: '❄️' },
-  { key: 'mysterious', label: '神秘', icon: '🌙' },
-  { key: 'healing', label: '治愈', icon: '🌿' },
-  { key: 'serious', label: '严肃', icon: '📐' },
-  { key: 'humorous', label: '幽默', icon: '😄' },
-  { key: 'fantasy', label: '童话', icon: '🏰' },
-  { key: 'cyberpunk', label: '赛博', icon: '🤖' },
+  { key: 'warm', label: '温暖', icon: '' },
+  { key: 'cold', label: '冷峻', icon: '' },
+  { key: 'mysterious', label: '神秘', icon: '' },
+  { key: 'healing', label: '治愈', icon: '' },
+  { key: 'serious', label: '严肃', icon: '' },
+  { key: 'humorous', label: '幽默', icon: '' },
+  { key: 'fantasy', label: '童话', icon: '' },
+  { key: 'cyberpunk', label: '赛博', icon: '' },
 ]
 
 // ==================== BGM 预设 ====================
@@ -98,10 +98,10 @@ export interface BgmPreset {
 }
 
 export const BGM_PRESETS: BgmPreset[] = [
-  { key: 'whitenoise', label: '自习室白噪', icon: '📖', description: '专注沉浸' },
-  { key: 'rainy_piano', label: '雨夜钢琴', icon: '🌧️', description: '思绪流淌' },
-  { key: 'morning_guitar', label: '晨光木吉他', icon: '🌅', description: '清新启程' },
-  { key: 'silent', label: '静音', icon: '🤫', description: '安静思考' },
+  { key: 'whitenoise', label: '自习室白噪', icon: '', description: '专注沉浸' },
+  { key: 'rainy_piano', label: '雨夜钢琴', icon: '', description: '思绪流淌' },
+  { key: 'morning_guitar', label: '晨光木吉他', icon: '', description: '清新启程' },
+  { key: 'silent', label: '静音', icon: '', description: '安静思考' },
 ]
 
 // ==================== 辅助函数 ====================

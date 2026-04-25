@@ -63,12 +63,12 @@ const SCENE_GRADIENTS: Record<string, string> = {
             style="padding:16px 22px;border-bottom:1px solid rgba(255,215,0,0.15);"
           >
             <span style="color:#ffd700;font-size:15px;letter-spacing:3px;">
-              {{ mode === 'save' ? '📁  存  档' : '📂  读  档' }}
+              {{ mode === 'save' ? '  存  档' : '  读  档' }}
             </span>
             <button
               style="color:rgba(255,255,255,0.5);cursor:pointer;"
               @click="emit('close')"
-            >✕</button>
+            ></button>
           </div>
 
           <!-- Slot grid -->

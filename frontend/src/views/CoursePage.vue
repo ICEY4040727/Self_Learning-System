@@ -46,7 +46,7 @@
             </div>
           </div>
           <button class="start-btn" @click="handleStartLearning">
-            开始学习 ▶
+            开始学习 >
           </button>
         </div>
       </div>
@@ -84,17 +84,17 @@
               @change="handleFileSelect"
             />
             <button class="upload-btn" @click="(fileInput as any)?.click()" :disabled="uploading">
-              {{ uploading ? `上传中 ${uploadProgress}%` : '📎 上传教材' }}
+              {{ uploading ? `上传中 ${uploadProgress}%` : '[+] 上传教材' }}
             </button>
             <span class="upload-hint">支持 PDF / TXT / MD / EPUB</span>
           </div>
           <!-- Textbook list -->
           <div v-if="textbooks.length > 0" class="textbook-list">
             <div v-for="tb in textbooks" :key="tb.id" class="textbook-item">
-              <span class="tb-icon">📄</span>
+              <span class="tb-icon"></span>
               <span class="tb-name">{{ tb.filename }}</span>
               <span class="tb-size">{{ formatSize(tb.file_size) }}</span>
-              <button class="tb-delete" @click="handleDeleteTextbook(tb.id)">✕</button>
+              <button class="tb-delete" @click="handleDeleteTextbook(tb.id)"></button>
             </div>
           </div>
           <div v-else class="empty-state">暂未上传教材</div>
@@ -105,7 +105,7 @@
             :disabled="generating"
             @click="handleGenerateCourse"
           >
-            {{ generating ? '生成中…' : '✨ 基于教材生成课程' }}
+            {{ generating ? '生成中…' : '* 基于教材生成课程' }}
           </button>
         </div>
       </div>
@@ -189,7 +189,7 @@
             class="sage-select-item"
             @click="confirmSageSelect(sage)"
           >
-            <div class="sage-avatar-sm">{{ sage.symbol || '☉' }}</div>
+            <div class="sage-avatar-sm">{{ sage.symbol || '' }}</div>
             <div class="sage-name-sm">{{ sage.name }}</div>
           </div>
         </div>
@@ -239,7 +239,7 @@ const courseId = computed(() => Number(route.params.courseId))
 
 const domainIcon = computed(() => {
   const domain = course.value?.meta?.domain
-  return domain ? DOMAIN_ICONS[domain] || '📚' : '📚'
+  return domain ? DOMAIN_ICONS[domain] || '' : ''
 })
 
 const domainLabel = computed(() => {

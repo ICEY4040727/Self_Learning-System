@@ -21,7 +21,7 @@
         <!-- API Settings -->
         <div class="panel">
           <div class="section-header">
-            <span class="section-icon">🔑</span>
+            <span class="section-icon"></span>
             <div>
               <div class="section-title font-ui">API 设置</div>
               <div class="section-hint font-ui">使用哪个模型驱动对话</div>
@@ -59,7 +59,7 @@
                 class="toggle-vis-btn"
                 @click="showApiKey = !showApiKey"
               >
-                {{ showApiKey ? '🙈' : '👁' }}
+                {{ showApiKey ? '' : '' }}
               </button>
             </div>
             <p class="field-hint font-ui">密钥将安全存储于后端，不会明文传输</p>
@@ -78,7 +78,7 @@
               {{ saving ? '保存中…' : '保存设置' }}
             </button>
             <Transition name="saved-fade">
-              <span v-if="saved" class="saved-indicator font-ui">✓ 已保存</span>
+              <span v-if="saved" class="saved-indicator font-ui">[v] 已保存</span>
             </Transition>
           </div>
         </div>
@@ -86,7 +86,7 @@
         <!-- LLM Settings -->
         <div class="panel">
           <div class="section-header">
-            <span class="section-icon">⚙️</span>
+            <span class="section-icon"></span>
             <div>
               <div class="section-title font-ui">LLM 参数</div>
               <div class="section-hint font-ui">调整对话生成行为</div>
@@ -131,7 +131,7 @@
         <!-- Learning Settings -->
         <div class="panel">
           <div class="section-header">
-            <span class="section-icon">📖</span>
+            <span class="section-icon"></span>
             <div>
               <div class="section-title font-ui">学习设置</div>
               <div class="section-hint font-ui">个性化学习体验</div>
@@ -171,7 +171,7 @@
         <!-- Danger Zone -->
         <div class="panel danger-zone">
           <div class="section-header">
-            <span class="section-icon danger-icon">⚠️</span>
+            <span class="section-icon danger-icon">[!]</span>
             <div>
               <div class="section-title danger-title font-ui">危险区域</div>
               <div class="section-hint font-ui">以下操作不可逆</div>

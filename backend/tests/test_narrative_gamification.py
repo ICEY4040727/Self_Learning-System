@@ -90,28 +90,28 @@ def _seed_achievement_defs(db: Session):
             key="first_step", display_name="初入世界", description="完成第一次学习",
             category="milestone", condition_type="stat_threshold",
             condition_params={"stat": "total_sessions", "threshold": 1},
-            rarity="common", icon="🌱", enabled=True,
+            rarity="common", icon="", enabled=True,
         ),
         AchievementDef(
             key="abstract_awakening", display_name="抽象思维觉醒",
             description="抽象思维维度跨越0.5",
             category="growth", condition_type="dimension_crossing",
             condition_params={"dimension": "abstract_thinking", "threshold": 0.5},
-            rarity="rare", icon="🧠", enabled=True,
+            rarity="rare", icon="", enabled=True,
         ),
         AchievementDef(
             key="kindred_spirit", display_name="心意相通",
             description="与导师关系达到「朋友」",
             category="relationship", condition_type="relationship_stage",
             condition_params={"stage": "friend"},
-            rarity="rare", icon="🤝", enabled=True,
+            rarity="rare", icon="", enabled=True,
         ),
         AchievementDef(
             key="night_owl", display_name="夜猫子",
             description="在23点后学习",
             category="hidden", condition_type="stat_threshold",
             condition_params={"stat": "late_night_session", "threshold": 1},
-            rarity="rare", icon="🦉", hidden=True, enabled=True,
+            rarity="rare", icon="", hidden=True, enabled=True,
         ),
     ]
     for d in defs:

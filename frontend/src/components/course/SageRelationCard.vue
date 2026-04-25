@@ -2,7 +2,7 @@
   <div class="sage-card" @click="$emit('select', sage)">
     <div class="sage-avatar">
       <img v-if="sage.avatar" :src="sage.avatar" :alt="sage.name" />
-      <span v-else class="sage-icon">{{ sage.symbol || '☉' }}</span>
+      <span v-else class="sage-icon">{{ sage.symbol || '' }}</span>
     </div>
     <div class="sage-info">
       <div class="sage-name">{{ sage.name }}</div>
@@ -45,7 +45,7 @@ const stageLabel = computed(() => {
 
 const stageIcon = computed(() => {
   const stage = props.sage.relationshipStage || 'stranger'
-  return RELATIONSHIP_STAGE_ICONS[stage] || '👤'
+  return RELATIONSHIP_STAGE_ICONS[stage] || ''
 })
 
 const lastSessionTime = computed(() => {

@@ -38,10 +38,10 @@ const stageLabel = computed(() => RELATIONSHIP_STAGE_LABELS[props.relationshipSt
     <!-- Left: action buttons -->
     <div class="flex items-center gap-1">
       <button class="galgame-hud-btn flex items-center gap-1" @click="emit('save')">
-        💾<span>存档</span>
+        <span>存档</span>
       </button>
       <button class="galgame-hud-btn flex items-center gap-1" @click="emit('load')">
-        📂<span>读档</span>
+        <span>读档</span>
       </button>
       <button class="galgame-hud-btn flex items-center gap-1" @click="emit('skip')">
         ⏭<span>跳过</span>
@@ -51,22 +51,22 @@ const stageLabel = computed(() => RELATIONSHIP_STAGE_LABELS[props.relationshipSt
         :class="{ active: autoMode }"
         @click="emit('autoToggle')"
       >
-        ▶<span>自动</span>
+        ><span>自动</span>
         <span v-if="autoMode" style="color:#4adf6a;font-size:9px;">●</span>
       </button>
       <button class="galgame-hud-btn flex items-center gap-1" @click="emit('backlog')">
-        📖<span>回忆</span>
+        <span>回忆</span>
       </button>
       <!-- v1.0 #191 Memory Drawer -->
       <button class="galgame-hud-btn flex items-center gap-1" @click="emit('openMemoryDrawer')">
-        🧠<span>档案</span>
+        <span>档案</span>
       </button>
-      <!-- <button class="galgame-hud-btn flex items-center gap-1" @click="emit('knowledgeGraph')">🗺<span>知识图谱</span></button> P1 #185 -->
+      <!-- <button class="galgame-hud-btn flex items-center gap-1" @click="emit('knowledgeGraph')"><span>知识图谱</span></button> P1 #185 -->
       <button class="galgame-hud-btn flex items-center gap-1" @click="emit('settings')">
-        ⚙<span>设置</span>
+        <span>设置</span>
       </button>
       <button class="galgame-hud-btn flex items-center gap-1" @click="emit('home')">
-        🏠<span>返回主页</span>
+        <span>返回主页</span>
       </button>
     </div>
 

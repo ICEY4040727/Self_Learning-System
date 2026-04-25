@@ -29,11 +29,11 @@ const emit = defineEmits<{ (e: 'close'): void }>()
             class="flex items-center justify-between font-ui flex-shrink-0"
             style="padding:16px 20px;border-bottom:1px solid rgba(255,215,0,0.15);"
           >
-            <span style="color:#ffd700;font-size:14px;letter-spacing:3px;">📖 回 忆 录</span>
+            <span style="color:#ffd700;font-size:14px;letter-spacing:3px;"> 回 忆 录</span>
             <button
               style="color:rgba(255,255,255,0.5);cursor:pointer;"
               @click="emit('close')"
-            >✕</button>
+            ></button>
           </div>
 
           <!-- Messages -->

@@ -21,9 +21,9 @@ class MisconceptionModule(MemoryModule):
     """
 
     SEVERITY_PROMPTS = {
-        "critical": "⚠️ [严重误解]",
-        "moderate": "⚠️ [中度误解]",
-        "minor": "⚠️ [轻微误解]",
+        "critical": " [严重误解]",
+        "moderate": " [中度误解]",
+        "minor": " [轻微误解]",
     }
 
     def get_section_name(self) -> str:
@@ -74,7 +74,7 @@ class MisconceptionModule(MemoryModule):
                     content = mis_data.get("content", "")
                     related_concept = mis_data.get("related_concept", "")
 
-                    severity_marker = self.SEVERITY_PROMPTS.get(severity, "⚠️")
+                    severity_marker = self.SEVERITY_PROMPTS.get(severity, "")
                     related = f" → 正确认知: {related_concept}" if related_concept else ""
 
                     active_misconceptions.append({

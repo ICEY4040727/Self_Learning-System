@@ -13,11 +13,11 @@
             <label class="field-label">角 色 类 型</label>
             <div class="type-toggle">
               <button type="button" class="type-btn" :class="{ active: isSage }" @click="isSage = true">
-                <div class="type-icon" :style="{ background: '#f59e0b' }">☉</div>
+                <div class="type-icon" :style="{ background: '#f59e0b' }"></div>
                 <span class="type-name">知者</span>
               </button>
               <button type="button" class="type-btn" :class="{ active: !isSage }" @click="isSage = false">
-                <div class="type-icon" :style="{ background: '#3b82f6' }">✦</div>
+                <div class="type-icon" :style="{ background: '#3b82f6' }"></div>
                 <span class="type-name">旅者</span>
               </button>
             </div>

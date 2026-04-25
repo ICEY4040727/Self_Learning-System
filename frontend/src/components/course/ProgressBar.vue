@@ -7,7 +7,7 @@
     <div class="progress-track">
       <div class="progress-track-bg"></div>
       <div class="progress-track-fill" :style="{ width: `${progress}%` }"></div>
-      <div class="progress-anchor start-anchor">○</div>
+      <div class="progress-anchor start-anchor">[ ]</div>
       <div class="progress-anchor end-anchor" :class="{ completed: progress >= 100 }">●</div>
     </div>
     <div class="progress-footer">
@@ -33,7 +33,7 @@ const endLabel = computed(() => getLevelLabel(props.targetLevel, true))
 
 const milestoneMessage = computed(() => {
   const p = props.progress
-  if (p >= 100) return '🎉 达成目标！'
+  if (p >= 100) return ' 达成目标！'
   if (p >= 75) return '快要到达目标了'
   if (p >= 50) return '过半了，继续加油'
   if (p >= 25) return '刚上路'

@@ -19,7 +19,7 @@
               class="identity-card"
               @click="selectType('traveler')"
             >
-              <span class="identity-icon">🧭</span>
+              <span class="identity-icon"></span>
               <span class="identity-title">旅者</span>
               <span class="identity-desc">这是我自己。代表我在世界里探索的化身。</span>
             </div>
@@ -27,7 +27,7 @@
               class="identity-card"
               @click="selectType('sage')"
             >
-              <span class="identity-icon">📖</span>
+              <span class="identity-icon"></span>
               <span class="identity-title">知者</span>
               <span class="identity-desc">一位老师/同伴/灵感来源，会陪我学习。</span>
             </div>

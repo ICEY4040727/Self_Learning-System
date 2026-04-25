@@ -14,7 +14,7 @@
       :enter="{ opacity: 1, y: 0 }"
       :transition="{ duration: 900, delay: 150 }"
     >
-      <div class="top-rune">✦ &nbsp; ZHĪ YÙ · 愿求知者皆得其道 &nbsp; ✦</div>
+      <div class="top-rune"> &nbsp; ZHĪ YÙ · 愿求知者皆得其道 &nbsp; </div>
       <h1 class="title-text-hover title-text">知遇</h1>
       <div class="subtitle-text">Zhī Yù</div>
       <div class="gold-divider"></div>
@@ -112,7 +112,7 @@
       :enter="{ opacity: 1 }"
       :transition="{ delay: 1200, duration: 1000 }"
     >
-      ✦ &nbsp; ZHĪ YÙ v{{ version }} &nbsp; ✦
+       &nbsp; ZHĪ YÙ v{{ version }} &nbsp; 
     </div>
   </div>
 </template>

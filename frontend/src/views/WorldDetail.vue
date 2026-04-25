@@ -117,7 +117,7 @@
             :style="{ animationDelay: `${i * 0.1}s` }"
             @click="startLearning(course.id)"
           >
-            <div class="course-icon">{{ course.icon || '📚' }}</div>
+            <div class="course-icon">{{ course.icon || '' }}</div>
             <div class="course-info">
               <div class="course-name">{{ course.name }}</div>
               <div class="course-desc">{{ course.description || '暂无描述' }}</div>
@@ -182,7 +182,7 @@
           </div>
           <div class="form-group">
             <label>世界符号</label>
-            <input v-model="editWorldForm.symbol" type="text" placeholder="如 🏛️" maxlength="2" />
+            <input v-model="editWorldForm.symbol" type="text" placeholder="如 " maxlength="2" />
           </div>
         </div>
         <div class="modal-actions">
@@ -211,7 +211,7 @@
               <div class="traveler-option-name">{{ traveler.name }}</div>
               <div class="traveler-option-title">{{ traveler.title || '旅者' }}</div>
             </div>
-            <div v-if="currentTraveler?.id === traveler.id" class="traveler-check">✓</div>
+            <div v-if="currentTraveler?.id === traveler.id" class="traveler-check">[v]</div>
           </div>
         </div>
         <div class="modal-actions">
@@ -259,7 +259,7 @@
     <Transition name="modal-fade">
       <div v-if="showDeleteConfirm" class="modal-overlay" @click.self="showDeleteConfirm = false">
         <div class="confirm-dialog">
-          <div class="confirm-icon">⚠</div>
+          <div class="confirm-icon">[!]</div>
           <div class="confirm-title">确认删除</div>
           <div class="confirm-message">
             确定要删除世界 <span class="confirm-name">{{ selectedWorld?.name }}</span> 吗？<br />

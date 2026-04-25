@@ -475,7 +475,7 @@ def _get_world_characters_by_role(db: Session, world_id: int, role: str) -> list
     ).order_by(WorldCharacter.is_primary.desc()).all()
 
     default_color = "#ffd700" if role == "sage" else "#60a5fa"
-    default_symbol = "☉" if role == "sage" else "✦"
+    default_symbol = "" if role == "sage" else ""
 
     result = []
     for link in links:
@@ -504,7 +504,7 @@ def _build_world_response(world: World, db: Session, current_user_id: int = None
     if courses:
         for course in courses:
             progress = None
-            icon = "📖"  # 默认图标
+            icon = ""  # 默认图标
 
             # 如果提供了 user_id，获取课程进度
             if current_user_id:

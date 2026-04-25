@@ -1,19 +1,19 @@
 <template>
   <div class="hud-bar galgame-hud">
     <div class="hud-left">
-      <button class="hud-btn galgame-hud-btn" @click="$emit('save')">💾 存档</button>
-      <button class="hud-btn galgame-hud-btn" @click="$emit('load')">📂 读档</button>
+      <button class="hud-btn galgame-hud-btn" @click="$emit('save')"> 存档</button>
+      <button class="hud-btn galgame-hud-btn" @click="$emit('load')"> 读档</button>
       <button class="hud-btn galgame-hud-btn" @click="$emit('skip')">⏩ 跳过</button>
       <button
         class="hud-btn galgame-hud-btn"
         :class="{ 'active': isAuto }"
         @click="$emit('toggle-auto')"
-      >▶ 自动</button>
-      <button class="hud-btn galgame-hud-btn" @click="$emit('backlog')">📖 回忆</button>
-      <button class="hud-btn galgame-hud-btn" @click="$emit('knowledge-graph')">📊 图谱</button>
-      <button class="hud-btn galgame-hud-btn" @click="$emit('toggle-ui')">🙈 隐藏UI</button>
-      <button class="hud-btn galgame-hud-btn" @click="$emit('settings')">⚙ 设置</button>
-      <button class="hud-btn galgame-hud-btn" @click="$emit('exit')">🏠 主页</button>
+      >> 自动</button>
+      <button class="hud-btn galgame-hud-btn" @click="$emit('backlog')"> 回忆</button>
+      <button class="hud-btn galgame-hud-btn" @click="$emit('knowledge-graph')"> 图谱</button>
+      <button class="hud-btn galgame-hud-btn" @click="$emit('toggle-ui')"> 隐藏UI</button>
+      <button class="hud-btn galgame-hud-btn" @click="$emit('settings')"> 设置</button>
+      <button class="hud-btn galgame-hud-btn" @click="$emit('exit')"> 主页</button>
     </div>
     <div class="hud-right">
       <slot name="status">

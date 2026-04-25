@@ -69,9 +69,9 @@ class MemoryFactsModule(MemoryModule):
                 # 根据 salience 添加标记
                 salience_marker = ""
                 if mem.salience >= 0.8:
-                    salience_marker = "⭐"
+                    salience_marker = "*"
                 elif mem.salience >= 0.6:
-                    salience_marker = "📌"
+                    salience_marker = ""
 
                 content = mem.content[:100] + "..." if len(mem.content) > 100 else mem.content
                 lines.append(f"- [{fact_type_label}]{salience_marker} {content}")

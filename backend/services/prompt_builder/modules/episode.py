@@ -23,11 +23,11 @@ class EpisodeModule(MemoryModule):
     """
 
     SIGNIFICANCE_PROMPTS = {
-        "breakthrough": "💡 [突破]",
-        "struggle": "😓 [困难]",
-        "correction": "🔧 [纠正]",
-        "connection": "🔗 [联系]",
-        "normal": "💬 [普通]",
+        "breakthrough": " [突破]",
+        "struggle": " [困难]",
+        "correction": " [纠正]",
+        "connection": " [联系]",
+        "normal": " [普通]",
     }
 
     def get_section_name(self) -> str:
@@ -80,7 +80,7 @@ class EpisodeModule(MemoryModule):
                 if not summary:
                     continue
 
-                marker = self.SIGNIFICANCE_PROMPTS.get(significance, "💬")
+                marker = self.SIGNIFICANCE_PROMPTS.get(significance, "")
                 emotion_part = f" ({emotion})" if emotion else ""
 
                 lines.append(f"- {marker}{emotion_part} {summary}")

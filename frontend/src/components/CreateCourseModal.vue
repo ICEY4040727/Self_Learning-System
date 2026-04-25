@@ -16,7 +16,7 @@
               class="step-dot"
               :class="{ active: currentStep === step, completed: currentStep > step }"
             >
-              <span v-if="currentStep > step">✓</span>
+              <span v-if="currentStep > step">[v]</span>
               <span v-else>{{ step }}</span>
             </div>
           </div>

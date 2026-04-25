@@ -25,7 +25,7 @@ export const SAGE_TEMPLATES: SageTemplate[] = [
     nameEn: 'Socratic',
     desc: '擅长通过反问引导思考，层层递进，适合哲学讨论',
     shortDesc: '耐心追问，启发思考',
-    icon: '🤔',
+    icon: '',
     color: '#f59e0b',
     greeting: '我知道我一无所知。让我们一起来探索真理吧。',
     tags: ['耐心', '追问型', '启发型'],
@@ -36,7 +36,7 @@ export const SAGE_TEMPLATES: SageTemplate[] = [
     nameEn: 'Einstein',
     desc: '鼓励大胆假设和实验，适合科学探索',
     shortDesc: '鼓励探索，激发好奇',
-    icon: '💡',
+    icon: '',
     color: '#8b5cf6',
     greeting: '想象力比知识更重要。你准备好提出大胆的想法了吗？',
     tags: ['鼓励型', '探索型', '启发型'],
@@ -47,7 +47,7 @@ export const SAGE_TEMPLATES: SageTemplate[] = [
     nameEn: 'Aristotle',
     desc: '百科全书式讲解，体系完整，适合系统学习',
     shortDesc: '严谨体系，博学多才',
-    icon: '📚',
+    icon: '',
     color: '#10b981',
     greeting: '让我们从基础开始，构建完整的知识体系。',
     tags: ['严谨', '体系化', '百科全书'],
@@ -58,7 +58,7 @@ export const SAGE_TEMPLATES: SageTemplate[] = [
     nameEn: 'Sun Tzu',
     desc: '策略性思考，引导举一反三，适合方法论学习',
     shortDesc: '策略引导，举一反三',
-    icon: '⚔️',
+    icon: '',
     color: '#dc2626',
     greeting: '知己知彼，百战不殆。让我们先理清思路。',
     tags: ['策略性', '举一反三', '引导型'],
@@ -69,7 +69,7 @@ export const SAGE_TEMPLATES: SageTemplate[] = [
     nameEn: 'Yoda',
     desc: '神秘导师风格，言语简短但充满智慧',
     shortDesc: '神秘导师，言简意深',
-    icon: '🌙',
+    icon: '',
     color: '#06b6d4',
     greeting: '尝试，不尝试。不存在。只有doing。',
     tags: ['神秘', '简洁', '智慧型'],
@@ -80,7 +80,7 @@ export const SAGE_TEMPLATES: SageTemplate[] = [
     nameEn: 'Free Spirit',
     desc: '不受束缚，天马行空，适合创意发散',
     shortDesc: '天马行空，创意发散',
-    icon: '🦋',
+    icon: '',
     color: '#ec4899',
     greeting: '规则是用来打破的！让我们一起跳出思维定式。',
     tags: ['自由', '创意', '发散型'],
@@ -91,7 +91,7 @@ export const SAGE_TEMPLATES: SageTemplate[] = [
     nameEn: 'Custom',
     desc: '从零开始，完全按你的想法塑造导师',
     shortDesc: '自由设定你的导师',
-    icon: '✨',
+    icon: '*',
     color: '#ffd700',
     greeting: '你好，期待我们的学习之旅。',
     tags: [],
@@ -124,15 +124,15 @@ export interface AvatarPreset {
 }
 
 export const TRAVELER_AVATARS: AvatarPreset[] = [
-  { key: 'traveler1', emoji: '🧭', label: '探索者' },
-  { key: 'traveler2', emoji: '🧙', label: '法师' },
-  { key: 'traveler3', emoji: '🧝', label: '精灵' },
-  { key: 'traveler4', emoji: '🦸', label: '英雄' },
-  { key: 'traveler5', emoji: '🧑‍🎓', label: '学者' },
-  { key: 'traveler6', emoji: '🧑‍💻', label: '程序员' },
-  { key: 'traveler7', emoji: '🎨', label: '艺术家' },
-  { key: 'traveler8', emoji: '🔮', label: '占卜师' },
-  { key: 'traveler9', emoji: '✨', label: '冒险家' },
+  { key: 'traveler1', emoji: '', label: '探索者' },
+  { key: 'traveler2', emoji: '', label: '法师' },
+  { key: 'traveler3', emoji: '', label: '精灵' },
+  { key: 'traveler4', emoji: '', label: '英雄' },
+  { key: 'traveler5', emoji: '', label: '学者' },
+  { key: 'traveler6', emoji: '', label: '程序员' },
+  { key: 'traveler7', emoji: '', label: '艺术家' },
+  { key: 'traveler8', emoji: '', label: '占卜师' },
+  { key: 'traveler9', emoji: '*', label: '冒险家' },
 ]
 
 // ==================== Traveler 性格标签 ====================
@@ -160,11 +160,11 @@ export interface SpriteConfig {
 }
 
 export const DEFAULT_SPRITES: SpriteConfig[] = [
-  { expression: 'default', emoji: '😊', desc: '默认' },
-  { expression: 'smile', emoji: '😄', desc: '微笑' },
-  { expression: 'thinking', emoji: '🤔', desc: '思考' },
-  { expression: 'serious', emoji: '😐', desc: '严肃' },
-  { expression: 'encourage', emoji: '💪', desc: '鼓励' },
+  { expression: 'default', emoji: '', desc: '默认' },
+  { expression: 'smile', emoji: '', desc: '微笑' },
+  { expression: 'thinking', emoji: '', desc: '思考' },
+  { expression: 'serious', emoji: '', desc: '严肃' },
+  { expression: 'encourage', emoji: '', desc: '鼓励' },
 ]
 
 // ==================== 性格滑块配置 ====================
@@ -235,7 +235,7 @@ export const SPEECH_STYLES = [
 ]
 
 // ==================== 头像预设（紧凑创建流程用） ====================
-export const AVATAR_OPTIONS = ['☉', '☽', '★', '✧', '❋', '⬡', '⬢', '◈', '◉']
+export const AVATAR_OPTIONS = ['', '', '', '', '', '⬡', '⬢', '◈', '◉']
 
 // ==================== 颜色预设（紧凑创建流程用） ====================
 export const COLOR_OPTIONS = [

@@ -23,11 +23,11 @@ export const RELATIONSHIP_STAGE_LABELS: Record<string, string> = {
 }
 
 export const RELATIONSHIP_STAGE_ICONS: Record<string, string> = {
-  stranger: '👤',
-  acquaintance: '🧑‍🤝‍🧑',
-  friend: '👥',
-  mentor: '🎓',
-  partner: '🤝',
+  stranger: '',
+  acquaintance: '',
+  friend: '',
+  mentor: '',
+  partner: '',
 }
 
 export const MOTIVATION_LABELS: Record<string, string> = {
@@ -39,15 +39,15 @@ export const MOTIVATION_LABELS: Record<string, string> = {
 }
 
 export const DOMAIN_ICONS: Record<string, string> = {
-  programming: '💻',
-  language: '🗣️',
-  mathematics: '📐',
-  science: '🔬',
-  history: '📜',
-  art: '🎨',
-  music: '🎵',
-  business: '💼',
-  default: '📚',
+  programming: '',
+  language: '',
+  mathematics: '',
+  science: '',
+  history: '',
+  art: '',
+  music: '',
+  business: '',
+  default: '',
 }
 
 export function getLevelIndex(level: string, isTarget: boolean): number {
