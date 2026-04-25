@@ -44,7 +44,7 @@ const stageLabel = computed(() => RELATIONSHIP_STAGE_LABELS[props.relationshipSt
         <span>读档</span>
       </button>
       <button class="galgame-hud-btn flex items-center gap-1" @click="emit('skip')">
-        ⏭<span>跳过</span>
+        <span>>></span><span>跳过</span>
       </button>
       <button
         class="galgame-hud-btn flex items-center gap-1"
@@ -86,7 +86,7 @@ const stageLabel = computed(() => RELATIONSHIP_STAGE_LABELS[props.relationshipSt
 
       <!-- Relationship stage -->
       <div class="flex items-center gap-1">
-        <span style="color:rgba(255,215,0,0.6);">⏱</span>
+        <span style="color:rgba(255,215,0,0.6);">[t]</span>
         <span style="color:rgba(255,215,0,0.8);">{{ stageLabel }}</span>
       </div>
 

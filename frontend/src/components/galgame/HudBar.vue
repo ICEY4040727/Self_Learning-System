@@ -3,7 +3,7 @@
     <div class="hud-left">
       <button class="hud-btn galgame-hud-btn" @click="$emit('save')"> 存档</button>
       <button class="hud-btn galgame-hud-btn" @click="$emit('load')"> 读档</button>
-      <button class="hud-btn galgame-hud-btn" @click="$emit('skip')">⏩ 跳过</button>
+      <button class="hud-btn galgame-hud-btn" @click="$emit('skip')">>> 跳过</button>
       <button
         class="hud-btn galgame-hud-btn"
         :class="{ 'active': isAuto }"
