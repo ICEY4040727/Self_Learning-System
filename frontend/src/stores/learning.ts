@@ -51,6 +51,10 @@ export const useLearningStore = defineStore('learning', () => {
   // ── Progress ─────────────────────────────────────────────────
   const masteryPercent   = ref(0)
 
+  // ── Phase 3: Narrative & Achievements ────────────────────────
+  const narrativeEvents  = ref<Array<{ event_type: string; description: string; scene?: string }>>([])
+  const newAchievements  = ref<Array<{ id: string; name: string; description: string; icon?: string }>>([])
+
   // ── Knowledge graph ──────────────────────────────────────────
   const knowledgeGraph   = ref<KnowledgeGraph>({ nodes: [], edges: [] })
 
@@ -227,6 +231,16 @@ export const useLearningStore = defineStore('learning', () => {
         }))
       }
 
+      // Phase 3: Handle narrative events
+      if (data.narrative_events && data.narrative_events.length > 0) {
+        narrativeEvents.value.push(...data.narrative_events)
+      }
+
+      // Phase 3: Handle new achievements
+      if (data.new_achievements && data.new_achievements.length > 0) {
+        newAchievements.value.push(...data.new_achievements)
+      }
+
     } catch (e: any) {
       const detail = e?.response?.data?.detail ?? '连接错误，请检查网络和 API Key 配置'
       pushSpeaking(`（${detail}）`)
@@ -332,6 +346,8 @@ export const useLearningStore = defineStore('learning', () => {
     pendingStageEvent.value = null
     stageSpecialLine.value  = ''
     masteryPercent.value    = 0
+    narrativeEvents.value   = []
+    newAchievements.value   = []
     knowledgeGraph.value    = { nodes: [], edges: [] }
     thinking.value          = false
     loadError.value         = null
@@ -344,7 +360,7 @@ export const useLearningStore = defineStore('learning', () => {
     messages, mode, currentText, currentChoices,
     currentEmotion, sageExpression, sageJumpKey, travelerJumpKey,
     relationshipStage, pendingStageEvent, stageSpecialLine,
-    masteryPercent, knowledgeGraph, thinking, loadError,
+    masteryPercent, narrativeEvents, newAchievements, knowledgeGraph, thinking, loadError,
     sageName,
     startSession, loadHistory, sendMessage, chooseOption,
     fetchKnowledgeGraph, createCheckpoint, fetchCheckpoints,

@@ -55,6 +55,18 @@ export interface ChatResponse {
   }> | null
   expression_hint?: Expression | null
   memory_extracted_count?: number
+  // Phase 3: 叙事事件 & 成就
+  narrative_events?: Array<{
+    event_type: string
+    description: string
+    scene?: string
+  }> | null
+  new_achievements?: Array<{
+    id: string
+    name: string
+    description: string
+    icon?: string
+  }> | null
 }
 
 export interface StartLearningResponse {
