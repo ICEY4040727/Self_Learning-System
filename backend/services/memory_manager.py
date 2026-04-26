@@ -75,16 +75,24 @@ class MemoryManager:
         fact_types: list[str] | None = None,
         concept_tags: list[str] | None = None,
         limit: int | None = None,
+        min_salience: float = 0.3,
     ) -> list[MemoryFact]:
         """
         Retrieve memories for PromptBuilder context injection.
-        Ordered by effective_salience DESC. Updates recall_count + last_recalled_at.
+
+        Ordered by effective_salience DESC, filtered by min_salience.
+        Updates recall_count + last_recalled_at on returned facts.
+
+        effective_salience <= base salience (decay never amplifies), so
+        SQL-prefiltering by base salience >= min_salience is safe and prunes
+        the candidate pool before per-row Python computation.
         """
         mem_cfg = _cfg()["memory"]
         limit = limit or mem_cfg["default_retrieve_limit"]
 
         q = db.query(MemoryFact).filter(
             MemoryFact.character_id == character_id,
+            MemoryFact.salience >= min_salience,
             (MemoryFact.expires_at.is_(None))
             | (MemoryFact.expires_at > datetime.now(UTC)),
         )
@@ -103,7 +111,13 @@ class MemoryManager:
             for tag in concept_tags:
                 q = q.filter(MemoryFact.concept_tags.contains(f'"{tag}"'))
 
-        facts = q.order_by(MemoryFact.salience.desc()).limit(limit).all()
+        # Pull a buffer; effective_salience filtering may further prune.
+        candidates = q.order_by(MemoryFact.salience.desc()).limit(limit * 5).all()
+
+        scored = [(f, self.compute_effective_salience(f)) for f in candidates]
+        scored = [(f, s) for f, s in scored if s >= min_salience]
+        scored.sort(key=lambda x: x[1], reverse=True)
+        facts = [f for f, _ in scored[:limit]]
 
         # Update recall metadata (M2)
         now = datetime.now(UTC)
@@ -256,21 +270,21 @@ class MemoryManager:
         msg = student_message
         signals: list[dict[str, Any]] = []
 
+        # Channel-2 signals get sentinel concept_tags so they participate in
+        # dedup. Without a tag, _find_duplicate skips and every "我不懂" spawns
+        # a new row.
+
         # Confusion
         for kw in ext_cfg["confusion_keywords"]:
             if kw in msg:
-                qm_ratio = msg.count("?") / max(len(msg), 1)
-                if qm_ratio > ext_cfg["confusion_question_mark_threshold"] or any(
-                    k in msg for k in ext_cfg["confusion_keywords"]
-                ):
-                    signals.append(
-                        {
-                            "fact_type": "concept_struggle",
-                            "content": f"学生表示困惑: {msg[:80]}",
-                            "concept_tags": [],
-                            "salience": 0.6,
-                        }
-                    )
+                signals.append(
+                    {
+                        "fact_type": "concept_struggle",
+                        "content": f"学生表示困惑: {msg[:80]}",
+                        "concept_tags": ["__channel2_confusion__"],
+                        "salience": 0.6,
+                    }
+                )
                 break
 
         # Mastery
@@ -280,7 +294,7 @@ class MemoryManager:
                     {
                         "fact_type": "concept_mastered",
                         "content": f"学生表示理解: {msg[:80]}",
-                        "concept_tags": [],
+                        "concept_tags": ["__channel2_mastery__"],
                         "salience": 0.6,
                     }
                 )
@@ -293,7 +307,7 @@ class MemoryManager:
                     {
                         "fact_type": "student_state",
                         "content": f"学生情绪低落: {msg[:80]}",
-                        "concept_tags": [],
+                        "concept_tags": ["__channel2_negative_emotion__"],
                         "salience": 0.5,
                     }
                 )
@@ -311,7 +325,7 @@ class MemoryManager:
                         {
                             "fact_type": "preference",
                             "content": f"学生偏好{display}学习方式",
-                            "concept_tags": [],
+                            "concept_tags": [f"__channel2_preference_{pref_key}__"],
                             "salience": 0.5,
                         }
                     )
@@ -336,7 +350,14 @@ class MemoryManager:
             return fact.salience  # no decay
 
         now = datetime.now(UTC)
-        hours_elapsed = (now - fact.created_at).total_seconds() / 3600 if fact.created_at else 0
+        created = fact.created_at
+        if created is None:
+            hours_elapsed = 0
+        else:
+            # SQLite stores DateTime without tz; coerce to UTC to subtract.
+            if created.tzinfo is None:
+                created = created.replace(tzinfo=UTC)
+            hours_elapsed = (now - created).total_seconds() / 3600
         recall_count = fact.recall_count or 0
 
         adjusted_decay = base_decay * multiplier / (1 + recall_count * recall_factor)

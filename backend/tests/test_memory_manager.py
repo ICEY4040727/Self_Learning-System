@@ -161,6 +161,25 @@ class TestRetrieve:
         db_session.refresh(fact)
         assert fact.recall_count >= 1
 
+    def test_retrieve_filters_by_effective_min_salience(self, db_session):
+        """A struggle at base salience 0.2 (no decay) is below min 0.3 -> excluded."""
+        c = _make_character(db_session)
+        _make_fact(db_session, c.id, "concept_struggle", "low", ["x"], 0.2, hours_ago=1)
+        results = memory_manager.retrieve(db_session, c.id, world_id=1, min_salience=0.3)
+        assert results == []
+
+    def test_retrieve_orders_by_effective_salience(self, db_session):
+        """A non-decaying struggle outranks a heavily-decayed student_state with higher base."""
+        c = _make_character(db_session)
+        # struggle: multiplier=0 -> effective=0.5 regardless of age
+        struggle = _make_fact(db_session, c.id, "concept_struggle", "stable", ["s"], 0.5, hours_ago=300)
+        # student_state: multiplier=1.5, age=300h -> effective ~ 0.9*exp(-1.875) ~ 0.138
+        _make_fact(db_session, c.id, "student_state", "stale", [], 0.9, hours_ago=300)
+
+        results = memory_manager.retrieve(db_session, c.id, world_id=1)
+        assert results, "should retrieve at least one"
+        assert results[0].id == struggle.id, "struggle effective (0.5) should beat decayed student_state"
+
 
 # ---------------------------------------------------------------
 # should_extract_memory fix
@@ -254,6 +273,21 @@ class TestDualChannel:
             MemoryFact.character_id == c.id,
         ).count()
         assert count == 0
+
+    def test_channel2_dedups_repeated_confusion(self, db_session):
+        """Repeated confusion messages within dedup window -> single row, not N rows."""
+        c = _make_character(db_session)
+        for msg in ["我不懂", "什么意思", "不理解"]:
+            memory_manager._extract_student_signals(
+                db_session, msg, character_id=c.id, world_id=1,
+            )
+
+        rows = db_session.query(MemoryFact).filter(
+            MemoryFact.character_id == c.id,
+            MemoryFact.fact_type == "concept_struggle",
+        ).all()
+        assert len(rows) == 1, f"expected 1 deduped row, got {len(rows)}"
+        assert "__channel2_confusion__" in (rows[0].concept_tags or [])
 
     def test_dual_channel_merge(self, db_session):
         """Channel 1 + Channel 2 same type -> deduped (channel 1 wins, channel 2 merged)."""
