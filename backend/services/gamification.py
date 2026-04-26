@@ -10,7 +10,12 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
+from backend.models.models import RELATIONSHIP_STAGE_LABELS
+
 logger = logging.getLogger(__name__)
+
+# [2E-02] 复用 models 中的阶段定义，避免重复
+_STAGE_ORDER = list(RELATIONSHIP_STAGE_LABELS.keys())
 
 
 class GamificationEngine:
@@ -139,7 +144,7 @@ class GamificationEngine:
 
         elif condition_type == "relationship_stage":
             target_stage = params.get("stage", "")
-            stage_order = ["stranger", "acquaintance", "friend", "mentor", "partner"]
+            stage_order = _STAGE_ORDER  # [2E-02] 复用全局定义
             if current_stage and current_stage in stage_order:
                 idx = stage_order.index(current_stage)
                 target_idx = stage_order.index(target_stage) if target_stage in stage_order else 0

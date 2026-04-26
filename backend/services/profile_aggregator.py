@@ -221,8 +221,9 @@ class ProfileAggregator:
         if not keywords:
             return None
 
+        # [R1-01] Pass world_id to prevent cross-world memory leakage
         facts = memory_manager.observe_recent(
-            db, cid, fact_types=source_types, limit=50,
+            db, cid, world_id=wid, fact_types=source_types, limit=50,
         )
         if len(facts) < min_facts:
             return None

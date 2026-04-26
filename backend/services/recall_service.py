@@ -67,14 +67,16 @@ class RecallService:
                     label = n.get("label", prereq_id)
                     break
 
-            # Check memory facts for this prerequisite concept
+            # [R1-01] Pass world_id to prevent cross-world memory leakage
             struggle_facts = memory_manager.observe_recent(
                 db, character_id,
+                world_id=world_id,
                 fact_types=["concept_struggle"],
                 limit=10,
             )
             mastered_facts = memory_manager.observe_recent(
                 db, character_id,
+                world_id=world_id,
                 fact_types=["concept_mastered"],
                 limit=10,
             )

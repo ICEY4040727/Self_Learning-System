@@ -18,6 +18,8 @@ class NarrativeEngine:
     """叙事引擎 - 基于规则的叙事事件触发器"""
 
     # 内存冷却存储 {(user_id, character_id, trigger_type): last_trigger_time}
+    # [R1-02] Acceptable: 内存级冷却记录，服务器重启后丢失。
+    # 若未来需要持久化，可迁移至 DB 表或 Redis。
     _cooldowns: dict[tuple[int, int, str], datetime] = {}
 
     def check_triggers(

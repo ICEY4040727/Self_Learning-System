@@ -10,7 +10,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision = '2026_04_25_textbooks'
-down_revision = None  # standalone, no dependency on broken chain
+down_revision = '2026_04_25_narrative_achievements'
 branch_labels = None
 depends_on = None
 

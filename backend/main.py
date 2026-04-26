@@ -22,7 +22,13 @@ if settings.sentry_dsn:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
-    yield
+    from backend.services.scheduler import shutdown_scheduler, start_scheduler
+
+    start_scheduler()
+    try:
+        yield
+    finally:
+        shutdown_scheduler()
 
 
 app = FastAPI(

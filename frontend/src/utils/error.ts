@@ -42,6 +42,7 @@ export function parseApiError(error: any): string {
       'Save not found': '存档不存在',
       'Progress not found': '进度不存在',
       'Access denied': '访问被拒绝',
+      'Not authenticated': '未登录或登录已过期，请重新登录',
     }
     return friendlyMessages[data.detail] || data.detail
   }
@@ -51,6 +52,9 @@ export function parseApiError(error: any): string {
 
   // Rate limit
   if (error.response?.status === 429) return '操作太频繁，请稍后再试'
+
+  // Server error
+  if (error.response?.status === 500) return '服务器内部错误，请稍后重试或联系管理员'
 
   return '操作失败，请重试'
 }

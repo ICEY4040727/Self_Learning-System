@@ -246,6 +246,11 @@ class LearningEngine:
                 user_id=session.user_id,
             )
 
+            # 15.5 Evolve salience moved to scheduled daily job (services/scheduler.py)
+            # — running it per-message decayed every memory by a full day's worth on
+            # each chat (max(days, 1.0) floor). Daily cron keeps semantics correct
+            # and removes the O(N) scan from the request path.
+
             # 16. Update UserProfile
             from backend.services.user_profile import update_user_profile_after_chat
             update_user_profile_after_chat(db, session.user_id, session.world_id)

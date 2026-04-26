@@ -8,7 +8,7 @@ Create Date: 2026-04-25
 from alembic import op
 
 revision = "2026_04_25_memory_idx"
-down_revision = "2026_04_14_add_checkpoint_file_path"
+down_revision = "3f7e10f713f3"
 branch_labels = None
 depends_on = None
 

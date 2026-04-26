@@ -68,7 +68,7 @@ class CharacterCreate(BaseModel):
     tags: list[str] | None = None
     title: str | None = None
     sprites: dict | None = None
-    template_name: str = "默认"  # 人格模板名称（用于生成 traits）
+    template_name: str | None = "默认"  # 人格模板名称（用于生成 traits）
     # 性格滑块值 (Phase 1 新增)
     # 格式: {"strictness": 5, "pace": 5, "questioning": 5, "warmth": 5, "humor": 5}
     traits: dict | None = None
@@ -957,6 +957,36 @@ def update_learner_profile(
     db.commit()
     db.refresh(db_profile)
     return db_profile
+
+
+# World-scoped learner profile (Phase 2F: frontend expects this route)
+@router.get("/worlds/{world_id}/learner_profile")
+def get_world_learner_profile(
+    world_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Return the learner profile for a specific world.
+
+    Frontend (CoursePage, Learning) expects this route to return
+    { dimension_scores, strengths, weaknesses, learning_stats, last_updated }
+    directly, unwrapped from the profile JSON column.
+    """
+    lp = db.query(LearnerProfile).filter(
+        LearnerProfile.user_id == current_user.id,
+        LearnerProfile.world_id == world_id,
+    ).first()
+    if lp is None:
+        raise HTTPException(status_code=404, detail="Learner profile not found")
+
+    profile = lp.profile if isinstance(lp.profile, dict) else {}
+    return {
+        "dimension_scores": profile.get("dimension_scores", {}),
+        "strengths": profile.get("strengths", []),
+        "weaknesses": profile.get("weaknesses", []),
+        "learning_stats": profile.get("learning_stats", {}),
+        "last_updated": profile.get("last_updated"),
+    }
 
 
 # Course endpoints

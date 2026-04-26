@@ -119,6 +119,7 @@ class MemoryManager:
         db: Session,
         character_id: int,
         *,
+        world_id: int | None = None,
         fact_types: list[str] | None = None,
         since: datetime | None = None,
         limit: int | None = None,
@@ -126,11 +127,18 @@ class MemoryManager:
         """
         Observe recent memories without affecting recall state.
         For NarrativeEngine and GamificationEngine.
+
+        [R1-01] Added world_id filter to prevent cross-world memory leakage.
         """
         mem_cfg = _cfg()["memory"]
         limit = limit or mem_cfg["observe_recent_limit"]
 
         q = db.query(MemoryFact).filter(MemoryFact.character_id == character_id)
+
+        if world_id is not None:
+            q = q.filter(
+                (MemoryFact.world_id == world_id) | (MemoryFact.world_id.is_(None))
+            )
 
         if fact_types:
             q = q.filter(MemoryFact.fact_type.in_(fact_types))

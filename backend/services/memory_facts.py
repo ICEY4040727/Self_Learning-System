@@ -10,6 +10,7 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
+from backend.core.config import get_settings
 from backend.models.models import Character, LearnerProfile, MemoryFact
 
 logger = logging.getLogger(__name__)
@@ -69,6 +70,8 @@ class MemoryFactsService:
                 last_recalled_at=now,
                 recall_count=0,
                 expires_at=mem.get("expires_at"),
+                # [2A-02] 记忆创建时设置生效时间
+                t_valid=mem.get("t_valid", now),
             )
             db.add(fact)
             db.flush()
@@ -117,8 +120,14 @@ class MemoryFactsService:
         if fact_types:
             q = q.filter(MemoryFact.fact_type.in_(fact_types))
 
+        # [2F-01] 当 query 不为空时同时匹配 content ILIKE 和 concept_tags JSON
         if query:
-            q = q.filter(MemoryFact.content.ilike(f"%{query}%"))
+            # [2A-05] 转义 ILIKE 通配符，防止非预期匹配
+            escaped = query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            q = q.filter(
+                MemoryFact.content.ilike(f"%{escaped}%", escape="\\")
+                | MemoryFact.concept_tags.contains(f'"{query}"')
+            )
 
         # 按 salience 降序 + created_at 降序排序
         memories = q.order_by(
@@ -126,15 +135,79 @@ class MemoryFactsService:
             MemoryFact.created_at.desc()
         ).limit(limit).all()
 
+        # [2A-04] 更新召回追踪：对每条返回的记忆递增 recall_count 并刷新 last_recalled_at
+        now = datetime.now(UTC)
+        for mem in memories:
+            mem.recall_count = (mem.recall_count or 0) + 1
+            mem.last_recalled_at = now
+        db.flush()
+
         return memories
 
-    def update_recall_count(self, db: Session, memory_id: int) -> None:
-        """更新记忆被召回次数"""
-        fact = db.query(MemoryFact).filter(MemoryFact.id == memory_id).first()
-        if fact:
-            fact.recall_count += 1
-            fact.last_recalled_at = datetime.now(UTC)
-            db.flush()
+    def evolve_salience(self, db: Session, character_id: int | None = None) -> int:
+        """
+        [2A-01] 对记忆执行 salience 衰减。
+
+        规则：
+        - 基础衰减：salience -= salience_base_decay * days_since_last_recall
+        - 召回增强：salience += salience_recall_factor * (rc / (rc + 10))
+        - 类型修正：salience *= salience_type_multiplier[fact_type]
+        - 保底保护：recall_count > 5 的记忆 salience 不低于 0.3
+        - 下限：salience 永不低于 0.1
+
+        Returns:
+            更新的记忆数量
+        """
+        settings = get_settings()
+        cfg = settings.learning_system
+        base_decay = cfg["memory"]["salience_base_decay"]
+        recall_factor = cfg["memory"]["salience_recall_factor"]
+        type_multiplier = cfg.get("salience_type_multiplier", {})
+
+        now = datetime.now(UTC)
+        q = db.query(MemoryFact).filter(
+            MemoryFact.salience > 0.1,  # 跳过已达下限的记忆
+        )
+        if character_id is not None:
+            q = q.filter(MemoryFact.character_id == character_id)
+
+        facts = q.all()
+        updated = 0
+
+        for fact in facts:
+            # 自上次召回以来的天数（至少 1 天以产生衰减）
+            last = fact.last_recalled_at or fact.created_at or now
+            if last.tzinfo is None:
+                last = last.replace(tzinfo=UTC)
+            days = max((now - last).total_seconds() / 86400, 1.0)
+
+            # 基础衰减
+            new_salience = fact.salience - base_decay * days
+
+            # 召回增强：被频繁召回的记忆衰减更慢
+            rc = fact.recall_count or 0
+            if rc > 0:
+                boost = recall_factor * (rc / (rc + 10))
+                new_salience += boost
+
+            # 类型修正
+            multiplier = type_multiplier.get(fact.fact_type, 1.0)
+            new_salience *= multiplier
+
+            # 保底保护：recall_count > 5 的记忆不低于 0.3
+            if rc > 5:
+                new_salience = max(new_salience, 0.3)
+
+            # 下限
+            new_salience = max(new_salience, 0.1)
+
+            if abs(new_salience - fact.salience) > 0.001:
+                fact.salience = round(new_salience, 4)
+                updated += 1
+
+        db.flush()
+        logger.info("evolve_salience: scanned %d facts, updated %d", len(facts), updated)
+        return updated
 
     def delete_expired_memories(self, db: Session) -> int:
         """删除过期记忆，返回删除数量"""

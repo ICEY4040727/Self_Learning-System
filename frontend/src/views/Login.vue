@@ -156,8 +156,9 @@ const handleSubmit = async () => {
     if (mode.value === 'login') {
       const data = await authApi.login(username.value.trim(), password.value)
       authStore.token = data.access_token
-      authStore.user = data
       localStorage.setItem('token', authStore.token!)
+      // Properly fetch user info after login
+      await authStore.fetchUser()
       router.push('/home')
     } else {
       await authApi.register({

@@ -108,6 +108,9 @@ class MemoryFact(Base):
     last_recalled_at = Column(DateTime, default=_utcnow)
     recall_count = Column(Integer, default=0)
     expires_at = Column(DateTime, nullable=True)
+    # [2A-02] 时态字段：t_valid = 记忆生效时间, t_invalid = 记忆失效/被纠正时间
+    t_valid = Column(DateTime, nullable=True, comment="记忆生效时间（事实开始成立的时刻）")
+    t_invalid = Column(DateTime, nullable=True, comment="记忆失效时间（事实被纠正/过期的时刻）")
 
     character = orm_relationship("Character", back_populates="memory_facts")
     world = orm_relationship("World", back_populates="memory_facts")
@@ -151,6 +154,8 @@ class Character(Base):
     sprites = Column(JSON, nullable=True)
     title = Column(String(100), nullable=True)  # 知者名片头衔
     tags = Column(JSON, nullable=True, default=list)  # 角色标签列表
+    # TODO [2E-01]: experience_points/level 已决定不做经验值系统 (Plan E2)，
+    # 但因前后端多处引用暂保留，待下版本清理
     experience_points = Column(Integer, nullable=False, default=0)  # 经验值
     level = Column(Integer, nullable=False, default=1)  # 等级
     # Phase 1.5: TeacherPersona 合并 (DD1)
