@@ -57,7 +57,32 @@ class RecallService:
         if not prerequisites:
             return []
 
-        # For each prerequisite, check struggle/mastered status
+        # [TODO-3] One observe_recent per fact_type, not per prereq.
+        # [R1-01] world_id filter prevents cross-world memory leakage.
+        struggle_facts = memory_manager.observe_recent(
+            db, character_id,
+            world_id=world_id,
+            fact_types=["concept_struggle"],
+            limit=50,
+        )
+        mastered_facts = memory_manager.observe_recent(
+            db, character_id,
+            world_id=world_id,
+            fact_types=["concept_mastered"],
+            limit=50,
+        )
+
+        # Build tag-only sets for exact membership checks.
+        # [TODO-3] Dropped `prereq_id in content` substring match —
+        # `"abs" in "absolutely confused"` was a false-positive trap.
+        # concept_tags is the structured field; content is freeform prose.
+        struggle_tags = {
+            tag for f in struggle_facts for tag in (f.concept_tags or [])
+        }
+        mastered_tags = {
+            tag for f in mastered_facts for tag in (f.concept_tags or [])
+        }
+
         hints: list[str] = []
         for prereq_id in prerequisites:
             # Find node label
@@ -67,29 +92,8 @@ class RecallService:
                     label = n.get("label", prereq_id)
                     break
 
-            # [R1-01] Pass world_id to prevent cross-world memory leakage
-            struggle_facts = memory_manager.observe_recent(
-                db, character_id,
-                world_id=world_id,
-                fact_types=["concept_struggle"],
-                limit=10,
-            )
-            mastered_facts = memory_manager.observe_recent(
-                db, character_id,
-                world_id=world_id,
-                fact_types=["concept_mastered"],
-                limit=10,
-            )
-
-            # Check if prereq concept appears in struggle/mastered facts
-            has_struggle = any(
-                prereq_id in (f.concept_tags or []) or prereq_id in (f.content or "")
-                for f in struggle_facts
-            )
-            has_mastered = any(
-                prereq_id in (f.concept_tags or []) or prereq_id in (f.content or "")
-                for f in mastered_facts
-            )
+            has_struggle = prereq_id in struggle_tags
+            has_mastered = prereq_id in mastered_tags
 
             if has_struggle and not has_mastered:
                 hints.append(

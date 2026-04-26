@@ -181,6 +181,31 @@ class TestRetrieve:
         assert results[0].id == struggle.id, "struggle effective (0.5) should beat decayed student_state"
 
 
+class TestObserveRecent:
+    def test_observe_recent_filters_expired(self, db_session):
+        """observe_recent must skip facts whose expires_at is in the past."""
+        c = _make_character(db_session)
+        now = datetime.now(UTC)
+        # One live fact + one expired
+        live = MemoryFact(
+            character_id=c.id, world_id=1, fact_type="event", content="live",
+            concept_tags=["x"], salience=0.5, created_at=now,
+            expires_at=now + timedelta(hours=1),
+        )
+        expired = MemoryFact(
+            character_id=c.id, world_id=1, fact_type="event", content="expired",
+            concept_tags=["x"], salience=0.5, created_at=now,
+            expires_at=now - timedelta(hours=1),
+        )
+        db_session.add_all([live, expired])
+        db_session.flush()
+
+        results = memory_manager.observe_recent(db_session, c.id, world_id=1)
+        ids = {r.id for r in results}
+        assert live.id in ids
+        assert expired.id not in ids
+
+
 # ---------------------------------------------------------------
 # should_extract_memory fix
 # ---------------------------------------------------------------
@@ -348,3 +373,44 @@ class TestWorkingContext:
 
         ctx = memory_manager.get_working_context(db_session, session.id)
         assert ctx == []
+
+    def test_token_budget_trims_oldest(self, db_session):
+        """When messages exceed token budget, oldest are dropped first."""
+        c = _make_character(db_session)
+        session = SessionModel(
+            course_id=1, user_id=1, world_id=1, sage_character_id=c.id,
+        )
+        db_session.add(session)
+        db_session.flush()
+
+        # Each message ~ (3000//3 + 4) ≈ 1004 tokens. Budget is 4000.
+        # 5 messages would be ~5020 tokens, so only 3 latest survive.
+        big = "x" * 3000
+        for i in range(5):
+            db_session.add(ChatMessage(
+                session_id=session.id, sender_type="user", content=f"{i}-{big}",
+            ))
+        db_session.flush()
+
+        ctx = memory_manager.get_working_context(db_session, session.id)
+        assert len(ctx) < 5
+        # Latest message must be present (newest-first walk keeps it).
+        assert ctx[-1]["content"].startswith("4-")
+
+    def test_token_budget_keeps_at_least_one(self, db_session):
+        """A single message larger than budget is still returned (not dropped to [])."""
+        c = _make_character(db_session)
+        session = SessionModel(
+            course_id=1, user_id=1, world_id=1, sage_character_id=c.id,
+        )
+        db_session.add(session)
+        db_session.flush()
+
+        # One message way over budget (~20000 tokens vs 4000 budget).
+        db_session.add(ChatMessage(
+            session_id=session.id, sender_type="user", content="x" * 60000,
+        ))
+        db_session.flush()
+
+        ctx = memory_manager.get_working_context(db_session, session.id)
+        assert len(ctx) == 1

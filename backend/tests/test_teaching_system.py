@@ -209,3 +209,36 @@ class TestRecallService:
             current_topic="nonexistent_topic", course_id=1,
         )
         assert hints == []
+
+    def test_recall_no_substring_false_positive(self, db_session):
+        """[TODO-3] prereq 'abs' must NOT match a fact with content
+        'absolutely confused' or tags ['absolute']."""
+        w = _make_world(db_session)
+        char = _make_character(db_session)
+        concept_map = {
+            "nodes": [
+                {"id": "abs", "label": "abs"},
+                {"id": "topic", "label": "topic"},
+            ],
+            "edges": [
+                {"source": "topic", "target": "abs", "type": "requires"},
+            ],
+        }
+        c = Course(id=1, world_id=w.id, name="TestCourse", meta={"concept_map": concept_map})
+        db_session.add(c)
+        db_session.flush()
+
+        # A struggle fact whose content contains "abs" as substring of another word
+        # and whose tags contain a tag with "abs" as substring — but neither is the
+        # exact tag "abs". Old code matched both via substring; new code must not.
+        _make_fact(
+            db_session, char.id, "concept_struggle",
+            "absolutely confused about something else",
+            concept_tags=["absolute"],
+        )
+
+        hints = recall_service.get_recall_hints(
+            db_session, character_id=char.id, world_id=1,
+            current_topic="topic", course_id=1,
+        )
+        assert hints == []

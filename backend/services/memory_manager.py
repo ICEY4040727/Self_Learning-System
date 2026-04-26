@@ -36,6 +36,12 @@ class MemoryManager:
     # Working memory (chat_messages)
     # ---------------------------------------------------------------
 
+    @staticmethod
+    def _estimate_tokens(content: str) -> int:
+        """Rough token count: ~3 chars/token splits the difference between
+        Chinese (~1) and English (~4). +4 for the per-message role overhead."""
+        return max(1, len(content or "") // 3) + 4
+
     def get_working_context(
         self,
         db: Session,
@@ -43,23 +49,42 @@ class MemoryManager:
         *,
         max_messages: int | None = None,
     ) -> list[dict]:
-        """Return recent chat messages for LLM context, respecting budget."""
-        mem_cfg = _cfg()["memory"]
-        limit = max_messages or mem_cfg["max_working_context_messages"]
+        """Return recent chat messages for LLM context, capped by both
+        max_working_context_messages and max_working_context_tokens.
 
-        messages = (
+        Walks newest→oldest and keeps prepending until either cap is hit.
+        Always keeps at least the latest message even if it alone busts the
+        token budget (better than returning an empty context)."""
+        mem_cfg = _cfg()["memory"]
+        msg_cap = max_messages or mem_cfg["max_working_context_messages"]
+        token_budget = mem_cfg["max_working_context_tokens"]
+
+        # Newest-first; trim to fit token budget.
+        # Tie-break on id desc — SQLite timestamp is second-resolution, so
+        # rapid-fire messages within the same second would otherwise be
+        # ordered nondeterministically.
+        candidates = (
             db.query(ChatMessage)
             .filter(ChatMessage.session_id == session_id)
-            .order_by(ChatMessage.timestamp.desc())
-            .limit(limit)
+            .order_by(ChatMessage.timestamp.desc(), ChatMessage.id.desc())
+            .limit(msg_cap)
             .all()
         )
-        messages.reverse()
+
+        kept: list[ChatMessage] = []
+        total_tokens = 0
+        for m in candidates:
+            cost = self._estimate_tokens(m.content)
+            if kept and total_tokens + cost > token_budget:
+                break
+            kept.append(m)
+            total_tokens += cost
+        kept.reverse()
 
         role_map = {"user": "user", "teacher": "assistant"}
         return [
             {"role": role_map.get(m.sender_type, "user"), "content": m.content}
-            for m in messages
+            for m in kept
         ]
 
     # ---------------------------------------------------------------
@@ -107,7 +132,12 @@ class MemoryManager:
             q = q.filter(MemoryFact.fact_type.in_(fact_types))
 
         if concept_tags:
-            # SQLite JSON: concept_tags stored as JSON array
+            # SQLite JSON: concept_tags stored as JSON text; .contains() is
+            # substring-LIKE under the hood. [TODO-4] In practice tags are
+            # multi-char Chinese / multi-word English so collisions are rare,
+            # but `"abs"` would match `["absolute"]`. Switch to JSON1
+            # `json_each` or post-fetch filtering if false-positives become
+            # observable. Accepted for now.
             for tag in concept_tags:
                 q = q.filter(MemoryFact.concept_tags.contains(f'"{tag}"'))
 
@@ -142,12 +172,18 @@ class MemoryManager:
         Observe recent memories without affecting recall state.
         For NarrativeEngine and GamificationEngine.
 
-        [R1-01] Added world_id filter to prevent cross-world memory leakage.
+        [R1-01] world_id filter prevents cross-world memory leakage.
+        [TODO-2b] expires_at filter — narrative/gamification must not see
+        memories that retrieve() would already exclude as expired.
         """
         mem_cfg = _cfg()["memory"]
         limit = limit or mem_cfg["observe_recent_limit"]
 
-        q = db.query(MemoryFact).filter(MemoryFact.character_id == character_id)
+        q = db.query(MemoryFact).filter(
+            MemoryFact.character_id == character_id,
+            (MemoryFact.expires_at.is_(None))
+            | (MemoryFact.expires_at > datetime.now(UTC)),
+        )
 
         if world_id is not None:
             q = q.filter(
@@ -369,7 +405,12 @@ class MemoryManager:
     # ---------------------------------------------------------------
 
     def cleanup_expired(self, db: Session) -> int:
-        """Remove expired memories. Returns count deleted."""
+        """Remove expired memories. Returns count deleted.
+
+        Not auto-scheduled (we removed the scheduler in feat/v1.0.3).
+        Operations should run `python -m backend.scripts.cleanup_memories`
+        on whatever cadence they choose.
+        """
         return memory_facts_service.delete_expired_memories(db)
 
     # ---------------------------------------------------------------
@@ -392,6 +433,9 @@ class MemoryManager:
         )
 
         if concept_tags:
+            # [TODO-4] Same substring-match caveat as retrieve(). For dedup
+            # the risk is merging unrelated memories whose tags happen to
+            # overlap as substrings. Acceptable for now.
             for tag in concept_tags:
                 q = q.filter(MemoryFact.concept_tags.contains(f'"{tag}"'))
         else:
