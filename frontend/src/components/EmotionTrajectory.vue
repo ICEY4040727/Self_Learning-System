@@ -101,7 +101,7 @@ const formatDate = (d: string) => {
 const fetchSessions = async () => {
   try {
     const params = props.courseId ? `?course_id=${props.courseId}` : ''
-    const { data } = await client.get(`/api/sessions${params}`, )
+    const { data } = await client.get(`/sessions${params}`, )
     sessions.value = data
   } catch {
     // endpoint may not exist yet; silently skip
@@ -113,7 +113,7 @@ const fetchTrajectory = async () => {
   loading.value = true
   try {
     const { data } = await client.get(
-      `/api/sessions/${selectedSession.value}/emotion_trajectory`,
+      `/sessions/${selectedSession.value}/emotion_trajectory`,
       
     )
     trajectoryData.value = data

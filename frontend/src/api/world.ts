@@ -57,8 +57,8 @@ export const worldApi = {
   /**
    * 向世界添加角色
    */
-  addCharacter: (worldId: number, characterId: number) =>
-    client.post(`/worlds/${worldId}/characters`, { character_id: characterId }),
+  addCharacter: (worldId: number, characterId: number, role: 'sage' | 'traveler') =>
+    client.post(`/worlds/${worldId}/characters`, { character_id: characterId, role }),
 
   /**
    * 从世界移除角色

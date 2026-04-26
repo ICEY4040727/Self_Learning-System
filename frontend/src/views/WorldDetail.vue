@@ -413,7 +413,7 @@ const fetchCharacters = async () => {
 const handleCreatePersona = async (data: Record<string, any>) => {
   try {
     const newCharacter = await characterApi.create(data as any)
-    await worldApi.addCharacter(worldId.value, newCharacter.id)
+    await worldApi.addCharacter(worldId.value, newCharacter.id, 'sage')
     await fetchWorld()
     showCreatePersona.value = false
   } catch (error) {
@@ -436,7 +436,7 @@ const handleEditTraveler = (traveler: Character) => {
 // Select traveler
 const selectTraveler = async (traveler: Character) => {
   try {
-    await worldApi.addCharacter(worldId.value, traveler.id)
+    await worldApi.addCharacter(worldId.value, traveler.id, 'traveler')
     await fetchWorld()
     showTravelerSelect.value = false
   } catch (error) {
@@ -447,7 +447,7 @@ const selectTraveler = async (traveler: Character) => {
 // Select sage (link existing sage to this world)
 const selectSage = async (sage: Character) => {
   try {
-    await worldApi.addCharacter(worldId.value, sage.id)
+    await worldApi.addCharacter(worldId.value, sage.id, 'sage')
     await fetchWorld()
     await fetchCharacters()
     showSageSelect.value = false
@@ -537,7 +537,8 @@ const openStepCreate = (type: 'sage' | 'traveler') => {
 const handleStepCreate = async (data: Record<string, any>) => {
   try {
     const newCharacter = await characterApi.create(data as any)
-    await worldApi.addCharacter(worldId.value, newCharacter.id)
+    const role = newCharacter.type === 'traveler' ? 'traveler' : 'sage'
+    await worldApi.addCharacter(worldId.value, newCharacter.id, role)
     await fetchWorld()
     showStepCreate.value = false
   } catch (error) {

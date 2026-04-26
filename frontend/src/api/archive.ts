@@ -51,5 +51,5 @@ export const archiveApi = {
    * 获取角色列表（归档视图用）
    */
   getCharacters: () =>
-    client.get('/characters').then(res => res.data),
+    client.get('/character').then(res => res.data),
 }

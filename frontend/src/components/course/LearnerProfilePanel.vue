@@ -254,17 +254,3 @@ const dimClass = (score: number) => {
   color: rgba(255, 255, 255, 0.3);
 }
 </style>
-</task_progress>
-</write_to_file>
-<task_progress>
-- [x] Phase 3 全部完成并提交
-- [x] 教材上传前端集成
-- [x] 删除所有 emoji
-- [ ] 学习画像 UI (Phase 2F)
-  - [x] LearnerProfilePanel 组件
-  - [ ] API 端点接入
-  - [ ] 集成到 CoursePage
-  - [ ] build + test 验证
-  - [ ] Git 提交
-</task_progress>
-</write_to_file>
