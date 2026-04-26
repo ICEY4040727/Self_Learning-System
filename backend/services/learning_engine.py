@@ -262,6 +262,7 @@ class LearningEngine:
                 memories=recent_facts,
                 course_id=session.course_id,
                 world_id=session.world_id,
+                user_id=session.user_id,
             )
 
             # 18. Narrative events (观察者，不调 LLM)

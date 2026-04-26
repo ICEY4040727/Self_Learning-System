@@ -60,6 +60,7 @@ class MasteryTracker:
         memories: list[MemoryFact],
         course_id: int,
         world_id: int,
+        user_id: int,
     ) -> dict:
         """从新提取的记忆事实更新掌握度
 
@@ -67,6 +68,8 @@ class MasteryTracker:
             memories: 本轮对话新提取的 MemoryFact 列表
             course_id: 当前课程 ID
             world_id: 当前世界 ID
+            user_id: 当前用户 ID — ProgressTracking.user_id 是 NOT NULL，
+                必须传入（之前漏传导致 prod INSERT 失败）。
 
         Returns:
             {
@@ -101,12 +104,17 @@ class MasteryTracker:
                     concept=concept,
                     delta=delta,
                     world_id=world_id,
+                    user_id=user_id,
                 )
                 updated_concepts.append(concept)
 
-                # 如果是 mastered，调度 FSRS 复习
-                if fact.fact_type == "concept_mastered":
-                    self._schedule_review(db, world_id, concept)
+                # [TODO-T2] Schedule FSRS for both mastered AND struggle.
+                # Struggle is precisely when the system should pull a concept
+                # forward in the review queue, not skip it.
+                if fact.fact_type in ("concept_mastered", "concept_struggle"):
+                    self._schedule_review(
+                        db, world_id, concept, signal=fact.fact_type,
+                    )
 
         # 检查是否可以自动推进
         auto_advanced = False
@@ -142,10 +150,12 @@ class MasteryTracker:
         concept: str,
         delta: int,
         world_id: int,
+        user_id: int,
     ):
-        """更新单个概念的掌握度"""
+        """更新单个概念的掌握度。user_id 必须传入（NOT NULL on table）。"""
         tracking = db.query(ProgressTracking).filter(
             ProgressTracking.course_id == course_id,
+            ProgressTracking.user_id == user_id,
             ProgressTracking.topic == concept,
         ).first()
 
@@ -156,6 +166,7 @@ class MasteryTracker:
         else:
             tracking = ProgressTracking(
                 course_id=course_id,
+                user_id=user_id,
                 topic=concept,
                 mastery_level=max(MIN_MASTERY, min(MAX_MASTERY, 50 + delta)),
                 last_review=datetime.now(UTC),
@@ -220,31 +231,57 @@ class MasteryTracker:
 
         return True, next_idx
 
-    def _schedule_review(self, db: Session, world_id: int, concept: str):
-        """调度 FSRS 复习"""
+    def _schedule_review(
+        self, db: Session, world_id: int, concept: str,
+        *, signal: str = "concept_mastered",
+    ):
+        """调度 FSRS 复习。
+
+        Args:
+            signal: "concept_mastered" 或 "concept_struggle"
+                - mastered: 增长 stability，间隔变长（标准 SRS 行为）
+                - struggle: 缩短 stability，重置 reps，明天再练
+
+        [NEW-T1] flush() before SELECT — sessions are autoflush=False, so a
+        prior pending INSERT in the same call (e.g., two memories tagging
+        the same concept in one process_message) wouldn't be visible to the
+        SELECT and we'd add a duplicate, hitting UNIQUE(world_id, concept_id).
+        """
+        from datetime import timedelta
+
+        db.flush()
         existing = db.query(FSRSState).filter(
             FSRSState.world_id == world_id,
             FSRSState.concept_id == concept,
         ).first()
 
+        now = datetime.now(UTC)
+
         if existing:
-            existing.reps = (existing.reps or 0) + 1
-            existing.last_review = datetime.now(UTC)
-            # 简化的间隔计算：每次复习后稳定性增加
-            stability = (existing.stability or 1.0) * 1.5
-            existing.stability = min(stability, 365.0)
-            from datetime import timedelta
-            existing.next_review = datetime.now(UTC) + timedelta(days=stability)
+            existing.last_review = now
+            if signal == "concept_struggle":
+                # Failed review — Anki/SuperMemo style: reset reps, shrink
+                # stability, schedule for tomorrow.
+                existing.reps = 0
+                existing.stability = max((existing.stability or 1.0) * 0.5, 1.0)
+                existing.next_review = now + timedelta(days=1)
+            else:
+                existing.reps = (existing.reps or 0) + 1
+                stability = (existing.stability or 1.0) * 1.5
+                existing.stability = min(stability, 365.0)
+                existing.next_review = now + timedelta(days=existing.stability)
         else:
-            from datetime import timedelta
+            # First-time signal. Struggle starts at low stability so the
+            # next review is sooner; mastered uses the standard 1-day start.
+            initial_stability = 0.5 if signal == "concept_struggle" else 1.0
             fsrs = FSRSState(
                 world_id=world_id,
                 concept_id=concept,
                 difficulty=5.0,
-                stability=1.0,
-                last_review=datetime.now(UTC),
-                next_review=datetime.now(UTC) + timedelta(days=1),
-                reps=1,
+                stability=initial_stability,
+                last_review=now,
+                next_review=now + timedelta(days=1),
+                reps=0 if signal == "concept_struggle" else 1,
             )
             db.add(fsrs)
 

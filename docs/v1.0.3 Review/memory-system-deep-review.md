@@ -124,3 +124,23 @@
 - §3 全部消化（要么修要么 deferred）
 - 全套测试 pass
 - 然后才进入 Phase 3 下一片（教学/掌握度引擎）
+
+---
+
+## 7. 完成态（2026-04-26）
+
+| Section | 状态 |
+|---|---|
+| §1 已修复 | 14 项（含 TODO-1~4 + NEW-1） |
+| §2 待修复 | 0 项（全部 ✅） |
+| §3 新发现 | 1 项已修（NEW-1 order_by tie-break） |
+| §4 acceptable | 3 项（设计对齐） |
+
+**测试**：`cd backend && pytest` → 270 passed, 13 skipped
+
+**Commits on `feat/v1.0.3`**：
+- `fb1c812` 第一轮 review followup（scheduler、迁移链、404）
+- `3cecf76` 大重构：废弃 evolve_salience、接通 effective_salience、通道 2 dedup、删除 scheduler
+- `e3fa6d1` 本轮：token budget、expiry、recall_service 优化
+
+**记忆系统 review 关闭。** 下一片：教学/掌握度引擎（mastery_tracker.py + teaching_planner.py + course_generator.py，~750 行新代码）。
