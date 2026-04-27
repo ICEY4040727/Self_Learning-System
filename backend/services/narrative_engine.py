@@ -90,22 +90,27 @@ class NarrativeEngine:
             }
 
             # 5. 写回记忆（观察者约束：fact_type 必须是 event）
+            # [TODO-N5] Route through memory_manager.write_facts so dedup
+            # (24h same-type/same-tags merge), t_valid timestamping, and any
+            # future ChromaDB sync apply. Direct db.add bypassed all of that
+            # — every cooldown-reset triggered a duplicate row.
             if rule.writeback_memory:
                 try:
+                    from backend.services.memory_manager import memory_manager
+
                     content = f"叙事事件: {event_text}"
                     tags = merged_vars.get("concept_tags", [rule.trigger_type])
                     if isinstance(tags, str):
                         tags = [tags]
-                    db.add(MemoryFact(
-                        character_id=character_id,
-                        world_id=world_id,
-                        fact_type="event",
-                        content=content,
-                        concept_tags=tags,
-                        salience=0.6,
-                        created_at=now,
-                    ))
-                    db.flush()
+                    memory_manager.write_facts(
+                        db, character_id, world_id,
+                        [{
+                            "fact_type": "event",
+                            "content": content,
+                            "concept_tags": tags,
+                            "salience": 0.6,
+                        }],
+                    )
                 except Exception as e:
                     logger.warning(f"NarrativeEngine writeback failed: {e}")
 
@@ -157,8 +162,14 @@ class NarrativeEngine:
             window_minutes = params.get("window_minutes", 60)
 
             since = datetime.now(UTC) - timedelta(minutes=window_minutes)
+            # [TODO-N3] world_id filter prevents cross-world leakage —
+            # struggles in world A must not trigger narrative events in B.
+            # Match observe_recent semantics: NULL world_id (cross-world
+            # facts) also count.
             matching = db.query(MemoryFact).filter(
                 MemoryFact.character_id == character_id,
+                (MemoryFact.world_id == world_id)
+                | (MemoryFact.world_id.is_(None)),
                 MemoryFact.fact_type == fact_type,
                 MemoryFact.created_at >= since,
             ).all()
@@ -179,6 +190,15 @@ class NarrativeEngine:
         elif rule.condition_type == "time_gap":
             # Checked by caller providing last_session_time in context
             pass  # Handled externally via context_vars
+
+        else:
+            # [TODO-N4] Surface dead-rule footgun: an admin can author a
+            # rule with a condition_type the engine doesn't recognise and
+            # it silently never fires. Log so operators notice.
+            logger.warning(
+                "NarrativeEngine: unknown condition_type %r on rule %r — silently skipping",
+                rule.condition_type, rule.trigger_type,
+            )
 
         return False, extra_vars
 

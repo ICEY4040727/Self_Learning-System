@@ -88,31 +88,41 @@ class GamificationEngine:
             if not triggered:
                 continue
 
-            # 插入解锁记录（唯一约束保证幂等）
+            # [TODO-N2] Wrap each INSERT in a SAVEPOINT so a UniqueConstraint
+            # collision (race with a concurrent unlock) only rolls back this
+            # one INSERT, not the entire process_message transaction. The
+            # previous `db.rollback()` recovery destroyed mastery updates,
+            # narrative writeback rows, and the ChatMessage saved earlier in
+            # the same call.
+            record = Achievement(
+                user_id=user_id,
+                character_id=character_id,
+                achievement_key=adef.key,
+                unlocked_at=datetime.now(UTC),
+                context=ctx,
+            )
             try:
-                record = Achievement(
-                    user_id=user_id,
-                    character_id=character_id,
-                    achievement_key=adef.key,
-                    unlocked_at=datetime.now(UTC),
-                    context=ctx,
-                )
-                db.add(record)
-                db.flush()
-
-                new_unlocks.append({
-                    "key": adef.key,
-                    "display_name": adef.display_name,
-                    "description": adef.description,
-                    "rarity": adef.rarity,
-                    "icon": adef.icon,
-                    "category": adef.category,
-                    "context": ctx,
-                })
+                with db.begin_nested():
+                    db.add(record)
             except Exception:
-                db.rollback()
-                # UniqueConstraint violation = already unlocked, skip
+                # Either UniqueConstraint (already unlocked by concurrent
+                # request) or some FK error — skip this achievement and move
+                # on. The outer transaction is intact thanks to SAVEPOINT.
+                logger.info(
+                    "Achievement %s skipped on insert (likely already unlocked)",
+                    adef.key,
+                )
                 continue
+
+            new_unlocks.append({
+                "key": adef.key,
+                "display_name": adef.display_name,
+                "description": adef.description,
+                "rarity": adef.rarity,
+                "icon": adef.icon,
+                "category": adef.category,
+                "context": ctx,
+            })
 
         return new_unlocks
 
@@ -165,6 +175,14 @@ class GamificationEngine:
             matching = [f for f in recent_facts if f.fact_type == fact_type]
             if len(matching) >= count:
                 return True, {"count": len(matching)}
+
+        else:
+            # [TODO-N4] An achievement def with an unknown condition_type
+            # silently never unlocks. Surface for operator awareness.
+            logger.warning(
+                "GamificationEngine: unknown condition_type %r — achievement will never unlock",
+                condition_type,
+            )
 
         return False, None
 

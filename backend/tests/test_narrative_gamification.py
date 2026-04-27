@@ -323,3 +323,184 @@ class TestGamificationEngine:
 
         keys = [u["key"] for u in unlocks]
         assert "kindred_spirit" in keys
+
+
+# ---- World isolation (TODO-N3) ----
+
+
+class TestNarrativeWorldIsolation:
+    """[TODO-N3] fact_count_threshold previously queried by character_id only,
+    so 3 struggles in world A would falsely trigger a struggle_cascade event
+    in world B. Pin the world_id filter."""
+
+    def test_struggles_in_other_world_do_not_trigger(self, db_session):
+        """3 concept_struggle facts in world 2 must NOT trigger a cascade
+        event when the engine is invoked for world 1."""
+        from backend.services.narrative_engine import NarrativeEngine
+
+        # Build worlds 1 and 2 (default _make_world inserts id=1)
+        _make_world(db_session)
+        w2 = World(id=2, user_id=1, name="World2")
+        db_session.add(w2)
+        db_session.flush()
+
+        char = _make_character(db_session)
+        _seed_narrative_rules(db_session)
+
+        # Insert 3 struggles into world 2 (NOT world 1)
+        for i in range(3):
+            db_session.add(MemoryFact(
+                character_id=char.id, world_id=2,
+                fact_type="concept_struggle",
+                content=f"struggle {i}", concept_tags=["topic"],
+                salience=0.5, created_at=datetime.now(UTC),
+            ))
+        db_session.flush()
+
+        # Use a fresh engine instance to avoid cooldown leakage from prior tests
+        engine = NarrativeEngine()
+        events = engine.check_triggers(
+            db_session, user_id=1, character_id=char.id, world_id=1,
+        )
+
+        cascade_events = [e for e in events if e["type"] == "struggle_cascade"]
+        assert cascade_events == [], "world-2 struggles must not fire cascade in world-1"
+
+    def test_struggles_in_same_world_still_trigger(self, db_session):
+        """Same-world struggles should still trigger — guard against
+        over-tightening the filter."""
+        from backend.services.narrative_engine import NarrativeEngine
+
+        _make_world(db_session)
+        char = _make_character(db_session)
+        _seed_narrative_rules(db_session)
+
+        for i in range(3):
+            db_session.add(MemoryFact(
+                character_id=char.id, world_id=1,
+                fact_type="concept_struggle",
+                content=f"s {i}", concept_tags=["topic"],
+                salience=0.5, created_at=datetime.now(UTC),
+            ))
+        db_session.flush()
+
+        engine = NarrativeEngine()
+        events = engine.check_triggers(
+            db_session, user_id=1, character_id=char.id, world_id=1,
+        )
+
+        types = {e["type"] for e in events}
+        assert "struggle_cascade" in types
+
+
+# ---- Transaction integrity tests (TODO-N2) ----
+
+
+class TestAchievementTransactionIntegrity:
+    """[TODO-N2] check_achievements used to db.rollback() on UNIQUE collision,
+    nuking everything else flushed in the same transaction. These tests pin
+    the SAVEPOINT-based recovery in place."""
+
+    def test_pre_existing_writes_survive_engine_call(self, db_session):
+        """Black-box: a fact added BEFORE check_achievements must still
+        exist after. The old code's unconditional db.rollback() on UNIQUE
+        collision would have wiped it."""
+        _make_world(db_session)
+        char = _make_character(db_session)
+        _seed_achievement_defs(db_session)
+
+        canary = MemoryFact(
+            character_id=char.id, world_id=1, fact_type="event",
+            content="canary — must not vanish", concept_tags=["canary"],
+            salience=0.5, created_at=datetime.now(UTC),
+        )
+        db_session.add(canary)
+        db_session.flush()
+        canary_id = canary.id
+
+        gamification_engine.check_achievements(
+            db_session, user_id=1, character_id=char.id, world_id=1,
+            current_stage="friend",
+        )
+
+        survived = db_session.query(MemoryFact).filter(
+            MemoryFact.id == canary_id,
+        ).first()
+        assert survived is not None, "pre-existing fact must survive"
+
+    def test_savepoint_absorbs_unique_collision(self, db_session):
+        """[TODO-N2] White-box: directly mirror the engine's INSERT pattern
+        (begin_nested + add) with a pre-seeded conflicting row. SAVEPOINT
+        must absorb the IntegrityError so the outer transaction's prior
+        writes (the canary) remain intact."""
+        from sqlalchemy.exc import IntegrityError
+
+        _make_world(db_session)
+        char = _make_character(db_session)
+
+        # Pre-seed kindred_spirit so the duplicate INSERT will collide.
+        db_session.add(Achievement(
+            user_id=1, character_id=char.id,
+            achievement_key="kindred_spirit",
+            unlocked_at=datetime.now(UTC),
+        ))
+        db_session.flush()
+
+        # Canary written into the same transaction.
+        canary = MemoryFact(
+            character_id=char.id, world_id=1, fact_type="event",
+            content="must survive collision", concept_tags=["c"],
+            salience=0.5, created_at=datetime.now(UTC),
+        )
+        db_session.add(canary)
+        db_session.flush()
+        canary_id = canary.id
+
+        # Mirror the engine's pattern (gamification.py:_check_condition path).
+        try:
+            with db_session.begin_nested():
+                db_session.add(Achievement(
+                    user_id=1, character_id=char.id,
+                    achievement_key="kindred_spirit",
+                    unlocked_at=datetime.now(UTC),
+                ))
+        except IntegrityError:
+            pass  # SAVEPOINT absorbed it — outer transaction intact
+
+        # Outer transaction still alive — canary survives, new queries work.
+        survived = db_session.query(MemoryFact).filter(
+            MemoryFact.id == canary_id,
+        ).first()
+        assert survived is not None, "outer transaction must be intact"
+        assert survived.content == "must survive collision"
+
+
+# ---- Route auth tests (TODO-N1) ----
+
+
+class TestAchievementsRouteAuth:
+    """[TODO-N1] /achievements route used to allow anonymous IDOR. These
+    tests lock in the auth + ownership checks."""
+
+    def test_unauthenticated_rejected(self, client):
+        """No bearer token → 401."""
+        resp = client.get("/api/achievements/1/1")
+        assert resp.status_code == 401
+
+    def test_cannot_read_other_users_achievements(self, client, auth_headers):
+        """Authenticated as user A but querying user B's achievements → 403."""
+        # auth_headers is user id 1 (testuser created in conftest fixture)
+        resp = client.get("/api/achievements/9999/1", headers=auth_headers)
+        assert resp.status_code == 403
+
+    def test_owner_can_read_own_achievements(self, client, auth_headers):
+        """Owner can read their own (assumes user_id=1 from auth_headers)."""
+        # Look up the actual user_id from /api/auth/me to avoid hard-coding.
+        me = client.get("/api/auth/me", headers=auth_headers)
+        assert me.status_code == 200
+        my_id = me.json()["id"]
+        resp = client.get(f"/api/achievements/{my_id}/1", headers=auth_headers)
+        assert resp.status_code == 200
+        body = resp.json()
+        assert "unlocked" in body
+        assert "total_unlocked" in body

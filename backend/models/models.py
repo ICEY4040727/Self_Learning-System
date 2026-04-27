@@ -410,7 +410,11 @@ class NarrativeTriggerRule(Base):
     id = Column(Integer, primary_key=True, index=True)
     trigger_type = Column(String(50), unique=True, nullable=False)
     display_name = Column(String(100), nullable=False)
-    condition_type = Column(String(30), nullable=False)  # fact_created/fact_count_threshold/relationship_stage_change/profile_shift/session_event/time_gap
+    # [TODO-N4] Implemented in narrative_engine._check_condition:
+    #   fact_created, fact_count_threshold, relationship_stage_change
+    # Listed here historically but NOT implemented (engine logs warning):
+    #   profile_shift, session_event, time_gap
+    condition_type = Column(String(30), nullable=False)
     condition_params = Column(JSON, nullable=True, default=dict)
     priority = Column(String(10), default="medium")  # high/medium/low
     writeback_memory = Column(Boolean, default=False)
@@ -430,7 +434,12 @@ class AchievementDef(Base):
     display_name = Column(String(100), nullable=False)
     description = Column(Text, nullable=True)
     category = Column(String(20), nullable=False)  # milestone/growth/relationship/resilience/exploration/hidden
-    condition_type = Column(String(30), nullable=False)  # stat_threshold/dimension_crossing/relationship_stage/fact_transition/fact_count_threshold/consecutive_days
+    # [TODO-N4] Implemented in gamification._check_condition:
+    #   stat_threshold, dimension_crossing, relationship_stage,
+    #   fact_transition, fact_count_threshold
+    # Listed here historically but NOT implemented (engine logs warning):
+    #   consecutive_days
+    condition_type = Column(String(30), nullable=False)
     condition_params = Column(JSON, nullable=True, default=dict)
     rarity = Column(String(10), default="common")  # common/rare/legendary
     icon = Column(String(50), nullable=True)
