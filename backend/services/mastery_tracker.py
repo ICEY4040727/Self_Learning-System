@@ -17,6 +17,7 @@ from datetime import UTC, datetime
 
 from sqlalchemy.orm import Session
 
+from backend.core.config import get_settings
 from backend.models.models import (
     Course,
     FSRSState,
@@ -26,22 +27,20 @@ from backend.models.models import (
 
 logger = logging.getLogger(__name__)
 
-# 掌握度变化阈值
-MASTERY_DELTA_MAP = {
-    "concept_mastered": 25,      # 大幅提升
-    "concept_struggle": -15,     # 明显下降
-    "student_state": 0,          # 不影响掌握度
-    "preference": 0,
-    "event": 0,
-    "commitment": 0,
-}
 
-# 掌握度范围
-MIN_MASTERY = 0
-MAX_MASTERY = 100
+def _mastery_cfg() -> dict:
+    """[TODO-T9] All mastery tunables live in core/config.py learning_system.mastery."""
+    return get_settings().learning_system["mastery"]
 
-# 自动推进阈值：当前章节核心概念平均掌握度 >= 此值时推进
-AUTO_ADVANCE_THRESHOLD = 70
+
+# Re-exports for backward compat with tests that import these names.
+# Read at module load — cfg dict won't change at runtime.
+_cfg = _mastery_cfg()
+MASTERY_DELTA_MAP = _cfg["delta_map"]
+MIN_MASTERY = _cfg["min"]
+MAX_MASTERY = _cfg["max"]
+AUTO_ADVANCE_THRESHOLD = _cfg["auto_advance_threshold"]
+del _cfg
 
 
 class MasteryTracker:
@@ -244,19 +243,24 @@ class MasteryTracker:
         self, db: Session, world_id: int, concept: str,
         *, signal: str = "concept_mastered",
     ):
-        """调度 FSRS 复习。
+        """调度 FSRS 复习 — 委托给 spaced_repetition wrapper（py-fsrs）。
 
         Args:
-            signal: "concept_mastered" 或 "concept_struggle"
-                - mastered: 增长 stability，间隔变长（标准 SRS 行为）
-                - struggle: 缩短 stability，重置 reps，明天再练
+            signal: "concept_mastered" → Rating.Good (3)
+                    "concept_struggle" → Rating.Again (1)
 
-        [NEW-T1] flush() before SELECT — sessions are autoflush=False, so a
-        prior pending INSERT in the same call (e.g., two memories tagging
-        the same concept in one process_message) wouldn't be visible to the
-        SELECT and we'd add a duplicate, hitting UNIQUE(world_id, concept_id).
+        [TODO-T7] Replaced hand-rolled stability *= 1.5 / *= 0.5 logic with
+        spaced_repetition.review (py-fsrs lib). The library handles
+        difficulty, stability, retrievability per the FSRS algorithm; the
+        old code ignored difficulty entirely and capped stability at 365
+        days, freezing intervals after ~13 successful reviews.
+
+        [NEW-T1] flush() before SELECT — sessions are autoflush=False; same
+        concept hit twice in one call would otherwise duplicate INSERT.
         """
-        from datetime import timedelta
+        from backend.services import spaced_repetition
+
+        rating_int = 1 if signal == "concept_struggle" else 3
 
         db.flush()
         existing = db.query(FSRSState).filter(
@@ -264,35 +268,30 @@ class MasteryTracker:
             FSRSState.concept_id == concept,
         ).first()
 
-        now = datetime.now(UTC)
+        # Use card_data as authoritative state. The individual columns can't
+        # round-trip through py-fsrs (state/step/card_id missing) so reading
+        # them and rebuilding a Card silently lost progress.
+        existing_state = existing.card_data if existing else None
 
-        if existing:
-            existing.last_review = now
-            if signal == "concept_struggle":
-                # Failed review — Anki/SuperMemo style: reset reps, shrink
-                # stability, schedule for tomorrow.
-                existing.reps = 0
-                existing.stability = max((existing.stability or 1.0) * 0.5, 1.0)
-                existing.next_review = now + timedelta(days=1)
-            else:
-                existing.reps = (existing.reps or 0) + 1
-                stability = (existing.stability or 1.0) * 1.5
-                existing.stability = min(stability, 365.0)
-                existing.next_review = now + timedelta(days=existing.stability)
+        result = spaced_repetition.review(existing_state, rating_int)
+        fsrs_payload = result["fsrs_state"]
+
+        if existing is None:
+            existing = FSRSState(world_id=world_id, concept_id=concept)
+            db.add(existing)
+
+        existing.card_data = fsrs_payload
+        # Keep individual columns synchronised for ad-hoc SQL queries.
+        existing.difficulty = fsrs_payload.get("difficulty")
+        existing.stability = fsrs_payload.get("stability")
+        existing.last_review = result["last_review"]
+        existing.next_review = result["due"]
+        # reps tracked locally (py-fsrs Card has no reps field) —
+        # struggle resets the streak, mastered increments it.
+        if signal == "concept_struggle":
+            existing.reps = 0
         else:
-            # First-time signal. Struggle starts at low stability so the
-            # next review is sooner; mastered uses the standard 1-day start.
-            initial_stability = 0.5 if signal == "concept_struggle" else 1.0
-            fsrs = FSRSState(
-                world_id=world_id,
-                concept_id=concept,
-                difficulty=5.0,
-                stability=initial_stability,
-                last_review=now,
-                next_review=now + timedelta(days=1),
-                reps=0 if signal == "concept_struggle" else 1,
-            )
-            db.add(fsrs)
+            existing.reps = (existing.reps or 0) + 1
 
     def get_course_mastery(self, db: Session, course_id: int) -> dict:
         """获取课程的掌握度概览（仅 concept 行，不含 lesson 行）
@@ -322,6 +321,10 @@ class MasteryTracker:
                 "total_tracked": 0,
             }
 
+        cfg = _mastery_cfg()
+        weak_threshold = cfg["weak_threshold"]
+        mastered_threshold = cfg["auto_advance_threshold"]
+
         concepts = {}
         weak = []
         mastered = 0
@@ -331,9 +334,9 @@ class MasteryTracker:
             m = t.mastery_level or 0
             concepts[t.topic] = m
             total += m
-            if m < 40:
+            if m < weak_threshold:
                 weak.append(t.topic)
-            if m >= AUTO_ADVANCE_THRESHOLD:
+            if m >= mastered_threshold:
                 mastered += 1
 
         overall = total / len(trackings) if trackings else 0.0

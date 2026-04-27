@@ -28,12 +28,27 @@ class CourseContentModule(MemoryModule):
         return 12  # 在 Narrative(10) 之后，Misconception(30) 之前
 
     def is_applicable(self, context: dict) -> bool:
-        """需要有 course_id 且课程有生成内容"""
+        """[TODO-T10] Kept for back-compat with any external caller; the
+        builder framework only consults should_include."""
         return context.get("course_id") is not None
 
     def should_include(self, context: dict) -> bool:
-        """课程有生成内容时始终注入"""
-        return True
+        """[TODO-T10] Skip the module entirely when the course has no
+        generated content — previously the module ran assemble() every
+        prompt build and returned "" for sessions without uploaded textbooks."""
+        db = context.get("db")
+        course_id = context.get("course_id")
+        if not db or not course_id:
+            return False
+
+        from backend.models.models import Course
+
+        course = db.query(Course).filter(Course.id == course_id).first()
+        if not course or not course.meta:
+            return False
+
+        meta = course.meta if isinstance(course.meta, dict) else {}
+        return bool(meta.get("generated_overview") or meta.get("generated_lessons"))
 
     def assemble(self, context: dict) -> str:
         """从 Course.meta 读取生成内容并渲染教学提示"""

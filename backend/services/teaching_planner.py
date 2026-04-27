@@ -11,6 +11,7 @@ from datetime import UTC, datetime
 from sqlalchemy.orm import Session
 from sqlalchemy.orm.attributes import flag_modified
 
+from backend.core.config import get_settings
 from backend.models.models import Course, ProgressTracking
 
 logger = logging.getLogger(__name__)
@@ -100,6 +101,9 @@ class TeachingPlanner:
                 item["_status"] = "pending"
             lesson_list.append(item)
 
+        # [TODO-T6] course_completed: every lesson has been advanced past.
+        course_completed = total > 0 and done >= total
+
         return {
             "total_lessons": total,
             "current_index": current_idx,
@@ -107,15 +111,17 @@ class TeachingPlanner:
             "progress_pct": round(pct, 1),
             "current_lesson": current_lesson,
             "lessons": lesson_list,
+            "course_completed": course_completed,
         }
 
     def advance_lesson(self, db: Session, course: Course) -> dict:
         """推进到下一课
 
         Marks current lesson as completed and moves to next.
-
-        Returns:
-            更新后的进度 dict
+        [TODO-T6] When advancing past the last lesson, current_index stays
+        clamped to the last lesson and `course_completed=True` shows up in
+        the returned progress dict (computed by get_progress from completion
+        set size). Frontend can use that to show a completion screen.
         """
         if not course.meta:
             return {"error": "课程无生成内容"}
@@ -133,7 +139,7 @@ class TeachingPlanner:
         # 推进到下一课（不超出范围）
         next_idx = current_idx + 1
         if next_idx >= len(lessons):
-            next_idx = len(lessons) - 1  # 保持在最后一课
+            next_idx = len(lessons) - 1  # stay on last lesson; course_completed flag carries the signal
 
         course.meta["current_lesson_index"] = next_idx
         course.meta["completed_lessons"] = sorted(completed)
@@ -181,7 +187,13 @@ class TeachingPlanner:
         return self.get_progress(db, course)
 
     def _record_lesson_progress(self, db: Session, course: Course, lesson_idx: int):
-        """记录章节进度到 ProgressTracking 表（topic_type='lesson'）"""
+        """首次到达某 lesson 时插入 'started' 行（mastery=20）。
+
+        [TODO-T5] 不再对 existing 行 += 20。原实现把"导航到 lesson"等同于
+        "学了 20% 这节课"，导致用户从第 5 课跳回第 1 课复习时第 1 课的
+        mastery 又涨 20。Lesson 实际掌握度由 mastery_tracker 通过 concept
+        信号推动；本函数只负责"开始"标记。
+        """
         lessons = course.meta.get("generated_lessons", [])
         if not lessons or lesson_idx >= len(lessons):
             return
@@ -198,18 +210,21 @@ class TeachingPlanner:
         ).first()
 
         if existing:
-            existing.mastery_level = min((existing.mastery_level or 0) + 20, 100)
+            # Already started — just refresh last_review timestamp.
             existing.last_review = datetime.now(UTC)
-        else:
-            tracking = ProgressTracking(
-                course_id=course.id,
-                user_id=course.world.user_id if course.world else None,
-                topic=topic,
-                topic_type="lesson",
-                mastery_level=20,
-                last_review=datetime.now(UTC),
-            )
-            db.add(tracking)
+            return
+
+        # [TODO-T9] initial mastery for a freshly-started lesson is config-driven
+        initial = get_settings().learning_system["mastery"]["lesson_started_initial"]
+        tracking = ProgressTracking(
+            course_id=course.id,
+            user_id=course.world.user_id if course.world else None,
+            topic=topic,
+            topic_type="lesson",
+            mastery_level=initial,
+            last_review=datetime.now(UTC),
+        )
+        db.add(tracking)
 
 
 # Global instance

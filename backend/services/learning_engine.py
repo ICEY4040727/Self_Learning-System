@@ -257,6 +257,13 @@ class LearningEngine:
             recent_facts = result.memories if result else []
 
             # 17.6 Mastery tracking: MemoryFact → 概念掌握度 → 自适应推进 (Phase 3 Step 4)
+            # [TODO-T8] Intentional: only channel-1 (LLM-extracted) facts feed
+            # mastery. Channel-2 signals (keyword rules like "我不懂") are
+            # carried by sentinel concept_tags (__channel2_*) and used for
+            # working-context retrieval, but they're noisy single-keyword
+            # heuristics — letting them swing mastery scores ±15/+25 makes
+            # the score reflect emotion more than understanding. LLM extraction
+            # uses surrounding context and is the single source of truth here.
             mastery_result = mastery_tracker.update_from_memories(
                 db=db,
                 memories=recent_facts,

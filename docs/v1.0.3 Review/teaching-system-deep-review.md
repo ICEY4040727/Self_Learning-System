@@ -68,55 +68,45 @@
 - **测试**：替换 `test_validate_result_minimal` 为 `test_validate_result_empty_raises`，断言 ValueError 抛出
 - **状态**：✅ done（待 commit）
 
-### TODO-T5 ⏳ — `set_lesson` 后退也加 mastery 🟡 **P2**
+### TODO-T5 ✅ — `set_lesson` 后退也加 mastery 🟡 **P2**
 
-- **位置**：`teaching_planner.py:154-181` + `_record_lesson_progress`
-- **问题**：手动设 lesson_index=2 时也调 `_record_lesson_progress`，把第 3 课的 mastery 加 20。如果用户从第 5 课跳回第 1 课"复习一下"，**第 1 课的 mastery 又涨 20**。复习 ≠ 学完。
-- **修法**：`_record_lesson_progress` 只在 `advance_lesson` 路径调用，`set_lesson` 不写 mastery；或者只对**首次到达**的 lesson 写。
-- **状态**：pending
+- **位置**：`teaching_planner._record_lesson_progress`
+- **修复**：方法只 INSERT "started" 行（mastery=20），existing 路径仅刷新 `last_review`，**不再 += 20**。lesson 实际掌握度由 mastery_tracker 通过 concept 信号推动；本函数只负责"开始"标记。
+- **测试**：新增 `test_record_progress_does_not_bump_existing_mastery`
+- **状态**：✅ done（待 commit）
 
-### TODO-T6 ⏳ — `advance_lesson` 在末课静默 no-op 🟡 **P2**
+### TODO-T6 ✅ — `advance_lesson` 在末课静默 no-op 🟡 **P2**
 
-- **位置**：`teaching_planner.py:133-136`
-- **问题**：
-  ```python
-  next_idx = current_idx + 1
-  if next_idx >= len(lessons):
-      next_idx = len(lessons) - 1  # 保持在最后一课
-  ```
-  推到最后一课后再调 `advance_lesson`，next_idx 不变。前端调用方收不到"课程已完成"信号。
-- **修法**：在最后一课时返回 `{"completed": True, ...}` 字段；前端可以据此显示祝贺/结业页面。
-- **状态**：pending
+- **位置**：`teaching_planner.advance_lesson` + `get_progress`
+- **修复**：`get_progress` 增加 `course_completed: bool` 字段（`done >= total`）。`advance_lesson` 末课调用时 current_index clamp 到末课但 completed_lessons 添加完后 `course_completed=True` 自然为 True。前端可据此显示结业页。
+- **测试**：`test_course_completed_signal` (推到末课后 = True) + `test_course_not_completed_mid_course` (中途 = False)
+- **状态**：✅ done（待 commit）
 
-### TODO-T7 ⏳ — 自定 FSRS 实现 vs `fsrs>=6.3.0` 依赖 🟡 **P2**
+### TODO-T7 ✅ — 自定 FSRS 实现 vs `fsrs>=6.3.0` 依赖 🟡 **P2**
 
-- **位置**：`mastery_tracker.py:223-249` + `requirements.txt:12 fsrs>=6.3.0`
-- **问题**：`_schedule_review` 自己实现 stability 几何增长 `stability * 1.5`，cap 365。同时 `requirements.txt` 列了 fsrs 库（标准 SuperMemo/Anki 算法）。
-  - 自定算法没有 difficulty 自适应，不同概念衰减一样
-  - cap 365 后再 mastered 不影响下次复习时间，**13 次完美复习后永远固化在 365 天间隔**
-- **修法**：`from fsrs import Scheduler` 直接用库；或者 explicit 注释"故意不用，因为 X"。
-- **状态**：pending
+- **发现**：项目里**已经有 `backend/services/spaced_repetition.py`** 是 fsrs 库的正确封装（被 archive.py 用着）。mastery_tracker 是在已有正确实现旁边重新发明了一个错的轮子。
+- **修复**：`_schedule_review` 改为调用 `spaced_repetition.review` — Rating.Good (3) for mastered，Rating.Again (1) for struggle
+- **顺手修了 schema 缺陷**：FSRSState 之前只存 difficulty/stability/last_review/next_review/reps 这几个字段，但 `Card.from_dict` 需要 card_id/state/step。所以无论 mastery_tracker 还是 archive.py，**之前每次 review 都因为字段不全而退化为"首次 review"**——FSRS 的进度从来没真正累积过。新增 `card_data JSON` 列存完整 Card.to_dict()。新迁移 `2026_04_27_add_fsrs_card_data.py`
+- **测试**：3 个新测试 — struggle 触发 FSRS、struggle interval < mastered interval、连续 mastered → reps=3 + state 累积
+- **状态**：✅ done（待 commit）
 
-### TODO-T8 ⏳ — 通道 2 信号不进入掌握度 🟢 **P3**
+### TODO-T8 ✅ — 通道 2 信号不进入掌握度 🟢 **P3**
 
-- **位置**：`learning_engine.py:262` 传给 mastery_tracker 的 `recent_facts = result.memories`，仅来自通道 1（LLM `<memory>` 标签）。
-- **问题**：通道 2（"我不懂" → struggle）现已有 sentinel tag `__channel2_confusion__`，但 `mastery_tracker` 看不到。
-  - **争议点**：可能是设计选择（LLM 信号更可信）。如果是有意，得在 docstring 写明。
-- **状态**：pending（先等用户决定）
+- **决定**：保留现状（通道 2 不进 mastery），明示为有意设计
+- **修复**：`learning_engine.py:259` 加 `[TODO-T8]` 注释块说明：通道 2 是单关键词 heuristic，让其影响 ±15/+25 mastery 会让分数反映情绪而非理解；LLM 提取的通道 1 是唯一可信源
+- **状态**：✅ done（待 commit）
 
-### TODO-T9 ⏳ — `MASTERY_DELTA_MAP` 等魔术数字硬编码 🟢 **P3**
+### TODO-T9 ✅ — `MASTERY_DELTA_MAP` 等魔术数字硬编码 🟢 **P3**
 
-- **位置**：`mastery_tracker.py:30-44`
-- **问题**：`{"concept_mastered": 25, "concept_struggle": -15}`、`AUTO_ADVANCE_THRESHOLD = 70`、`MIN/MAX_MASTERY = 0/100`、`weak < 40`、`mastered_count >= 70`。
-- **修法**：移到 `core/config.py` 的 `learning_system` dict，与 salience 那批一致。
-- **状态**：pending
+- **修复**：`config.py learning_system["mastery"]` 新 dict — `delta_map`、`min`/`max`、`auto_advance_threshold`、`weak_threshold`、`lesson_started_initial`。`mastery_tracker` 的模块级常量改成从 config 读（保留 `MASTERY_DELTA_MAP` 等名称用于向后兼容旧 import）。`teaching_planner._record_lesson_progress` 也用 config 的 `lesson_started_initial`
+- **状态**：✅ done（待 commit）
 
-### TODO-T10 ⏳ — `CourseContentModule.is_applicable` 太宽 🟢 **P3**
+### TODO-T10 ✅ — `CourseContentModule.is_applicable` 太宽 🟢 **P3**
 
-- **位置**：`course_content.py:30-36`
-- **问题**：只要 `course_id` 存在就 applicable，但 `assemble` 在课程没 meta 时返回 `""`。模块每次 prompt 构建都被无谓调用。
-- **修法**：`is_applicable` 改为 `course_id is not None and Course.meta exists`。需要 db query — 取舍：是否值得为省一次 prompt 段落付一次 query。
-- **状态**：pending
+- **发现**：framework 实际只看 `should_include`，不看 `is_applicable`（is_applicable 只是模块自己加的辅助方法）
+- **修复**：把检查搬到 `should_include` — db + course_id + Course exists + Course.meta 含 generated_overview 或 generated_lessons 才返回 True。assemble() 不变（保留作为 defensive fallback）
+- **测试**：4 个新 should_include 测试覆盖 no-db / no-course / empty-meta / has-content 四种分支；删旧的 `test_should_include_always_true`
+- **状态**：✅ done（待 commit）
 
 ---
 
@@ -160,6 +150,25 @@
 
 ---
 
-## 7. 完成态
+## 7. 完成态（2026-04-27）
 
-（执行过程中填充）
+| Section | 状态 |
+|---|---|
+| §1 已修复 | 11 项（T1-T10 + NEW-T1） |
+| §2 待修复 | 0（全部 ✅） |
+| §3 新发现 | 1 项已修（NEW-T1 autoflush race） |
+| §4 acceptable | 3 项 |
+
+**测试**：`cd backend && pytest` → 280 passed, 13 skipped
+**Alembic**：single head (`2026_04_27_fsrs_card_data`), single base
+
+**Commits on `feat/v1.0.3`**：
+- `28a9fe0` T1+T2+NEW-T1（user_id, struggle FSRS, autoflush race）
+- `0e5476b` T3+T4（topic_type 列, no silent course fallback）
+- 本轮（待 commit）T5-T10（lesson mastery, completed signal, fsrs lib + card_data, channel-2 doc, config, course_content gating）
+
+**两个意外发现**：
+- T7 实施时发现 `spaced_repetition.py` 早就存在 — `mastery_tracker._schedule_review` 在已有正确实现旁边写错了一个轮子
+- T7 顺带发现 FSRSState 缺 card_id/state/step 字段，**之前 archive.py 也用错了相同的 cherry-pick 模式**，导致每次 review 都退化为首次 review — 本轮一并修了
+
+**教学系统 review 关闭。** 下一片：叙事/成就引擎（`narrative_engine.py` 185 + `gamification.py` 211 + 路由 + 325 行测试）。

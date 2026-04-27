@@ -284,6 +284,10 @@ class FSRSState(Base):
     last_review = Column(DateTime, nullable=True)
     next_review = Column(DateTime, nullable=True)
     reps = Column(Integer, default=0)
+    # [TODO-T7] Authoritative py-fsrs Card.to_dict() payload — needed because
+    # Card.from_dict requires card_id/state/step which the columns above don't
+    # carry. Other columns are kept for ad-hoc SQL convenience only.
+    card_data = Column(JSON, nullable=True)
 
     world = orm_relationship("World", back_populates="fsrs_states")
 

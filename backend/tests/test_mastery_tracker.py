@@ -301,26 +301,12 @@ class TestMasteryTracker:
         assert result["mastered_count"] == 2  # 80 and 75 >= 70
         assert result["total_tracked"] == 3
 
-    # ── _schedule_review ───────────────────────────────────────────
-
-    def test_schedule_review_new(self):
-        db = MagicMock()
-        db.query().filter().first.return_value = None
-
-        self.tracker._schedule_review(db, 1, "变量")
-        assert db.add.called
-
-    def test_schedule_review_existing(self):
-        db = MagicMock()
-        fsrs = MagicMock()
-        fsrs.reps = 2
-        fsrs.stability = 3.0
-        db.query().filter().first.return_value = fsrs
-
-        self.tracker._schedule_review(db, 1, "变量")
-        assert fsrs.reps == 3
-        assert fsrs.stability == 4.5  # 3.0 * 1.5
-        assert not db.add.called
+    # [TODO-T7] Removed `test_schedule_review_existing` — it asserted
+    # stability == 4.5 (3.0 * 1.5), which was the hand-rolled math we
+    # replaced with py-fsrs. Real behavior is now covered by
+    # TestMasteryTrackerRealDB::test_card_data_round_trips_state etc.
+    # Removed `test_schedule_review_new` for the same reason — its
+    # `db.add.called` assertion is now exercised by the real-DB tests.
 
 
 class TestMasteryTrackerRealDB:
@@ -428,9 +414,9 @@ class TestMasteryTrackerRealDB:
         assert overview["total_tracked"] == 1
         assert "递归" in overview["concepts"]
 
-    def test_struggle_schedules_fsrs_with_short_interval(self, db_session):
-        """[TODO-T2] concept_struggle must also schedule FSRS — and with a
-        SHORTER interval than mastered, since the student needs to revisit."""
+    def test_struggle_schedules_fsrs(self, db_session):
+        """[TODO-T2] concept_struggle must also schedule FSRS (the original
+        code only scheduled mastered, leaving struggling concepts un-reviewed)."""
         user_id, world_id, course_id = self._seed_user_world_course(db_session)
         struggle_fact = MemoryFact(
             character_id=1, world_id=world_id, fact_type="concept_struggle",
@@ -451,39 +437,69 @@ class TestMasteryTrackerRealDB:
         ).first()
         assert fsrs is not None, "struggle must trigger FSRS schedule"
         assert fsrs.reps == 0, "struggle should reset reps, not increment"
-        assert fsrs.stability < 1.0, "struggle should start with sub-1.0 stability"
+        assert fsrs.card_data is not None, "card_data must be persisted (T7)"
+        assert fsrs.next_review is not None
 
-    def test_struggle_then_mastered_recovers(self, db_session):
-        """Struggling first then mastering same concept: stability grows from
-        the shrunken value, not reset."""
-        user_id, world_id, course_id = self._seed_user_world_course(db_session)
-        struggle = MemoryFact(
+    def test_struggle_interval_shorter_than_mastered(self, db_session):
+        """[TODO-T2/T7] After struggle, next_review should be sooner than
+        after mastered. py-fsrs Rating.Again schedules within minutes;
+        Rating.Good schedules days out."""
+        user_id, world_id, _ = self._seed_user_world_course(db_session)
+
+        # Two separate concepts so FSRS state is independent.
+        struggle_fact = MemoryFact(
             character_id=1, world_id=world_id, fact_type="concept_struggle",
-            content="不懂", concept_tags=["递归"], salience=0.6,
+            content="不懂A", concept_tags=["A"], salience=0.6,
         )
-        mastered = MemoryFact(
+        mastered_fact = MemoryFact(
             character_id=1, world_id=world_id, fact_type="concept_mastered",
-            content="懂了", concept_tags=["递归"], salience=0.7,
+            content="懂B", concept_tags=["B"], salience=0.7,
         )
-        db_session.add_all([struggle, mastered])
+        db_session.add_all([struggle_fact, mastered_fact])
         db_session.flush()
 
+        course_id = db_session.query(Course).first().id
         mastery_tracker.update_from_memories(
-            db=db_session, memories=[struggle],
+            db=db_session, memories=[struggle_fact, mastered_fact],
             course_id=course_id, world_id=world_id, user_id=user_id,
         )
-        mastery_tracker.update_from_memories(
-            db=db_session, memories=[mastered],
-            course_id=course_id, world_id=world_id, user_id=user_id,
+        db_session.flush()
+
+        struggle_fsrs = db_session.query(FSRSState).filter(
+            FSRSState.world_id == world_id, FSRSState.concept_id == "A",
+        ).first()
+        mastered_fsrs = db_session.query(FSRSState).filter(
+            FSRSState.world_id == world_id, FSRSState.concept_id == "B",
+        ).first()
+        assert struggle_fsrs.next_review < mastered_fsrs.next_review, \
+            "struggle should be reviewed sooner than mastered"
+
+    def test_card_data_round_trips_state(self, db_session):
+        """[TODO-T7] Sequential mastered reviews must accumulate FSRS state
+        — without card_data persistence each review reset to first-time."""
+        user_id, world_id, course_id = self._seed_user_world_course(db_session)
+        fact = MemoryFact(
+            character_id=1, world_id=world_id, fact_type="concept_mastered",
+            content="ok", concept_tags=["topic"], salience=0.7,
         )
+        db_session.add(fact)
+        db_session.flush()
+
+        for _ in range(3):
+            mastery_tracker.update_from_memories(
+                db=db_session, memories=[fact],
+                course_id=course_id, world_id=world_id, user_id=user_id,
+            )
         db_session.flush()
 
         fsrs = db_session.query(FSRSState).filter(
-            FSRSState.world_id == world_id,
-            FSRSState.concept_id == "递归",
+            FSRSState.world_id == world_id, FSRSState.concept_id == "topic",
         ).first()
-        assert fsrs.reps == 1, "mastered after struggle: reps from 0 → 1"
-        assert fsrs.stability > 0.5, "stability should grow from 0.5 (post-struggle)"
+        assert fsrs.reps == 3, "three mastered reviews → reps == 3"
+        # state should have progressed past Learning (state=1) into Review.
+        # py-fsrs State enum: 1=Learning, 2=Review, 3=Relearning
+        assert fsrs.card_data["state"] in (1, 2), "card_data must persist state"
+        assert fsrs.card_data["card_id"] is not None
 
     def test_update_existing_tracking_keyed_by_user(self, db_session):
         """Same course + same topic but different users → separate rows

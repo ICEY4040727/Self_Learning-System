@@ -27,8 +27,32 @@ class TestCourseContentModule:
     def test_is_applicable_without_course_id(self):
         assert self.module.is_applicable({}) is False
 
-    def test_should_include_always_true(self):
-        assert self.module.should_include({}) is True
+    def test_should_include_no_db(self):
+        """[TODO-T10] No db/course_id in context → skip module."""
+        assert self.module.should_include({}) is False
+        assert self.module.should_include({"course_id": 1}) is False  # no db
+
+    def test_should_include_no_course(self):
+        """[TODO-T10] course_id given but course not in DB → skip."""
+        db = MagicMock()
+        db.query().filter().first.return_value = None
+        assert self.module.should_include({"db": db, "course_id": 999}) is False
+
+    def test_should_include_no_generated_content(self):
+        """[TODO-T10] Course exists but meta is empty → skip module."""
+        db = MagicMock()
+        course = MagicMock()
+        course.meta = {}
+        db.query().filter().first.return_value = course
+        assert self.module.should_include({"db": db, "course_id": 1}) is False
+
+    def test_should_include_with_generated_content(self):
+        """[TODO-T10] Course has generated_lessons → include."""
+        db = MagicMock()
+        course = MagicMock()
+        course.meta = {"generated_lessons": [{"title": "L1"}]}
+        db.query().filter().first.return_value = course
+        assert self.module.should_include({"db": db, "course_id": 1}) is True
 
     def test_get_priority(self):
         assert self.module.get_priority() == 12
@@ -240,3 +264,49 @@ class TestTeachingPlanner:
         assert progress["lessons"][0]["_status"] == "completed"
         assert progress["lessons"][1]["_status"] == "current"
         assert progress["lessons"][2]["_status"] == "pending"
+
+    def test_course_completed_signal(self):
+        """[TODO-T6] After advancing past the last lesson, get_progress
+        should set course_completed=True so frontend can show completion."""
+        db = MagicMock()
+        db.query().filter().first.return_value = None
+
+        course = self._make_course(meta={
+            "generated_lessons": [{"title": "L1"}, {"title": "L2"}],
+            "current_lesson_index": 1,
+            "completed_lessons": [0],
+        })
+
+        result = self.planner.advance_lesson(db, course)
+        assert result["course_completed"] is True
+        assert result["progress_pct"] == 100.0
+
+    def test_course_not_completed_mid_course(self):
+        """course_completed should be False until the final advance."""
+        db = MagicMock()
+        course = self._make_course(meta={
+            "generated_lessons": [{"title": "L1"}, {"title": "L2"}, {"title": "L3"}],
+            "current_lesson_index": 1,
+            "completed_lessons": [0],
+        })
+        progress = self.planner.get_progress(db, course)
+        assert progress["course_completed"] is False
+
+    def test_record_progress_does_not_bump_existing_mastery(self):
+        """[TODO-T5] Revisiting a lesson must not increment mastery — that
+        was the bug where set_lesson(1) after advance_lesson(2) silently
+        added +20 to lesson 1's mastery on every revisit."""
+        db = MagicMock()
+        existing = MagicMock()
+        existing.mastery_level = 60
+        db.query.return_value.filter.return_value.first.return_value = existing
+
+        course = self._make_course(meta={
+            "generated_lessons": [{"title": "L1"}],
+            "current_lesson_index": 0,
+        })
+
+        self.planner._record_lesson_progress(db, course, 0)
+
+        assert existing.mastery_level == 60, "revisit must not change mastery_level"
+        assert not db.add.called, "must not insert another row when one exists"

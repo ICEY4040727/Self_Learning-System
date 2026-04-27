@@ -1467,15 +1467,9 @@ def review_progress(
         FSRSState.concept_id == db_progress.topic,
     ).first()
 
-    existing_fsrs_state = None
-    if fsrs_state_row:
-        existing_fsrs_state = {
-            "difficulty": fsrs_state_row.difficulty,
-            "stability": fsrs_state_row.stability,
-            "last_review": fsrs_state_row.last_review,
-            "due": fsrs_state_row.next_review,
-            "reps": fsrs_state_row.reps,
-        }
+    # [TODO-T7] Use card_data as authoritative state — cherry-picking columns
+    # loses card_id/state/step which py-fsrs Card.from_dict requires.
+    existing_fsrs_state = fsrs_state_row.card_data if fsrs_state_row else None
 
     result = spaced_repetition.review(existing_fsrs_state, req.rating)
 
@@ -1491,9 +1485,10 @@ def review_progress(
         )
         db.add(fsrs_state_row)
 
+    fsrs_state_row.card_data = fsrs_payload
     fsrs_state_row.difficulty = fsrs_payload.get("difficulty")
     fsrs_state_row.stability = fsrs_payload.get("stability")
-    fsrs_state_row.reps = fsrs_payload.get("reps") or 0
+    fsrs_state_row.reps = (fsrs_state_row.reps or 0) + 1
     fsrs_state_row.last_review = result["last_review"]
     fsrs_state_row.next_review = result["due"]
 

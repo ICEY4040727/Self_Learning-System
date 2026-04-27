@@ -80,6 +80,22 @@ class Settings(BaseSettings):
             "event": 0.8,
             "commitment": 0.5,
         },
+        # [TODO-T9] mastery_tracker / teaching_planner tunables
+        "mastery": {
+            "delta_map": {
+                "concept_mastered": 25,
+                "concept_struggle": -15,
+                "student_state": 0,
+                "preference": 0,
+                "event": 0,
+                "commitment": 0,
+            },
+            "min": 0,
+            "max": 100,
+            "auto_advance_threshold": 70,
+            "weak_threshold": 40,
+            "lesson_started_initial": 20,
+        },
     }
 
     model_config = SettingsConfigDict(
