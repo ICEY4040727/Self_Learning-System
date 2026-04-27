@@ -60,42 +60,31 @@
 - **修复**：从 `db.add(MemoryFact(...))` 换成 `memory_manager.write_facts(db, character_id, world_id, [{...}])`。dedup / t_valid / 未来 ChromaDB 同步全部生效
 - **状态**：✅ done（待 commit）
 
-### TODO-N6 ⏳ — `condition_params` 同时处理 str 和 dict — 死分支或脏数据 🟡 **P2**
+### TODO-N6 ✅ — `condition_params` 同时处理 str 和 dict — 实际是 schema drift 🟡 **P2**
 
-- **位置**：`narrative_engine.py:135-140` + `gamification.py:73-78`
-- **问题**：模型里 `condition_params = Column(JSON, default=dict)`，SQLAlchemy 反序列化为 dict。但代码里：
-  ```python
-  if isinstance(raw, str):
-      params = json.loads(raw)
-  elif isinstance(raw, dict):
-      params = raw
-  ```
-  - 要么 `str` 分支是死代码（永不触发）
-  - 要么有路径写入 stringified JSON 到 JSON 列（脏数据）
-- **修法**：grep 写入路径，确认只写 dict；删 str 分支或加 logger.error 触发警报。
-- **状态**：pending
+- **真相**：审下来发现两个分支**都不是死代码**：
+  - 模型 `condition_params = Column(JSON)` → 测试（用 model 的 create_all）和 PG 生产返回 dict
+  - 迁移 `2026_04_25_add_narrative_and_achievements.py:158/191` 创建的是 **TEXT** 列，并 INSERT JSON 字符串 → SQLite 生产返回 str
+- **修复**：两处加详细注释说明 schema drift；保留两条解析分支
+- **真正修复 schema**（迁移把 TEXT → JSON + 数据迁移）留作后续 issue（迁移有真实生产数据风险，单独评估）
+- **状态**：✅ done（已注释，schema 修复 deferred）
 
-### TODO-N7 ⏳ — `get_achievements_status` O(N×M) 扫描 🟢 **P2**
+### TODO-N7 ✅ — `get_achievements_status` O(N×M) 扫描 🟢 **P2**
 
-- **位置**：`gamification.py:185-197`
-- **问题**：在 `for adef in all_defs:` 内部用 `next((a for a in unlocked if ...))` 又扫一遍 unlocked。每个成就定义一次 O(N) 扫描，总 O(N×M)。100 个 def + 50 个 unlocked = 5000 次比对。
-- **修法**：循环外建 dict — `unlocked_by_key = {a.achievement_key: a for a in unlocked}`，循环内 O(1) lookup。
-- **状态**：pending
+- **位置**：`gamification.py:185`
+- **修复**：循环外建 `unlocked_by_key = {a.achievement_key: a for a in unlocked}`，循环内 O(1) lookup
+- **状态**：✅ done（待 commit）
 
-### TODO-N8 ⏳ — `get_achievements_status` 没有 user 隔离校验 🟢 **P2**
+### TODO-N8 ✅ — `get_achievements_status` 没有 user 隔离校验 🟢 **P2**
 
-- **位置**：`gamification.py:171-212`
-- **问题**：方法本身按 user_id+character_id 过滤 → 数据隔离 OK。但**完全依赖 caller 传对 user_id**。N1 那个无 auth 的路由就是 caller 不可信的真实例子。
-- **修法**：N1 修了之后此项天然消除，但还是建议在 status 里冗余记录被查询的 user_id，方便审计。
-- **状态**：pending（N1 修后确认即可）
+- **审完结论**：grep `get_achievements_status` 全 backend 只有一处 caller — 已被 N1 修过的路由。无其它 API 入口暴露此方法
+- **状态**：✅ done — N1 已覆盖，无遗漏暴露面
 
-### TODO-N9 ⏳ — `event_template` 占位符替换不安全 🟢 **P3**
+### TODO-N9 ✅ — `event_template` 占位符替换不安全 🟢 **P3**
 
-- **位置**：`narrative_engine.py:80-83`
-- **问题**：`event_text.replace(f"{{{key}}}", str(val))` — 朴素 replace。模板里如果含字面量 `{`，或者 val 本身含 `{key}` 字符串会递归替换。
-- **影响**：触发 toast 显示乱码，不会崩。
-- **修法**：用 `str.format_map(SafeDict(merged_vars))` 或 jinja2。
-- **状态**：pending（low-value，等真出乱码再说）
+- **位置**：`narrative_engine.py:_safe_format`
+- **修复**：新增 `_SafeDict` (missing key 返回字面 `{key}`) + `_safe_format()` helper 走 `str.format_map`。一次替换，缺 key 不崩，val 含 `{x}` 不递归。malformed 模板捕获 ValueError/IndexError 兜底原文返回
+- **状态**：✅ done（待 commit）
 
 ---
 
@@ -133,6 +122,24 @@
 
 ---
 
-## 7. 完成态
+## 7. 完成态（2026-04-27）
 
-（执行过程中填充）
+| Section | 状态 |
+|---|---|
+| §1 已修复 | 9 项（N1-N9 全 ✅） |
+| §2 待修复 | 0 |
+| §3 新发现 | 0 |
+| §4 acceptable | 2 项（R1-02 内存冷却、priority 默认） |
+
+**测试**：`cd backend && pytest` → 287 passed, 13 skipped
+**Alembic**：仍 single head (`2026_04_27_fsrs_card_data`), single base
+
+**Commits on `feat/v1.0.3`**：
+- `e0ca2ba` N1-N5（auth, savepoint, world_id, dead rules, writeback）
+- 本轮（待 commit）N6-N9（schema drift doc, O(N+M), N1 follow-up confirmation, safe format）
+
+**两个意外发现**：
+- N6 不是死代码而是 schema drift — 迁移建 TEXT、模型说 JSON。两条 parse 分支真的都需要。真正修迁移有数据风险，单独 issue
+- N4 实施时清楚看到：4 种 condition_type（time_gap / consecutive_days / profile_shift / session_event）在模型 docstring 列了但 engine 没实现，没有任何 lint 抓得到这种 dead-rule 陷阱
+
+**叙事/成就 review 关闭。** 下一片：教材子系统（`api/routes/textbook.py` 449 行新代码 + 教材表迁移 + course_generator 集成）— 是 cefd4da 里**最大的单文件**。

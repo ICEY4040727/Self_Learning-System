@@ -14,6 +14,23 @@ from sqlalchemy.orm import Session
 logger = logging.getLogger(__name__)
 
 
+class _SafeDict(dict):
+    """[TODO-N9] str.format_map source — missing keys leave the
+    placeholder literal `{key}` in place instead of raising KeyError."""
+    def __missing__(self, key: str) -> str:
+        return "{" + key + "}"
+
+
+def _safe_format(template: str, vars: dict) -> str:
+    """One-pass placeholder substitution — no recursive expansion of values."""
+    safe = _SafeDict({k: str(v) for k, v in vars.items()})
+    try:
+        return template.format_map(safe)
+    except (ValueError, IndexError):
+        # Malformed template (e.g. unmatched brace) — return as-is.
+        return template
+
+
 class NarrativeEngine:
     """叙事引擎 - 基于规则的叙事事件触发器"""
 
@@ -77,10 +94,13 @@ class NarrativeEngine:
             self._cooldowns[cooldown_key] = now
 
             # 4. 生成事件
+            # [TODO-N9] format_map with a SafeDict so:
+            #   - template literals like "the {bracket} thing" don't crash
+            #     when the key isn't in vars (KeyError → leaves placeholder)
+            #   - vals containing "{x}" no longer recursively trigger
+            #     replacement against subsequent keys
             merged_vars = {**context_vars, **extra_vars}
-            event_text = rule.event_template or ""
-            for key, val in merged_vars.items():
-                event_text = event_text.replace(f"{{{key}}}", str(val))
+            event_text = _safe_format(rule.event_template or "", merged_vars)
 
             event = {
                 "type": rule.trigger_type,
@@ -136,6 +156,13 @@ class NarrativeEngine:
         """检查单条规则的条件。返回 (triggered, extra_template_vars)。"""
         from backend.models.models import MemoryFact
 
+        # [TODO-N6] Both branches are real, not defensive padding:
+        # - The model declares condition_params as JSON column → tests
+        #   (create_all from model) and Postgres production return dict.
+        # - The migration 2026_04_25_add_narrative_and_achievements.py
+        #   creates the column as TEXT and seeds JSON-stringified rows →
+        #   SQLite production returns str.
+        # Schema drift to fix later; for now both forms must be parsed.
         params = {}
         if rule.condition_params:
             raw = rule.condition_params

@@ -68,7 +68,8 @@ class GamificationEngine:
             if adef.key in unlocked_keys:
                 continue
 
-            # 解析 condition_params
+            # [TODO-N6] Schema drift between model (JSON) and migration
+            # (TEXT seeds) — see narrative_engine for the full note.
             params = {}
             if adef.condition_params:
                 raw = adef.condition_params
@@ -197,21 +198,25 @@ class GamificationEngine:
             Achievement.character_id == character_id,
         ).all()
 
-        unlocked_keys = {a.achievement_key for a in unlocked}
+        # [TODO-N7] O(N+M) lookup: build dict once, hit O(1) per def.
+        # Old code did `next(a for a in unlocked if a.achievement_key == ...)`
+        # inside the loop → O(N×M).
+        unlocked_by_key = {a.achievement_key: a for a in unlocked}
+        unlocked_keys = set(unlocked_by_key)
         all_defs = db.query(AchievementDef).filter(AchievementDef.enabled == True).all()
 
         unlocked_list = []
         locked_visible = []
         for adef in all_defs:
             if adef.key in unlocked_keys:
-                ach = next((a for a in unlocked if a.achievement_key == adef.key), None)
+                ach = unlocked_by_key[adef.key]
                 unlocked_list.append({
                     "key": adef.key,
                     "display_name": adef.display_name,
                     "rarity": adef.rarity,
                     "icon": adef.icon,
                     "category": adef.category,
-                    "unlocked_at": ach.unlocked_at.isoformat() if ach and ach.unlocked_at else None,
+                    "unlocked_at": ach.unlocked_at.isoformat() if ach.unlocked_at else None,
                 })
             elif not adef.hidden:
                 locked_visible.append({
