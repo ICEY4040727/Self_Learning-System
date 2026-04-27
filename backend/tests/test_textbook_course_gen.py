@@ -175,16 +175,14 @@ class TestCourseGeneratorParsing:
         with pytest.raises(ValueError, match="JSON"):
             gen._parse_response("this is not json at all")
 
-    def test_validate_result_minimal(self):
-        """最小输入生成默认课程"""
+    def test_validate_result_empty_raises(self):
+        """[TODO-T4] Empty lessons must raise — silent fallback to a fake
+        '入门' lesson hid LLM failures from the user."""
         from backend.services.course_generator import CourseGenerator
 
         gen = CourseGenerator()
-        result = gen._validate_result({})
-
-        assert result["overview"] == ""
-        assert len(result["lessons"]) == 1  # 默认入门课
-        assert result["concept_map"] is None
+        with pytest.raises(ValueError, match="未生成有效章节"):
+            gen._validate_result({})
 
     def test_validate_result_normalizes_lessons(self):
         """验证 lessons 被标准化为 GeneratedLesson"""

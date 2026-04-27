@@ -219,13 +219,13 @@ class CourseGenerator:
                 )
                 result["lessons"].append(lesson)
 
-        # 确保至少有一节课
+        # [TODO-T4] No silent fallback. Empty lessons means LLM failed to
+        # produce a usable course; the caller should surface that to the
+        # user (retry / report / let them author lessons manually) rather
+        # than receive a fake "入门" placeholder that pretends success.
         if not result["lessons"]:
-            result["lessons"] = [GeneratedLesson(
-                title="入门",
-                description="课程入门",
-                order=1,
-                concepts=[],
-            )]
+            raise ValueError(
+                "LLM 未生成有效章节 — 请检查教材内容或重试课程生成"
+            )
 
         return result

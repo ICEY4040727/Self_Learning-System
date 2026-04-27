@@ -260,6 +260,10 @@ class ProgressTracking(Base):
     course_id = Column(Integer, ForeignKey("courses.id"), nullable=False)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     topic = Column(String(100), nullable=False)
+    # [TODO-T3] discriminator: 'concept' = concept_tag from MemoryFact (mastery_tracker),
+    # 'lesson' = course lesson title (teaching_planner). Without this column the two
+    # writers stomped each other when a lesson title equaled a concept name.
+    topic_type = Column(String(20), nullable=False, default="concept")
     mastery_level = Column(Integer, default=0)
     last_review = Column(DateTime, nullable=True)
     next_review = Column(DateTime, nullable=True)

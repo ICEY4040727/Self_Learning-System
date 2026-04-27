@@ -48,31 +48,25 @@
 - **测试**：2 个新 real-DB 测试 — struggle 触发 FSRS 且 reps=0/stability<1；struggle→mastered 序列正确恢复
 - **状态**：✅ done（待 commit）
 
-### TODO-T3 ⏳ — `ProgressTracking.topic` 列承担两个语义空间 🟡 **P1**
+### TODO-T3 ✅ — `ProgressTracking.topic` 列承担两个语义空间 🟡 **P1**
 
-- **位置**：
-  - `mastery_tracker._update_concept_mastery`：`topic = concept`（小颗粒度，如"递归"）
-  - `teaching_planner._record_lesson_progress`：`topic = lesson.title`（大颗粒度，如"第3课：树遍历"）
-- **问题**：同一张表的 `topic` 列承担两种 key 空间。如果某节课 title 恰巧等于某个 concept name，两路写入会互相覆盖。无 type 字段区分。
-- **影响**：
-  - `get_course_mastery` 返回的 `concepts` dict 里会混着 lesson title 和 concept name
-  - mastery 阈值（70）对两类语义意义不同
-- **修法**：
-  - 短期：给 ProgressTracking 加一列 `topic_type ENUM('concept', 'lesson')`，迁移 + 索引
-  - 或：teaching_planner 不写 ProgressTracking，单独用 lesson 完成度字段
-- **状态**：pending
+- **位置**：`mastery_tracker.py` + `teaching_planner.py` + `models/models.py`
+- **修复**：
+  - 新迁移 `2026_04_26_add_progress_tracking_topic_type.py` — 加 `topic_type` 列（默认 'concept'，与历史 mastery_tracker 行兼容） + 复合索引
+  - Model 加 `topic_type = Column(String(20), nullable=False, default="concept")`
+  - `mastery_tracker._update_concept_mastery` 写入 + 查询时 filter `topic_type='concept'`
+  - `mastery_tracker._check_lesson_mastered` filter concept
+  - `mastery_tracker.get_course_mastery` filter concept
+  - `teaching_planner._record_lesson_progress` 写入 + 查询时 filter `topic_type='lesson'`
+- **测试**：新增 `test_topic_type_isolates_concept_from_lesson` — 课程标题"递归"+ 概念"递归"共存，2 行 + 类型分离 + 概览只统计 concept
+- **状态**：✅ done（待 commit）
 
-### TODO-T4 ⏳ — `course_generator` 静默回退到"入门"假课 🟡 **P1**
+### TODO-T4 ✅ — `course_generator` 静默回退到"入门"假课 🟡 **P1**
 
-- **位置**：`course_generator.py:222-229`
-- **问题**：如果 LLM 返回的 lessons 列表为空（解析成功但内容空、或 LLM 完全失败但被前面 try/except 吞掉），`_validate_result` 静默生成一个 fake "入门" 课程：
-  ```python
-  if not result["lessons"]:
-      result["lessons"] = [GeneratedLesson(title="入门", description="课程入门", order=1, concepts=[])]
-  ```
-- **影响**：用户看不到任何错误，以为课程生成成功了；后续教学基于一个空白入门课，体验崩坏。
-- **修法**：直接 `raise ValueError("LLM 未生成有效章节")`，让上层选择：重试 / 报错 / 让用户手动添加章节。
-- **状态**：pending
+- **位置**：`course_generator.py:222`
+- **修复**：empty lessons → `raise ValueError("LLM 未生成有效章节 — 请检查教材内容或重试课程生成")`，吞错变报错
+- **测试**：替换 `test_validate_result_minimal` 为 `test_validate_result_empty_raises`，断言 ValueError 抛出
+- **状态**：✅ done（待 commit）
 
 ### TODO-T5 ⏳ — `set_lesson` 后退也加 mastery 🟡 **P2**
 

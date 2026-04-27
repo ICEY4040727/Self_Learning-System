@@ -181,7 +181,7 @@ class TeachingPlanner:
         return self.get_progress(db, course)
 
     def _record_lesson_progress(self, db: Session, course: Course, lesson_idx: int):
-        """记录章节进度到 ProgressTracking 表"""
+        """记录章节进度到 ProgressTracking 表（topic_type='lesson'）"""
         lessons = course.meta.get("generated_lessons", [])
         if not lessons or lesson_idx >= len(lessons):
             return
@@ -189,20 +189,23 @@ class TeachingPlanner:
         lesson = lessons[lesson_idx]
         topic = lesson.get("title", f"Lesson {lesson_idx + 1}")
 
-        # 检查是否已有记录
+        # [TODO-T3] filter by topic_type so a lesson title that happens to
+        # equal a concept name doesn't collide with mastery_tracker rows.
         existing = db.query(ProgressTracking).filter(
             ProgressTracking.course_id == course.id,
             ProgressTracking.topic == topic,
+            ProgressTracking.topic_type == "lesson",
         ).first()
 
         if existing:
-            existing.mastery_level = min(existing.mastery_level + 20, 100)
+            existing.mastery_level = min((existing.mastery_level or 0) + 20, 100)
             existing.last_review = datetime.now(UTC)
         else:
             tracking = ProgressTracking(
                 course_id=course.id,
                 user_id=course.world.user_id if course.world else None,
                 topic=topic,
+                topic_type="lesson",
                 mastery_level=20,
                 last_review=datetime.now(UTC),
             )

@@ -380,6 +380,54 @@ class TestMasteryTrackerRealDB:
         assert rows[0].user_id == user_id
         assert rows[0].mastery_level == 75  # 50 + 25 (concept_mastered delta)
 
+    def test_topic_type_isolates_concept_from_lesson(self, db_session):
+        """[TODO-T3] A lesson title equal to a concept name must not collide.
+        Without topic_type, the two writers stomped each other."""
+        from backend.services.teaching_planner import teaching_planner
+
+        user_id, world_id, course_id = self._seed_user_world_course(db_session)
+        # Set up course with a lesson titled exactly the same as a concept.
+        course = db_session.query(Course).filter(Course.id == course_id).first()
+        course.meta = {
+            "generated_lessons": [
+                {"title": "递归", "description": "", "concepts": ["递归"]},
+            ],
+            "current_lesson_index": 0,
+            "completed_lessons": [],
+        }
+        from sqlalchemy.orm.attributes import flag_modified
+        flag_modified(course, "meta")
+        db_session.flush()
+
+        # mastery_tracker writes a 'concept' row for "递归"
+        fact = MemoryFact(
+            character_id=1, world_id=world_id, fact_type="concept_mastered",
+            content="ok", concept_tags=["递归"], salience=0.7,
+        )
+        db_session.add(fact)
+        db_session.flush()
+        mastery_tracker.update_from_memories(
+            db=db_session, memories=[fact],
+            course_id=course_id, world_id=world_id, user_id=user_id,
+        )
+
+        # teaching_planner writes a 'lesson' row also titled "递归"
+        teaching_planner._record_lesson_progress(db_session, course, 0)
+        db_session.flush()
+
+        rows = db_session.query(ProgressTracking).filter(
+            ProgressTracking.course_id == course_id,
+            ProgressTracking.topic == "递归",
+        ).all()
+        assert len(rows) == 2, "concept and lesson rows must coexist"
+        types = {r.topic_type for r in rows}
+        assert types == {"concept", "lesson"}
+
+        # mastery overview must report only the concept row
+        overview = mastery_tracker.get_course_mastery(db_session, course_id)
+        assert overview["total_tracked"] == 1
+        assert "递归" in overview["concepts"]
+
     def test_struggle_schedules_fsrs_with_short_interval(self, db_session):
         """[TODO-T2] concept_struggle must also schedule FSRS — and with a
         SHORTER interval than mastered, since the student needs to revisit."""

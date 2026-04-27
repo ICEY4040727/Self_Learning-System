@@ -152,11 +152,16 @@ class MasteryTracker:
         world_id: int,
         user_id: int,
     ):
-        """更新单个概念的掌握度。user_id 必须传入（NOT NULL on table）。"""
+        """更新单个概念的掌握度。user_id 必须传入（NOT NULL on table）。
+
+        [TODO-T3] topic_type='concept' — distinguish from lesson rows that
+        teaching_planner writes against the same table.
+        """
         tracking = db.query(ProgressTracking).filter(
             ProgressTracking.course_id == course_id,
             ProgressTracking.user_id == user_id,
             ProgressTracking.topic == concept,
+            ProgressTracking.topic_type == "concept",
         ).first()
 
         if tracking:
@@ -168,6 +173,7 @@ class MasteryTracker:
                 course_id=course_id,
                 user_id=user_id,
                 topic=concept,
+                topic_type="concept",
                 mastery_level=max(MIN_MASTERY, min(MAX_MASTERY, 50 + delta)),
                 last_review=datetime.now(UTC),
             )
@@ -182,9 +188,12 @@ class MasteryTracker:
         tracked = 0
 
         for concept in concepts:
+            # [TODO-T3] only look at concept rows; lesson rows live in same
+            # table but have unrelated mastery semantics.
             tracking = db.query(ProgressTracking).filter(
                 ProgressTracking.course_id == course_id,
                 ProgressTracking.topic == concept,
+                ProgressTracking.topic_type == "concept",
             ).first()
 
             if tracking:
@@ -286,7 +295,7 @@ class MasteryTracker:
             db.add(fsrs)
 
     def get_course_mastery(self, db: Session, course_id: int) -> dict:
-        """获取课程的掌握度概览
+        """获取课程的掌握度概览（仅 concept 行，不含 lesson 行）
 
         Returns:
             {
@@ -297,8 +306,11 @@ class MasteryTracker:
                 "total_tracked": int,
             }
         """
+        # [TODO-T3] only count concept rows here; lesson-completion rows
+        # belong to teaching_planner's progress view, not mastery overview.
         trackings = db.query(ProgressTracking).filter(
             ProgressTracking.course_id == course_id,
+            ProgressTracking.topic_type == "concept",
         ).all()
 
         if not trackings:
