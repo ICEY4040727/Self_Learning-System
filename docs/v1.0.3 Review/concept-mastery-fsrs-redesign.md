@@ -114,6 +114,30 @@ filter，按 R1-01 的"跨世界泄漏"逻辑套过去 — 但 R1-01 是为 `rec
 ## 离开本片的判定
 
 - A1-A4, B1-B4 全 ✅
-- 全套测试 pass
-- 迁移在空 DB 跑通：`alembic upgrade head` 成功
-- 真 DB 回归测试覆盖关键不变量（concept 跨课程 / FSRS 跨世界）
+- 全套测试 pass — **288 passed, 13 skipped**（+2 from baseline 286）
+- 迁移在空 DB 跑通：✅ Postgres 上跑得通；SQLite 因前置 `3f7e10f713f3_add_character_traits_fields` 用 `ALTER COLUMN ... SET NOT NULL`（SQLite 不支持）整链失败 — 与本片无关，本片两条迁移仅用 portable DDL（create_table / add_column / batch_alter_table）
+- 真 DB 回归测试覆盖关键不变量：
+  - `test_concept_mastery_is_cross_world`（concept 跨世界）
+  - `test_fsrs_state_is_cross_world`（FSRS 跨世界 + reps 累加）
+  - `TestFSRSDecisionCMerge::test_merge_picks_max_stability_min_difficulty_sum_reps`（迁移合并算法）
+
+---
+
+## 完成态（2026-04-28）
+
+| Section | 状态 |
+|---|---|
+| A 概念掌握度拆表 | A1-A4 全 ✅ |
+| B FSRSState 跨世界 | B1-B5 全 ✅ |
+| C profile_aggregator 还原 | C1 ✅ |
+| Acceptable | 3 项（lesson 行不动 / 手动 progress 不动 / 旧 GET /progress concept 维兼容延后） |
+
+**Commits on `feat/v1.0.3`**：
+- `4136c2a` A1-A4 + C1（concept_mastery 表 + 跨世界 reader/writer + profile_aggregator）
+- `bdecf1d` B1-B5（FSRSState user_id 列 + 合并 + UNIQUE 切换 + 测试）
+
+**Supersedes**：
+- `teaching-system-deep-review.md` 的 **T1**（user_id NOT NULL）现在仅对 ProgressTracking lesson 行有意义（concept 行已迁移到 ConceptMastery）。原修复仍正确，但作用面缩小
+- `teaching-system-deep-review.md` 的 **T3**（topic_type 区分 concept/lesson）原本是缓解措施，concept 拆表后两类数据已物理隔离；topic_type 列对仅剩的 lesson 行实际不再起判别作用，但保留无害（删除需另做迁移，列入未来 cleanup）
+
+**重设计 review 关闭。**

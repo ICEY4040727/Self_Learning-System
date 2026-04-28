@@ -172,3 +172,15 @@
 - T7 顺带发现 FSRSState 缺 card_id/state/step 字段，**之前 archive.py 也用错了相同的 cherry-pick 模式**，导致每次 review 都退化为首次 review — 本轮一并修了
 
 **教学系统 review 关闭。** 下一片：叙事/成就引擎（`narrative_engine.py` 185 + `gamification.py` 211 + 路由 + 325 行测试）。
+
+---
+
+## 8. 后记 — 被 cross-world 重设计部分覆盖（2026-04-28）
+
+`docs/v1.0.3 Review/concept-mastery-fsrs-redesign.md` 实施后：
+
+- **T1** user_id NOT NULL 修复仍然正确，但作用面缩小：concept 行已搬到独立 `concept_mastery` 表，原修复现在主要保护 ProgressTracking 的 lesson 行
+- **T3** topic_type 区分 concept/lesson 原本是缓解措施 — concept 拆表后两类数据物理隔离，topic_type 列对仅剩的 lesson 行不再起判别作用（保留无害，删除需另做迁移，留待未来 cleanup）
+- **T7** FSRSState card_data 列继续有效；但 UNIQUE 约束已从 (world_id, concept_id) 切换到 (user_id, concept_id)（重设计 B 部分）
+
+`mastery_tracker._schedule_review` 签名加了 user_id 参数；`get_course_mastery` 改为接收 user_id；旧 mock 测试转换成 real-DB 跨世界回归测试。代码层面相关改动详见 redesign doc。
