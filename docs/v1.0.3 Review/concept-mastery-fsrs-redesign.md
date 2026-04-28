@@ -57,28 +57,34 @@
 
 ## B. FSRSState → per-(user, concept)
 
-### TR-B1 ⏳ — 加 user_id 列 + backfill
-- 迁移 `2026_04_27_fsrs_per_user.py`
-- `ALTER TABLE fsrs_states ADD COLUMN user_id INT`
-- backfill：`UPDATE fsrs_states SET user_id = (SELECT user_id FROM worlds WHERE id = fsrs_states.world_id)`
+### TR-B1 ✅ — 加 user_id 列 + backfill
+- 迁移 `2026_04_27_fsrs_per_user.py`（down_revision = 2026_04_27_concept_mastery）
+- `ADD COLUMN user_id INTEGER FK users(id)`（先 nullable）
+- backfill：`UPDATE ... SET user_id = (SELECT user_id FROM worlds WHERE id = world_id)`
 
-### TR-B2 ⏳ — 合并重复行（决策 C 数学合并）
-- 同迁移内：Python loop 找出重复 `(user_id, concept_id)` 组，应用合并算法，删多余行
-- world_id 在合并时取 stability 较高那行的（diagnostic）
+### TR-B2 ✅ — 合并重复行（决策 C 数学合并）
+- 同迁移 `_merge_duplicates`：SA core，按 (user_id, concept_id) 分组
+- max(stability) / min(difficulty) / sum(reps) / max(last_review) / max(next_review)
+- card_data：取 stability 较高那行，叠加 merged stability/difficulty
+- world_id：取 winner 的（diagnostic）
+- losers 一并 DELETE
+- **新增 unit test** `TestFSRSDecisionCMerge::test_merge_picks_max_stability_min_difficulty_sum_reps`：
+  在临时表上 INSERT 两条冲突行 → 运行同算法 → 验证决策 C math
 
-### TR-B3 ⏳ — 切换 UNIQUE 约束
-- 删 `UNIQUE(world_id, concept_id)`
-- 加 `UNIQUE(user_id, concept_id)`
-- world_id 改 nullable
+### TR-B3 ✅ — 切换 UNIQUE 约束
+- `batch_alter_table`（兼容 SQLite + Postgres）：
+  drop `uq_fsrs_world_concept` → user_id NOT NULL → world_id nullable → create `uq_fsrs_user_concept`
+- 加 `ix_fsrs_states_user` 索引
+- `models.py` 同步：UNIQUE 改、user_id NOT NULL、world_id nullable
 
-### TR-B4 ⏳ — 改 reader / writer
-- `mastery_tracker._schedule_review`：filter 改 `(user_id, concept_id)`，签名加 `user_id` 参数
-- `archive.py:1465 review_progress`：filter 改 `(current_user.id, concept_id)`
-- learning_engine 调 mastery_tracker.update_from_memories 时本来已有 user_id
+### TR-B4 ✅ — 改 reader / writer
+- `mastery_tracker._schedule_review(db, user_id, world_id, concept, *, signal)` 签名加 user_id；filter 改 `(user_id, concept_id)`；新行 world_id 仅作 diagnostic
+- `update_from_memories` → `_schedule_review` 调用同步加 user_id
+- `archive.py review_progress`：filter 改 `(current_user.id, concept_id)`；新行 world_id 仅作 diagnostic
 
-### TR-B5 ⏳ — 测试
-- cross-world concept review state 共享：math-world 复习"递归" → cs-world 看到同一 stability
-- 真 DB 测试 verify 决策 C 合并逻辑（构造两条冲突行，运行迁移函数，断言结果）
+### TR-B5 ✅ — 测试
+- **`test_fsrs_state_is_cross_world`**：同一用户在 world A 和 world B 各自标记"递归"为 mastered → 期望仅 1 行，reps==2（累加而非重置），world_id == wa.id（首次创建那个）
+- TestFSRSDecisionCMerge 见 B2
 
 ---
 

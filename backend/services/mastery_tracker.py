@@ -110,7 +110,7 @@ class MasteryTracker:
                 # forward in the review queue, not skip it.
                 if fact.fact_type in ("concept_mastered", "concept_struggle"):
                     self._schedule_review(
-                        db, world_id, concept, signal=fact.fact_type,
+                        db, user_id, world_id, concept, signal=fact.fact_type,
                     )
 
         # 检查是否可以自动推进
@@ -224,20 +224,21 @@ class MasteryTracker:
         return True, next_idx
 
     def _schedule_review(
-        self, db: Session, world_id: int, concept: str,
+        self, db: Session, user_id: int, world_id: int, concept: str,
         *, signal: str = "concept_mastered",
     ):
         """调度 FSRS 复习 — 委托给 spaced_repetition wrapper（py-fsrs）。
 
         Args:
+            user_id: keys the FSRSState row (per-(user, concept) cross-world).
+            world_id: stored as a diagnostic on first creation only — the row
+                is shared across worlds for this user.
             signal: "concept_mastered" → Rating.Good (3)
                     "concept_struggle" → Rating.Again (1)
 
-        [TODO-T7] Replaced hand-rolled stability *= 1.5 / *= 0.5 logic with
-        spaced_repetition.review (py-fsrs lib). The library handles
-        difficulty, stability, retrievability per the FSRS algorithm; the
-        old code ignored difficulty entirely and capped stability at 365
-        days, freezing intervals after ~13 successful reviews.
+        [TR-B4] Lookup is now (user_id, concept_id); world_id is no longer
+        part of the key. The same concept reviewed in any world updates the
+        same row.
 
         [NEW-T1] flush() before SELECT — sessions are autoflush=False; same
         concept hit twice in one call would otherwise duplicate INSERT.
@@ -248,7 +249,7 @@ class MasteryTracker:
 
         db.flush()
         existing = db.query(FSRSState).filter(
-            FSRSState.world_id == world_id,
+            FSRSState.user_id == user_id,
             FSRSState.concept_id == concept,
         ).first()
 
@@ -261,7 +262,7 @@ class MasteryTracker:
         fsrs_payload = result["fsrs_state"]
 
         if existing is None:
-            existing = FSRSState(world_id=world_id, concept_id=concept)
+            existing = FSRSState(user_id=user_id, world_id=world_id, concept_id=concept)
             db.add(existing)
 
         existing.card_data = fsrs_payload

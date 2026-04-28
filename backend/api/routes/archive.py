@@ -1462,8 +1462,10 @@ def review_progress(
     if not course:
         raise HTTPException(status_code=404, detail="Course not found")
 
+    # [TR-B4] FSRSState is per-(user, concept) cross-world; world_id is no
+    # longer in the unique key.
     fsrs_state_row = db.query(FSRSState).filter(
-        FSRSState.world_id == course.world_id,
+        FSRSState.user_id == current_user.id,
         FSRSState.concept_id == db_progress.topic,
     ).first()
 
@@ -1480,7 +1482,8 @@ def review_progress(
     fsrs_payload = result["fsrs_state"]
     if fsrs_state_row is None:
         fsrs_state_row = FSRSState(
-            world_id=course.world_id,
+            user_id=current_user.id,
+            world_id=course.world_id,  # diagnostic only
             concept_id=db_progress.topic,
         )
         db.add(fsrs_state_row)

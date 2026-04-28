@@ -292,11 +292,20 @@ class ConceptMastery(Base):
 
 
 class FSRSState(Base):
+    """[TR-B] Per-(user, concept) cross-world spaced-repetition state.
+
+    Originally keyed by (world_id, concept_id) — meaning the same user
+    relearned a concept from scratch in each new world. UNIQUE is now
+    (user_id, concept_id); world_id is kept as a nullable diagnostic
+    (the world where this state was first recorded) and does not
+    participate in the key.
+    """
     __tablename__ = "fsrs_states"
-    __table_args__ = (UniqueConstraint("world_id", "concept_id", name="uq_fsrs_world_concept"),)
+    __table_args__ = (UniqueConstraint("user_id", "concept_id", name="uq_fsrs_user_concept"),)
 
     id = Column(Integer, primary_key=True, index=True)
-    world_id = Column(Integer, ForeignKey("worlds.id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    world_id = Column(Integer, ForeignKey("worlds.id", ondelete="CASCADE"), nullable=True)
     concept_id = Column(String(150), nullable=False)
     difficulty = Column(Float, nullable=True)
     stability = Column(Float, nullable=True)
