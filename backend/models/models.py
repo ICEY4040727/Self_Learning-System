@@ -272,6 +272,25 @@ class ProgressTracking(Base):
     user = orm_relationship("User", back_populates="progress_trackings")
 
 
+class ConceptMastery(Base):
+    """概念掌握度 — per-(user, concept) 完全跨世界。
+
+    [TR-A1] 从 ProgressTracking 拆出来。原 ProgressTracking 用 (course_id, user_id, topic)
+    做隔离，导致同一个用户在 course A 学过的"递归"在 course B 不可见，
+    跟"画像跨世界"的产品语义冲突。新表去掉 course_id / world_id，
+    用 (user_id, concept_id) 做 UNIQUE，让概念掌握度真正跨世界共享。
+    """
+    __tablename__ = "concept_mastery"
+    __table_args__ = (UniqueConstraint("user_id", "concept_id", name="uq_concept_mastery_user_concept"),)
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    concept_id = Column(String(150), nullable=False)
+    mastery_level = Column(Integer, default=0)
+    last_review = Column(DateTime, nullable=True)
+    next_review = Column(DateTime, nullable=True)
+
+
 class FSRSState(Base):
     __tablename__ = "fsrs_states"
     __table_args__ = (UniqueConstraint("world_id", "concept_id", name="uq_fsrs_world_concept"),)

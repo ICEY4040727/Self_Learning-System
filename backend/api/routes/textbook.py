@@ -427,7 +427,7 @@ def get_course_mastery(
     _get_course_with_auth(course_id, db, current_user)
 
     from backend.services.mastery_tracker import mastery_tracker
-    return mastery_tracker.get_course_mastery(db, course_id)
+    return mastery_tracker.get_course_mastery(db, course_id, current_user.id)
 
 
 @router.put("/courses/{course_id}/lesson", response_model=LessonProgressResponse)

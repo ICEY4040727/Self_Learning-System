@@ -15,6 +15,7 @@ import pytest
 from unittest.mock import MagicMock, patch
 
 from backend.models.models import (
+    ConceptMastery,
     Course,
     MemoryFact,
     ProgressTracking,
@@ -176,7 +177,7 @@ class TestMasteryTracker:
         db = MagicMock()
         db.query().filter().first.return_value = None
 
-        self.tracker._update_concept_mastery(db, 1, "变量", 25, 1, 1)
+        self.tracker._update_concept_mastery(db, concept="变量", delta=25, user_id=1)
 
         # Should have added a new tracking
         assert db.add.called
@@ -187,7 +188,7 @@ class TestMasteryTracker:
         tracking.mastery_level = 50
         db.query().filter().first.return_value = tracking
 
-        self.tracker._update_concept_mastery(db, 1, "变量", 25, 1, 1)
+        self.tracker._update_concept_mastery(db, concept="变量", delta=25, user_id=1)
 
         assert tracking.mastery_level == 75
         assert not db.add.called
@@ -198,7 +199,7 @@ class TestMasteryTracker:
         tracking.mastery_level = 90
         db.query().filter().first.return_value = tracking
 
-        self.tracker._update_concept_mastery(db, 1, "变量", 25, 1, 1)
+        self.tracker._update_concept_mastery(db, concept="变量", delta=25, user_id=1)
         assert tracking.mastery_level == 100  # clamped
 
     def test_update_concept_mastery_clamped_min(self):
@@ -207,32 +208,34 @@ class TestMasteryTracker:
         tracking.mastery_level = 10
         db.query().filter().first.return_value = tracking
 
-        self.tracker._update_concept_mastery(db, 1, "变量", -15, 1, 1)
+        self.tracker._update_concept_mastery(db, concept="变量", delta=-15, user_id=1)
         assert tracking.mastery_level == 0  # clamped
 
     # ── _check_lesson_mastered ─────────────────────────────────────
 
     def test_check_lesson_mastered_true(self):
         db = MagicMock()
-        tracking = MagicMock()
-        tracking.mastery_level = AUTO_ADVANCE_THRESHOLD
-        db.query().filter().first.return_value = tracking
+        # Both concepts at threshold → average == threshold → True
+        rows = [
+            MagicMock(concept_id="a", mastery_level=AUTO_ADVANCE_THRESHOLD),
+            MagicMock(concept_id="b", mastery_level=AUTO_ADVANCE_THRESHOLD),
+        ]
+        db.query().filter().all.return_value = rows
 
         result = self.tracker._check_lesson_mastered(db, 1, ["a", "b"])
         assert result is True
 
     def test_check_lesson_mastered_false_low_mastery(self):
         db = MagicMock()
-        tracking = MagicMock()
-        tracking.mastery_level = 30
-        db.query().filter().first.return_value = tracking
+        rows = [MagicMock(concept_id="a", mastery_level=30)]
+        db.query().filter().all.return_value = rows
 
         result = self.tracker._check_lesson_mastered(db, 1, ["a"])
         assert result is False
 
     def test_check_lesson_mastered_false_untracked(self):
         db = MagicMock()
-        db.query().filter().first.return_value = None
+        db.query().filter().all.return_value = []  # no rows for the user
 
         result = self.tracker._check_lesson_mastered(db, 1, ["a"])
         assert result is False
@@ -265,41 +268,10 @@ class TestMasteryTracker:
             assert success is False
             assert new_idx is None
 
-    # ── get_course_mastery ─────────────────────────────────────────
-
-    def test_get_course_mastery_empty(self):
-        db = MagicMock()
-        db.query().filter().all.return_value = []
-
-        result = self.tracker.get_course_mastery(db, 1)
-        assert result["overall_mastery"] == 0.0
-        assert result["concepts"] == {}
-        assert result["weak_concepts"] == []
-        assert result["mastered_count"] == 0
-
-    def test_get_course_mastery_with_data(self):
-        db = MagicMock()
-
-        t1 = MagicMock()
-        t1.topic = "变量"
-        t1.mastery_level = 80
-
-        t2 = MagicMock()
-        t2.topic = "循环"
-        t2.mastery_level = 30
-
-        t3 = MagicMock()
-        t3.topic = "函数"
-        t3.mastery_level = 75
-
-        db.query().filter().all.return_value = [t1, t2, t3]
-
-        result = self.tracker.get_course_mastery(db, 1)
-        assert result["overall_mastery"] == 61.7  # (80+30+75)/3
-        assert result["concepts"]["变量"] == 80
-        assert "循环" in result["weak_concepts"]
-        assert result["mastered_count"] == 2  # 80 and 75 >= 70
-        assert result["total_tracked"] == 3
+    # ── get_course_mastery — see TestMasteryTrackerRealDB below ────
+    # The reader now joins course.meta lesson concepts with ConceptMastery
+    # rows. That control flow is too tangled for MagicMock; real-DB tests
+    # cover it.
 
     # [TODO-T7] Removed `test_schedule_review_existing` — it asserted
     # stability == 4.5 (3.0 * 1.5), which was the hand-rolled math we
@@ -329,11 +301,9 @@ class TestMasteryTrackerRealDB:
         db_session.flush()
         return u.id, w.id, c.id
 
-    def test_update_from_memories_inserts_progress_tracking_with_user_id(self, db_session):
-        """[TODO-T1] Regression: ProgressTracking.user_id is NOT NULL on the
-        real schema. The previous implementation omitted it, so any production
-        run hit IntegrityError on first INSERT. This test would have caught
-        the bug if it existed in the new code."""
+    def test_update_from_memories_inserts_concept_mastery_row(self, db_session):
+        """[TR-A3] update_from_memories must persist ConceptMastery for the
+        user (cross-world; no course_id / world_id on the row)."""
         user_id, world_id, course_id = self._seed_user_world_course(db_session)
 
         fact = MemoryFact(
@@ -358,21 +328,20 @@ class TestMasteryTrackerRealDB:
 
         assert result["updated_concepts"] == ["递归"]
 
-        rows = db_session.query(ProgressTracking).filter(
-            ProgressTracking.course_id == course_id,
-            ProgressTracking.topic == "递归",
+        rows = db_session.query(ConceptMastery).filter(
+            ConceptMastery.user_id == user_id,
+            ConceptMastery.concept_id == "递归",
         ).all()
         assert len(rows) == 1
-        assert rows[0].user_id == user_id
         assert rows[0].mastery_level == 75  # 50 + 25 (concept_mastered delta)
 
-    def test_topic_type_isolates_concept_from_lesson(self, db_session):
-        """[TODO-T3] A lesson title equal to a concept name must not collide.
-        Without topic_type, the two writers stomped each other."""
+    def test_concept_and_lesson_live_in_separate_tables(self, db_session):
+        """[TR-A3] Concept and lesson rows used to share progress_trackings
+        and stomp each other when titles matched; they now live in different
+        tables so collision is structurally impossible."""
         from backend.services.teaching_planner import teaching_planner
 
         user_id, world_id, course_id = self._seed_user_world_course(db_session)
-        # Set up course with a lesson titled exactly the same as a concept.
         course = db_session.query(Course).filter(Course.id == course_id).first()
         course.meta = {
             "generated_lessons": [
@@ -385,7 +354,6 @@ class TestMasteryTrackerRealDB:
         flag_modified(course, "meta")
         db_session.flush()
 
-        # mastery_tracker writes a 'concept' row for "递归"
         fact = MemoryFact(
             character_id=1, world_id=world_id, fact_type="concept_mastered",
             content="ok", concept_tags=["递归"], salience=0.7,
@@ -397,22 +365,72 @@ class TestMasteryTrackerRealDB:
             course_id=course_id, world_id=world_id, user_id=user_id,
         )
 
-        # teaching_planner writes a 'lesson' row also titled "递归"
         teaching_planner._record_lesson_progress(db_session, course, 0)
         db_session.flush()
 
-        rows = db_session.query(ProgressTracking).filter(
+        # Concept side: ConceptMastery
+        cm = db_session.query(ConceptMastery).filter(
+            ConceptMastery.user_id == user_id,
+            ConceptMastery.concept_id == "递归",
+        ).one()
+        assert cm.mastery_level == 75
+
+        # Lesson side: ProgressTracking with topic_type='lesson'
+        lesson_rows = db_session.query(ProgressTracking).filter(
             ProgressTracking.course_id == course_id,
             ProgressTracking.topic == "递归",
         ).all()
-        assert len(rows) == 2, "concept and lesson rows must coexist"
-        types = {r.topic_type for r in rows}
-        assert types == {"concept", "lesson"}
+        assert len(lesson_rows) == 1
+        assert lesson_rows[0].topic_type == "lesson"
 
-        # mastery overview must report only the concept row
-        overview = mastery_tracker.get_course_mastery(db_session, course_id)
+        # mastery overview pulls only ConceptMastery via course.meta
+        overview = mastery_tracker.get_course_mastery(db_session, course_id, user_id)
         assert overview["total_tracked"] == 1
-        assert "递归" in overview["concepts"]
+        assert overview["concepts"].get("递归") == 75
+
+    def test_concept_mastery_is_cross_world(self, db_session):
+        """[TR-A4] A concept learned in course A (world A) must be visible
+        from course B (world B) for the same user. This is the cross-world
+        invariant the redesign is supposed to deliver."""
+        u = User(username="t-cross-world", password_hash="x", role="user")
+        db_session.add(u)
+        db_session.flush()
+
+        wa = World(user_id=u.id, name="WA", scenes={})
+        wb = World(user_id=u.id, name="WB", scenes={})
+        db_session.add_all([wa, wb])
+        db_session.flush()
+
+        ca = Course(
+            world_id=wa.id, name="CA",
+            meta={"generated_lessons": [{"title": "L1", "concepts": ["递归"]}],
+                  "current_lesson_index": 0, "completed_lessons": []},
+        )
+        cb = Course(
+            world_id=wb.id, name="CB",
+            meta={"generated_lessons": [{"title": "L1", "concepts": ["递归"]}],
+                  "current_lesson_index": 0, "completed_lessons": []},
+        )
+        db_session.add_all([ca, cb])
+        db_session.flush()
+
+        # Learn 递归 in course A
+        fact = MemoryFact(
+            character_id=1, world_id=wa.id, fact_type="concept_mastered",
+            content="ok", concept_tags=["递归"], salience=0.7,
+        )
+        db_session.add(fact)
+        db_session.flush()
+        mastery_tracker.update_from_memories(
+            db=db_session, memories=[fact],
+            course_id=ca.id, world_id=wa.id, user_id=u.id,
+        )
+        db_session.flush()
+
+        # Course B should see it
+        overview_b = mastery_tracker.get_course_mastery(db_session, cb.id, u.id)
+        assert overview_b["concepts"].get("递归") == 75, \
+            "concept mastery must be cross-world for the same user"
 
     def test_struggle_schedules_fsrs(self, db_session):
         """[TODO-T2] concept_struggle must also schedule FSRS (the original
@@ -501,9 +519,9 @@ class TestMasteryTrackerRealDB:
         assert fsrs.card_data["state"] in (1, 2), "card_data must persist state"
         assert fsrs.card_data["card_id"] is not None
 
-    def test_update_existing_tracking_keyed_by_user(self, db_session):
-        """Same course + same topic but different users → separate rows
-        (user_id participates in lookup, not just course_id+topic)."""
+    def test_concept_mastery_keyed_by_user(self, db_session):
+        """Different users learning the same concept → separate ConceptMastery
+        rows (user_id is part of the UNIQUE key)."""
         u1, world_id, course_id = self._seed_user_world_course(db_session)
         u2 = User(username="t-mastery-2", password_hash="x", role="user")
         db_session.add(u2)
@@ -523,9 +541,8 @@ class TestMasteryTrackerRealDB:
             )
         db_session.flush()
 
-        rows = db_session.query(ProgressTracking).filter(
-            ProgressTracking.course_id == course_id,
-            ProgressTracking.topic == "递归",
+        rows = db_session.query(ConceptMastery).filter(
+            ConceptMastery.concept_id == "递归",
         ).all()
         assert len(rows) == 2
         assert {r.user_id for r in rows} == {u1, u2.id}

@@ -129,32 +129,27 @@ class ProfileAggregator:
         self, db: Session, cid: int, wid: int,
         source_types: list, params: dict, min_facts: int,
     ) -> float | None:
-        """positive_types count / total_types count"""
+        """positive_types count / total_types count.
+
+        [TR-C1] No world_id filter — learner profile aggregates cross-world for
+        the (user, character) pair. wid is accepted only for signature parity
+        with sibling methods.
+        """
         positive_types = params.get("positive_types", [])
         total_types = params.get("total_types", source_types)
 
-        total_q = db.query(func.count(MemoryFact.id)).filter(
+        total = db.query(func.count(MemoryFact.id)).filter(
             MemoryFact.character_id == cid,
             MemoryFact.fact_type.in_(total_types),
-        )
-        if wid:
-            total_q = total_q.filter(
-                (MemoryFact.world_id == wid) | (MemoryFact.world_id.is_(None))
-            )
-        total = total_q.scalar() or 0
+        ).scalar() or 0
 
         if total < min_facts:
             return None
 
-        pos_q = db.query(func.count(MemoryFact.id)).filter(
+        positive = db.query(func.count(MemoryFact.id)).filter(
             MemoryFact.character_id == cid,
             MemoryFact.fact_type.in_(positive_types),
-        )
-        if wid:
-            pos_q = pos_q.filter(
-                (MemoryFact.world_id == wid) | (MemoryFact.world_id.is_(None))
-            )
-        positive = pos_q.scalar() or 0
+        ).scalar() or 0
 
         return round(positive / total, 3) if total > 0 else None
 
@@ -162,28 +157,21 @@ class ProfileAggregator:
         self, db: Session, cid: int, wid: int,
         params: dict, min_facts: int,
     ) -> float | None:
-        """struggle→mastered conversion: mastered / (struggle + mastered)"""
+        """struggle→mastered conversion: mastered / (struggle + mastered).
+
+        [TR-C1] Cross-world; see _ratio.
+        """
         from_type = params.get("from_type", "concept_struggle")
         to_type = params.get("to_type", "concept_mastered")
 
-        from_q = db.query(func.count(MemoryFact.id)).filter(
+        from_count = db.query(func.count(MemoryFact.id)).filter(
             MemoryFact.character_id == cid,
             MemoryFact.fact_type == from_type,
-        )
-        to_q = db.query(func.count(MemoryFact.id)).filter(
+        ).scalar() or 0
+        to_count = db.query(func.count(MemoryFact.id)).filter(
             MemoryFact.character_id == cid,
             MemoryFact.fact_type == to_type,
-        )
-        if wid:
-            from_q = from_q.filter(
-                (MemoryFact.world_id == wid) | (MemoryFact.world_id.is_(None))
-            )
-            to_q = to_q.filter(
-                (MemoryFact.world_id == wid) | (MemoryFact.world_id.is_(None))
-            )
-
-        from_count = from_q.scalar() or 0
-        to_count = to_q.scalar() or 0
+        ).scalar() or 0
         total = from_count + to_count
 
         if total < min_facts:
@@ -195,16 +183,14 @@ class ProfileAggregator:
         self, db: Session, cid: int, wid: int,
         source_types: list, params: dict, min_facts: int,
     ) -> float | None:
-        """Normalized count: count / max_expected"""
-        q = db.query(func.count(MemoryFact.id)).filter(
+        """Normalized count: count / max_expected.
+
+        [TR-C1] Cross-world; see _ratio.
+        """
+        count = db.query(func.count(MemoryFact.id)).filter(
             MemoryFact.character_id == cid,
             MemoryFact.fact_type.in_(source_types),
-        )
-        if wid:
-            q = q.filter(
-                (MemoryFact.world_id == wid) | (MemoryFact.world_id.is_(None))
-            )
-        count = q.scalar() or 0
+        ).scalar() or 0
 
         if count < min_facts:
             return None
@@ -221,9 +207,11 @@ class ProfileAggregator:
         if not keywords:
             return None
 
-        # [R1-01] Pass world_id to prevent cross-world memory leakage
+        # [TR-C1] Cross-world for the (user, character) pair — learner profile
+        # is shared across worlds. R1-01's world_id scoping was right for the
+        # `recall` path (LLM-facing memory injection) but wrong here.
         facts = memory_manager.observe_recent(
-            db, cid, world_id=wid, fact_types=source_types, limit=50,
+            db, cid, world_id=None, fact_types=source_types, limit=50,
         )
         if len(facts) < min_facts:
             return None
@@ -271,26 +259,22 @@ class ProfileAggregator:
     def _compute_learning_stats(
         self, db: Session, character_id: int, world_id: int,
     ) -> dict[str, Any]:
-        """Compute concept mastery/struggle counts."""
+        """Compute concept mastery/struggle counts.
+
+        [TR-C1] Cross-world; see _ratio.
+        """
         mastered = db.query(func.count(MemoryFact.id)).filter(
             MemoryFact.character_id == character_id,
             MemoryFact.fact_type == "concept_mastered",
-        )
+        ).scalar() or 0
         struggling = db.query(func.count(MemoryFact.id)).filter(
             MemoryFact.character_id == character_id,
             MemoryFact.fact_type == "concept_struggle",
-        )
-        if world_id:
-            mastered = mastered.filter(
-                (MemoryFact.world_id == world_id) | (MemoryFact.world_id.is_(None))
-            )
-            struggling = struggling.filter(
-                (MemoryFact.world_id == world_id) | (MemoryFact.world_id.is_(None))
-            )
+        ).scalar() or 0
 
         return {
-            "concepts_mastered": mastered.scalar() or 0,
-            "concepts_struggling": struggling.scalar() or 0,
+            "concepts_mastered": mastered,
+            "concepts_struggling": struggling,
         }
 
 
