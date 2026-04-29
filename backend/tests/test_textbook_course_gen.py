@@ -561,3 +561,62 @@ class TestTextbookRoutes:
         )
         assert resp.status_code == 409, resp.text
         assert "重新生成" in resp.text or "regenerate" in resp.text.lower() or "已生成" in resp.text
+
+    def test_clear_generated_unblocks_regenerate(
+        self, client, auth_headers, tmp_path, monkeypatch,
+    ):
+        """[TR-X18] DELETE /courses/{id}/generated wipes meta.* generated
+        fields + progress cursors and resets processed textbooks back to
+        extracted, so the next /generate sees them again."""
+        from backend.tests.conftest import TestSessionLocal
+        from backend.models.models import Course, Textbook
+        from sqlalchemy.orm.attributes import flag_modified
+
+        _, course = self._setup_user_world_course(client, auth_headers, tmp_path, monkeypatch)
+
+        # Seed: a 'processed' textbook + course meta with prior LLM output
+        # and progress cursors
+        with TestSessionLocal() as s:
+            tb = Textbook(
+                course_id=course["id"], user_id=1,
+                filename="prev.pdf", file_path="/tmp/nonexistent.pdf",
+                file_size=10, status="processed",
+                extracted_text="...",
+            )
+            s.add(tb)
+            c = s.query(Course).filter_by(id=course["id"]).one()
+            c.meta = {
+                "generated_lessons": [{"title": "L1", "concepts": ["a"]}],
+                "generated_overview": "old overview",
+                "concept_map": {"nodes": [], "edges": []},
+                "current_lesson_index": 3,
+                "completed_lessons": [0, 1, 2],
+                "user_supplied_field": "must survive",  # canary
+            }
+            flag_modified(c, "meta")
+            s.commit()
+
+        resp = client.delete(
+            f"/api/courses/{course['id']}/generated",
+            headers=auth_headers,
+        )
+        assert resp.status_code == 204, resp.text
+
+        with TestSessionLocal() as s:
+            c = s.query(Course).filter_by(id=course["id"]).one()
+            for key in (
+                "generated_lessons", "generated_overview", "concept_map",
+                "current_lesson_index", "completed_lessons",
+            ):
+                assert key not in c.meta, f"{key} should be wiped"
+            assert c.meta.get("user_supplied_field") == "must survive", \
+                "non-generated fields must be preserved"
+
+            tb = s.query(Textbook).filter_by(filename="prev.pdf").one()
+            assert tb.status == "extracted", "processed textbooks reset to extracted"
+
+        # /generate would no longer 409 — verified indirectly: no
+        # generated_lessons in meta means the X11 guard won't trip.
+        # We don't actually re-run generate here because that would call
+        # the LLM. The unit-level guard is exercised in
+        # test_regenerate_rejected_when_lessons_exist above.

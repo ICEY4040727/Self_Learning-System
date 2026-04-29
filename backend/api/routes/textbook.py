@@ -489,6 +489,49 @@ def delete_textbook(
             logger.warning("教材文件删除失败 (post-commit, file=%s): %s", file_path, e)
 
 
+@router.delete("/courses/{course_id}/generated", status_code=204)
+def clear_generated_content(
+    course_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """[TR-X18] Wipe AI-generated course content so /generate can run again.
+
+    Counterpart to the X11 regenerate-block: that 409 protects the user's
+    teaching progress, but they still need an explicit way to discard a
+    bad LLM output and try again. This endpoint clears the four meta
+    fields populated by /generate (overview, lessons, concept_map, plus
+    the progress cursors that index into lessons), and resets every
+    'processed' textbook back to 'extracted' so the next /generate sees
+    them as input.
+    """
+    from sqlalchemy.orm.attributes import flag_modified
+
+    course = _get_course_with_auth(course_id, db, current_user)
+
+    if course.meta:
+        for key in (
+            "generated_overview",
+            "generated_lessons",
+            "concept_map",
+            # Progress cursors index into generated_lessons; once we drop
+            # the lessons their old values point at nothing, so wipe them
+            # too. The frontend confirm dialog warns about progress loss.
+            "current_lesson_index",
+            "completed_lessons",
+        ):
+            course.meta.pop(key, None)
+        flag_modified(course, "meta")
+
+    db.query(Textbook).filter(
+        Textbook.course_id == course_id,
+        Textbook.user_id == current_user.id,
+        Textbook.status == "processed",
+    ).update({Textbook.status: "extracted"})
+
+    db.commit()
+
+
 @router.post("/courses/{course_id}/generate", response_model=CourseGenerateResponse)
 async def generate_course_from_textbooks(
     course_id: int,

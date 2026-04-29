@@ -58,16 +58,26 @@ export const courseApi = {
     client.get(`/courses/${courseId}/textbooks`).then(res => res.data),
 
   /**
-   * 删除教材
+   * 删除教材 (returns void — backend responds 204)
    */
   deleteTextbook: (courseId: number, textbookId: number) =>
-    client.delete(`/courses/${courseId}/textbooks/${textbookId}`).then(res => res.data),
+    client.delete(`/courses/${courseId}/textbooks/${textbookId}`).then(() => undefined),
 
   /**
    * 基于教材生成课程结构
+   * Backend rejects (409) if generated_lessons already exist — call
+   * clearGeneratedContent first if you want to regenerate.
    */
   generateCourse: (courseId: number) =>
     client.post(`/courses/${courseId}/generate`).then(res => res.data),
+
+  /**
+   * 清空已生成的课程内容 (overview / lessons / concept_map + progress).
+   * Used to unlock /generate when the previous output was unsatisfactory.
+   * Backend responds 204.
+   */
+  clearGeneratedContent: (courseId: number) =>
+    client.delete(`/courses/${courseId}/generated`).then(() => undefined),
 
   /**
    * 获取课程进度（课程列表）

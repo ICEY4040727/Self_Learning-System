@@ -107,6 +107,15 @@
           >
             {{ generating ? '生成中…' : '* 基于教材生成课程' }}
           </button>
+          <!-- Regenerate (clears previous generated lessons + progress) -->
+          <button
+            v-if="textbooks.length > 0 && hasGeneratedContent"
+            class="generate-btn regenerate-btn"
+            :disabled="generating"
+            @click="handleRegenerateCourse"
+          >
+            {{ generating ? '重新生成中…' : '↻ 重新生成（会清空当前课程结构与进度）' }}
+          </button>
         </div>
       </div>
 
@@ -389,10 +398,11 @@ const formatSessionTime = (session: any) => {
 const fetchTextbooks = async () => {
   try {
     textbooks.value = await courseApi.listTextbooks(courseId.value)
-    // Check if course already has generated content
-    if (course.value?.meta?.lessons && course.value.meta.lessons.length > 0) {
-      hasGeneratedContent.value = true
-    }
+    // Backend writes to course.meta.generated_lessons (not .lessons —
+    // the previous check was always false on page reload, hiding the
+    // regenerate button after a refresh).
+    const lessons = course.value?.meta?.generated_lessons
+    hasGeneratedContent.value = Array.isArray(lessons) && lessons.length > 0
   } catch { /* ignore */ }
 }
 
@@ -445,6 +455,31 @@ const handleGenerateCourse = async () => {
     await fetchData()
   } catch (error: any) {
     toast.error(error?.response?.data?.detail || '生成失败')
+  } finally {
+    generating.value = false
+  }
+}
+
+const handleRegenerateCourse = async () => {
+  // Two-step confirm: this is destructive (drops generated lessons +
+  // teaching progress + costs another LLM call).
+  const ok = window.confirm(
+    '确定要重新生成课程吗？\n\n' +
+    '这将清空：\n' +
+    '  • 当前生成的课程概览、章节列表、概念图\n' +
+    '  • 当前章节进度（current_lesson_index、completed_lessons）\n\n' +
+    '已上传的教材会保留。'
+  )
+  if (!ok) return
+
+  generating.value = true
+  try {
+    await courseApi.clearGeneratedContent(courseId.value)
+    const result = await courseApi.generateCourse(courseId.value)
+    toast.success(`课程已重新生成：${result.lessons?.length || 0} 个课时`)
+    await fetchData()
+  } catch (error: any) {
+    toast.error(error?.response?.data?.detail || '重新生成失败')
   } finally {
     generating.value = false
   }
