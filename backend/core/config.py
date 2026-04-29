@@ -42,6 +42,11 @@ class Settings(BaseSettings):
     # Save directory (used by save_file_manager)
     save_directory: str = "./saves"
 
+    # [TR-X16] Textbook uploads — kept OUTSIDE backend/static so the public
+    # /static mount in main.py never serves user-uploaded files. Access goes
+    # through the auth-protected GET /api/textbooks/{id}/file endpoint.
+    upload_dir: str = "./uploads"
+
     # Application version (single source of truth)
     app_version: str = "1.0.0"
 
