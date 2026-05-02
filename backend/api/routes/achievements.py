@@ -1,7 +1,7 @@
 """Achievement & Gamification API endpoints."""
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from sqlalchemy.orm import Session
 
 from backend.api.routes.auth import get_current_user
@@ -18,8 +18,7 @@ class AchievementStatusResponse(BaseModel):
     total_unlocked: int
     total_available: int
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 @router.get(

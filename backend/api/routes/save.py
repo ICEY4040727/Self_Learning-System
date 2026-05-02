@@ -2,7 +2,7 @@ import logging
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, ConfigDict, Field
 from sqlalchemy.orm import Session
 
 from backend.api.routes.auth import get_current_user
@@ -52,8 +52,7 @@ class CheckpointResponse(BaseModel):
     masteryPercent: float | None = None  # 掌握度
     previewText: str | None = None  # 预览文本
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class BranchRequest(BaseModel):

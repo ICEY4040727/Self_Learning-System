@@ -2,7 +2,7 @@ from datetime import UTC, datetime
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, ConfigDict, Field
 from sqlalchemy import func as sa_func
 from sqlalchemy.orm import Session
 
@@ -80,8 +80,7 @@ class CharacterCreate(BaseModel):
 class CharacterResponse(CharacterCreate):
     id: int
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class CharacterStatsResponse(BaseModel):
@@ -127,8 +126,7 @@ class WorldResponse(WorldCreate):
     relationship: dict | None = None
     courses: list["CourseResponse"] | None = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class WorldCharacterCreate(BaseModel):
@@ -145,8 +143,7 @@ class WorldCharacterResponse(BaseModel):
     is_primary: bool
     character_name: str | None = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # Phase 1.5 DD1: TeacherPersona 相关类已删除，人格数据直接存储在 Character 模型中
@@ -161,8 +158,7 @@ class LearnerProfileResponse(LearnerProfileCreate):
     id: int
     user_id: int
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class CourseCreate(BaseModel):
@@ -182,8 +178,7 @@ class CourseResponse(CourseCreate):
     progress: float | None = None  # 0.0 - 1.0 课程完成度
     icon: str | None = None  # 课程图标
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class CourseInWorldCreate(BaseModel):
@@ -202,8 +197,7 @@ class LessonPlanCreate(BaseModel):
 class LessonPlanResponse(LessonPlanCreate):
     id: int
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class LearningDiaryCreate(BaseModel):
@@ -217,8 +211,7 @@ class LearningDiaryResponse(LearningDiaryCreate):
     id: int
     user_id: int
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ProgressTrackingCreate(BaseModel):
@@ -233,8 +226,7 @@ class ProgressTrackingResponse(ProgressTrackingCreate):
     user_id: int
     last_review: datetime | None = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # Character endpoints
@@ -1125,8 +1117,7 @@ class CourseSessionResponse(BaseModel):
     course_name: str | None = None
     message_count: int = 0
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class MemoryFactStatsResponse(BaseModel):
@@ -1144,8 +1135,7 @@ class MemoryFactResponse(BaseModel):
     created_at: datetime
     recall_count: int
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 def _get_course_with_auth(course_id: int, db: Session, current_user: User) -> Course:

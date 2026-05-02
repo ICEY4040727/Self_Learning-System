@@ -2,7 +2,7 @@ import os
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, ConfigDict, Field
 from sqlalchemy.orm import Session
 
 from backend.core.rate_limit import limiter  # 统一 Limiter 实例
@@ -25,8 +25,7 @@ class UserResponse(BaseModel):
     username: str
     role: str
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class Token(BaseModel):

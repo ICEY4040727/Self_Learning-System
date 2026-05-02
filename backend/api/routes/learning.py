@@ -226,9 +226,8 @@ async def start_learning(
             learner_profile=learner_profile,
         )
 
-    # Get characters for sprites (reuse helper)
-    sage_character = db.query(Character).filter(Character.id == sage_character_id).first() if sage_character_id else None
-    traveler_character = db.query(Character).filter(Character.id == traveler_character_id).first() if traveler_character_id else None
+    # sage_character & traveler_character already resolved above; SQLAlchemy
+    # identity map keeps them attached after commit.
 
     return _build_start_response(
         session_id=db_session.id,

@@ -11,7 +11,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile
 from fastapi.responses import FileResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from sqlalchemy.orm import Session
 
 from backend.api.routes.auth import get_current_user
@@ -88,8 +88,7 @@ class TextbookResponse(BaseModel):
     # so accept both rather than the previous (broken) ``str | None``.
     created_at: datetime | None = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class CourseGenerateRequest(BaseModel):
