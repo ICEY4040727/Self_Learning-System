@@ -90,3 +90,49 @@ class TestSaveFileManager:
         read_data = SaveFileManager.read_save_file(rel_path)
         assert read_data["content"] == "你好世界 "
         assert read_data["emoji"] == ""
+
+    # --- [TODO-S1] Path traversal tests ---
+
+    def test_path_traversal_dotdot(self, tmp_save_dir: Path):
+        """S1: ../../etc/passwd must be rejected."""
+        with pytest.raises(ValueError, match="Path escape"):
+            SaveFileManager.read_save_file("../../etc/passwd")
+
+    def test_path_traversal_absolute(self, tmp_save_dir: Path):
+        """S1: Absolute path must be rejected."""
+        with pytest.raises(ValueError, match="Path escape"):
+            SaveFileManager.delete_save_file("/etc/passwd")
+
+    def test_path_traversal_get_file_size(self, tmp_save_dir: Path):
+        """S1: get_file_size also validates path."""
+        with pytest.raises(ValueError, match="Path escape"):
+            SaveFileManager.get_file_size("../../../etc/hosts")
+
+    # --- [TODO-S2] Cross-user read protection ---
+
+    def test_cross_user_read_rejected(self, tmp_save_dir: Path):
+        """S2: User 1 cannot read user 2's file."""
+        data = {"secret": "user2_data"}
+        rel_path = SaveFileManager.write_save_file(user_id=2, checkpoint_id=1, data=data)
+
+        with pytest.raises(ValueError, match="Cross-user"):
+            SaveFileManager.read_save_file(rel_path, user_id=1)
+
+    def test_same_user_read_ok(self, tmp_save_dir: Path):
+        """S2: Correct user can read their own file."""
+        data = {"secret": "my_data"}
+        rel_path = SaveFileManager.write_save_file(user_id=1, checkpoint_id=1, data=data)
+        result = SaveFileManager.read_save_file(rel_path, user_id=1)
+        assert result["secret"] == "my_data"
+
+    # --- [TODO-S5] Atomic write ---
+
+    def test_atomic_write_no_tmp_left(self, tmp_save_dir: Path):
+        """S5: After successful write, no .tmp file remains."""
+        data = {"test": "atomic"}
+        rel_path = SaveFileManager.write_save_file(user_id=1, checkpoint_id=20, data=data)
+
+        import backend.services.save_file_manager as sfm
+        user_dir = sfm.SAVE_DIR / "1"
+        tmp_files = list(user_dir.glob("*.tmp"))
+        assert len(tmp_files) == 0, f"Leftover tmp files: {tmp_files}"

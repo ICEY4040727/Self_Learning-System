@@ -1,3 +1,4 @@
+import logging
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -11,6 +12,7 @@ from backend.models.models import (
     Character,
     ChatMessage,
     Checkpoint,
+    ConceptMastery,
     Course,
     LearnerProfile,
     MemoryFact,
@@ -23,6 +25,8 @@ from backend.models.models import (
     Session as SessionModel,
 )
 from backend.services.save_file_manager import SaveFileManager
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -142,12 +146,15 @@ def _build_full_save_data(
         if lp:
             learner_profile_snapshot = lp.profile or {}
 
-    # Memory snapshot
+    # Memory snapshot  [TODO-S3] Added world_id filter
     memory_snapshot: dict = {"memory_ids": [], "facts": []}
     if db_session and db_session.sage_character_id:
         facts = (
             db.query(MemoryFact)
-            .filter(MemoryFact.character_id == db_session.sage_character_id)
+            .filter(
+                MemoryFact.character_id == db_session.sage_character_id,
+                (MemoryFact.world_id == checkpoint.world_id) | MemoryFact.world_id.is_(None),
+            )
             .order_by(MemoryFact.salience.desc())
             .limit(50)
             .all()
@@ -158,8 +165,21 @@ def _build_full_save_data(
             for f in facts
         ]
 
-    # Progress snapshot
-    progress_snapshot: dict = {"topics": []}
+    # Progress snapshot  [TODO-S4] Include both ConceptMastery and lesson progress
+    progress_snapshot: dict = {"concepts": [], "lessons": []}
+
+    # Concept mastery (cross-world)
+    concept_rows = (
+        db.query(ConceptMastery)
+        .filter(ConceptMastery.user_id == user_id)
+        .all()
+    )
+    progress_snapshot["concepts"] = [
+        {"concept_id": c.concept_id, "mastery_level": c.mastery_level}
+        for c in concept_rows
+    ]
+
+    # Lesson progress (per-course)
     if course_id:
         progress_list = (
             db.query(ProgressTracking)
@@ -169,7 +189,7 @@ def _build_full_save_data(
             )
             .all()
         )
-        progress_snapshot["topics"] = [
+        progress_snapshot["lessons"] = [
             {"topic": p.topic, "mastery_level": p.mastery_level}
             for p in progress_list
         ]
@@ -186,11 +206,20 @@ def _build_full_save_data(
 
 
 def _get_checkpoint_state(checkpoint: Checkpoint) -> dict:
-    """读取存档状态：优先从文件读取，fallback 到 DB state 字段"""
+    """读取存档状态：优先从文件读取，fallback 到 DB state 字段
+
+    [TODO-S9] file_path set but file missing → warning logged.
+    """
     if checkpoint.file_path:
         file_data = SaveFileManager.read_save_file(checkpoint.file_path)
         if file_data is not None:
             return file_data
+        logger.warning(
+            "Checkpoint %d has file_path '%s' but file is missing/corrupt, "
+            "falling back to DB state",
+            checkpoint.id,
+            checkpoint.file_path,
+        )
     return checkpoint.state or {}
 
 
@@ -402,7 +431,7 @@ async def get_checkpoint(
     }
 
 
-@router.delete("/checkpoints/{checkpoint_id}")
+@router.delete("/checkpoints/{checkpoint_id}", status_code=204)
 async def delete_checkpoint(
     checkpoint_id: int,
     db: Session = Depends(get_db),
@@ -415,13 +444,14 @@ async def delete_checkpoint(
     if not checkpoint:
         raise HTTPException(status_code=404, detail="Checkpoint not found")
 
-    # Issue #207: 同步删除存档文件
-    if checkpoint.file_path:
-        SaveFileManager.delete_save_file(checkpoint.file_path)
+    file_path = checkpoint.file_path
 
+    # [TODO-S6] DB delete first, then file — avoids ghost row on commit failure
     db.delete(checkpoint)
     db.commit()
-    return {"message": "Checkpoint deleted"}
+
+    if file_path:
+        SaveFileManager.delete_save_file(file_path)
 
 
 @router.post("/checkpoints/{checkpoint_id}/branch")

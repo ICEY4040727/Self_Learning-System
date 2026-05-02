@@ -25,12 +25,24 @@ def _get_save_dir() -> Path:
 
 SAVE_DIR = _get_save_dir()
 
-# 单文件大小上限 (10 MB)
-MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024
-
-
 class SaveFileManager:
     """管理存档 JSON 文件的读写、删除操作。"""
+
+    @staticmethod
+    def _resolve_and_validate(relative_path: str) -> Path:
+        """Resolve relative_path within SAVE_DIR and validate no path escape.
+
+        [TODO-S1] Prevents path traversal attacks (e.g. ``../../etc/passwd``
+        or absolute paths that silently discard the base directory).
+
+        Raises:
+            ValueError: If the resolved path escapes SAVE_DIR.
+        """
+        base = SAVE_DIR.resolve()
+        full = (SAVE_DIR / relative_path).resolve()
+        if full != base and base not in full.parents:
+            raise ValueError(f"Path escape detected: {relative_path}")
+        return full
 
     @staticmethod
     def ensure_save_dir(user_id: int) -> Path:
@@ -42,6 +54,9 @@ class SaveFileManager:
     @staticmethod
     def write_save_file(user_id: int, checkpoint_id: int, data: dict[str, Any]) -> str:
         """写入存档文件，返回相对路径。
+
+        [TODO-S5] Uses tmp+rename for atomic writes — prevents half-file
+        corruption on OOM / SIGTERM / disk-full.
 
         Args:
             user_id: 用户 ID
@@ -59,7 +74,17 @@ class SaveFileManager:
         filepath = user_dir / filename
 
         content = json.dumps(data, ensure_ascii=False, indent=2)
-        filepath.write_text(content, encoding="utf-8")
+
+        # [TODO-S5] Atomic write: tmp + rename
+        tmp_path = filepath.with_suffix(".json.tmp")
+        try:
+            tmp_path.write_text(content, encoding="utf-8")
+            tmp_path.replace(filepath)  # POSIX rename is atomic
+        except BaseException:
+            # Clean up temp file on any failure
+            if tmp_path.exists():
+                tmp_path.unlink()
+            raise
 
         file_size = filepath.stat().st_size
         logger.info(
@@ -70,16 +95,33 @@ class SaveFileManager:
         return f"{user_id}/{filename}"
 
     @staticmethod
-    def read_save_file(relative_path: str) -> dict[str, Any] | None:
+    def read_save_file(relative_path: str, user_id: int | None = None) -> dict[str, Any] | None:
         """读取存档文件。
+
+        [TODO-S1] Validates path stays within SAVE_DIR.
+        [TODO-S2] If user_id is provided, validates the path belongs to that user.
 
         Args:
             relative_path: 相对路径，如 "1/checkpoint_123_20260414100000.json"
+            user_id: If provided, the path's first segment must match this user_id.
 
         Returns:
             解析后的 JSON 字典，文件不存在时返回 None
+
+        Raises:
+            ValueError: If path escapes SAVE_DIR or user_id mismatch.
         """
-        filepath = SAVE_DIR / relative_path
+        filepath = SaveFileManager._resolve_and_validate(relative_path)
+
+        # [TODO-S2] Cross-user read protection
+        if user_id is not None:
+            parts = Path(relative_path).parts
+            if not parts or parts[0] != str(user_id):
+                raise ValueError(
+                    f"Cross-user access denied: path '{relative_path}' "
+                    f"does not belong to user {user_id}"
+                )
+
         if not filepath.exists():
             logger.warning("Save file not found: %s", filepath)
             return None
@@ -93,13 +135,18 @@ class SaveFileManager:
     def delete_save_file(relative_path: str) -> bool:
         """删除存档文件。
 
+        [TODO-S1] Validates path stays within SAVE_DIR.
+
         Args:
             relative_path: 相对路径
 
         Returns:
             True 如果文件被删除，False 如果文件不存在
+
+        Raises:
+            ValueError: If path escapes SAVE_DIR.
         """
-        filepath = SAVE_DIR / relative_path
+        filepath = SaveFileManager._resolve_and_validate(relative_path)
         if filepath.exists():
             filepath.unlink()
             logger.info("Deleted save file: %s", filepath)
@@ -111,13 +158,18 @@ class SaveFileManager:
     def get_file_size(relative_path: str) -> int | None:
         """获取存档文件大小（字节）。
 
+        [TODO-S1] Validates path stays within SAVE_DIR.
+
         Args:
             relative_path: 相对路径
 
         Returns:
             文件大小，文件不存在时返回 None
+
+        Raises:
+            ValueError: If path escapes SAVE_DIR.
         """
-        filepath = SAVE_DIR / relative_path
+        filepath = SaveFileManager._resolve_and_validate(relative_path)
         if not filepath.exists():
             return None
         return filepath.stat().st_size
