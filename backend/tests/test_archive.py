@@ -29,7 +29,7 @@ class TestCharacterCRUD:
         create = client.post("/api/character", json={"name": "ToDelete"}, headers=auth_headers)
         char_id = create.json()["id"]
         resp = client.delete(f"/api/character/{char_id}", headers=auth_headers)
-        assert resp.status_code == 200
+        assert resp.status_code == 204
 
     def test_update_character(self, client, auth_headers):
         create = client.post("/api/character", json={"name": "Original"}, headers=auth_headers)
@@ -154,7 +154,7 @@ class TestWorldCharacterCRUD:
             f"/api/worlds/{world_id}/characters/{character_id}",
             headers=auth_headers,
         )
-        assert delete_resp.status_code == 200
+        assert delete_resp.status_code == 204
 
         list_after_delete = client.get(f"/api/worlds/{world_id}/characters", headers=auth_headers)
         assert list_after_delete.status_code == 200

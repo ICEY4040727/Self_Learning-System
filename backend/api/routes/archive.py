@@ -3,6 +3,7 @@ from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile
 from pydantic import BaseModel, Field
+from sqlalchemy import func as sa_func
 from sqlalchemy.orm import Session
 
 from backend.api.routes.auth import get_current_user
@@ -354,7 +355,7 @@ def update_character(
     return db_character
 
 
-@router.delete("/character/{character_id}")
+@router.delete("/character/{character_id}", status_code=204)
 def delete_character(
     character_id: int,
     db: Session = Depends(get_db),
@@ -369,7 +370,6 @@ def delete_character(
 
     db.delete(character)
     db.commit()
-    return {"message": "Character deleted"}
 
 
 # Character avatar upload endpoint
@@ -585,7 +585,7 @@ def get_worlds(
         .order_by(World.created_at.desc())
         .all()
     )
-    return [_build_world_response(w, db) for w in worlds]
+    return [_build_world_response(w, db, current_user.id) for w in worlds]
 
 
 @router.get("/worlds/{world_id}", response_model=WorldResponse)
@@ -625,7 +625,7 @@ def update_world(
     return _build_world_response(db_world, db, current_user.id)
 
 
-@router.delete("/worlds/{world_id}")
+@router.delete("/worlds/{world_id}", status_code=204)
 def delete_world(
     world_id: int,
     db: Session = Depends(get_db),
@@ -639,7 +639,6 @@ def delete_world(
         raise HTTPException(status_code=404, detail="World not found")
     db.delete(world)
     db.commit()
-    return {"message": "World deleted"}
 
 
 # WorldCharacter endpoints
@@ -795,7 +794,7 @@ def set_world_character_primary(
     )
 
 
-@router.delete("/worlds/{world_id}/characters/{character_id}")
+@router.delete("/worlds/{world_id}/characters/{character_id}", status_code=204)
 def delete_world_character(
     world_id: int,
     character_id: int,
@@ -818,7 +817,6 @@ def delete_world_character(
 
     db.delete(link)
     db.commit()
-    return {"message": "Character unbound from world"}
 
 
 # Character sprite upload
@@ -1099,7 +1097,7 @@ def update_course(
     return db_course
 
 
-@router.delete("/courses/{course_id}")
+@router.delete("/courses/{course_id}", status_code=204)
 def delete_course(
     course_id: int,
     db: Session = Depends(get_db),
@@ -1114,7 +1112,6 @@ def delete_course(
 
     db.delete(course)
     db.commit()
-    return {"message": "Course deleted"}
 
 
 # Issue #188: Course related APIs
@@ -1223,8 +1220,6 @@ def get_course_sessions(
     ).order_by(SessionModel.started_at.desc()).all()
 
     # Aggregate message count for each session
-    from sqlalchemy import func as sa_func
-
     session_ids = [s.id for s in sessions]
     message_counts: dict[int, int] = {}
     if session_ids:
@@ -1662,7 +1657,7 @@ async def generate_persona(
     world_context = ""
     if req.world_id:
         from backend.models.models import World
-        world = db.query(World).filter(World.id == req.world_id).first()
+        world = db.query(World).filter(World.id == req.world_id, World.user_id == current_user.id).first()
         if world and world.scenes:
             mood = world.scenes.get("mood", [])
             if mood:
