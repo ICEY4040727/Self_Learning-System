@@ -40,6 +40,11 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/views/Learning.vue')
   },
   {
+    path: '/bookshelf',
+    name: 'Bookshelf',
+    component: () => import('@/views/Bookshelf.vue')
+  },
+  {
     path: '/archive',
     name: 'Archive',
     component: () => import('@/views/Archive.vue')
@@ -80,3 +85,4 @@ router.beforeEach(async (to) => {
 })
 
 export default router
+

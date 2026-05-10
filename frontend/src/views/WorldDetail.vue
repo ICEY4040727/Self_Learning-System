@@ -146,7 +146,7 @@
       :show="showCreateCourse"
       :world-id="worldId"
       @close="showCreateCourse = false"
-      @create="handleCreateCourse"
+      @created="handleCourseCreated"
     />
 
     <!-- Create Persona Modal -->
@@ -163,10 +163,28 @@
       :show="showStepCreate"
       :default-type="stepCreateDefaultType"
       :world-id="worldId"
-      @close="showStepCreate = false"
+      :edit-character="editCharacter"
+      @close="showStepCreate = false; editCharacter = undefined"
       @create="handleStepCreate"
     />
 
+    <!-- Sage/Traveler Detail Modal -->
+    <SageDetailModal
+      :show="showSageDetail"
+      :character="detailCharacter"
+      :relationship="selectedWorld?.relationship"
+      @close="showSageDetail = false"
+      @edit="openEditFromDetail"
+    />
+
+
+    <!-- Sage/Traveler Edit Form -->
+    <SageEditForm
+      :show="showEditForm"
+      :character="editFormCharacter"
+      @close="showEditForm = false"
+      @saved="handleEditSaved"
+    />
     <!-- Edit World Modal -->
     <div v-if="showEditWorld" class="modal-overlay" @click.self="showEditWorld = false">
       <div class="edit-world-modal">
@@ -187,7 +205,7 @@
         </div>
         <div class="modal-actions">
           <button class="btn-cancel" @click="showEditWorld = false">取消</button>
-          <button class="btn-confirm" @click="handleUpdateWorld">保存</button>
+          <button class="btn-confirm" :disabled="!editWorldForm.name.trim()" @click="handleUpdateWorld">保存</button>
         </div>
       </div>
     </div>
@@ -282,13 +300,14 @@ import { useRoute, useRouter } from 'vue-router'
 import { Edit3, Trash2 } from 'lucide-vue-next'
 import { worldApi } from '@/api/world'
 import { characterApi } from '@/api/character'
-import { FALLBACK_CHARACTERS } from '@/constants/characterPresets'
 import { PAGE_BACKGROUNDS } from '@/constants/ui'
 
 import { parseApiError } from '@/utils/error'
 import CreateCourseModal from '@/components/CreateCourseModal.vue'
 import CreatePersonaModal from '@/components/CreatePersonaModal.vue'
 import StepCreateModal from '@/components/StepCreateModal.vue'
+import SageDetailModal from '@/components/SageDetailModal.vue'
+import SageEditForm from '@/components/SageEditForm.vue'
 
 const BG_URL = PAGE_BACKGROUNDS.worldDetail
 
@@ -311,6 +330,10 @@ interface World {
   description?: string
   symbol?: string
   scenes?: { background?: string }
+  relationship?: {
+    stage?: string
+    dimensions?: Record<string, number>
+  }
   sages?: Character[]
   travelers?: Character[]
 }
@@ -339,9 +362,11 @@ const showEditWorld = ref(false)
 const showTravelerSelect = ref(false)
 const showSageSelect = ref(false)
 const showDeleteConfirm = ref(false)
-
-// Fallback characters when API is unavailable
-const MOCK_CHARACTERS: Character[] = FALLBACK_CHARACTERS as Character[]
+const showEditForm = ref(false)
+const editFormCharacter = ref<Character | null>(null)
+const editCharacter = ref<Character | undefined>(undefined)
+const showSageDetail = ref(false)
+const detailCharacter = ref<Character | null>(null)
 
 // Edit forms
 const editWorldForm = ref({
@@ -355,10 +380,9 @@ const currentTraveler = computed(() => {
   return selectedWorld.value?.travelers?.[0] || null
 })
 
-// Available travelers (all travelers not linked to this world, type='traveler')
+// Available travelers (all travelers - can switch to any)
 const availableTravelers = computed(() => {
-  const linkedIds = new Set(selectedWorld.value?.travelers?.map(t => t.id) || [])
-  return allCharacters.value.filter(c => c.type === 'traveler' && !linkedIds.has(c.id))
+  return allCharacters.value.filter(c => c.type === 'traveler')
 })
 
 // Available sages (all sages not linked to this world)
@@ -402,9 +426,9 @@ const fetchCourses = async () => {
 const fetchCharacters = async () => {
   try {
     const data = await characterApi.list()
-    allCharacters.value = (data && data.length > 0) ? data as any : MOCK_CHARACTERS
+    allCharacters.value = (data && data.length > 0) ? data as any : []
   } catch (error) {
-    allCharacters.value = MOCK_CHARACTERS
+    allCharacters.value = []
     toast.error(parseApiError(error))
   }
 }
@@ -421,22 +445,43 @@ const handleCreatePersona = async (data: Record<string, any>) => {
   }
 }
 
-// Edit sage
+// Edit sage → show detail card
 const handleEditSage = (sage: Character) => {
-  console.log('Edit sage:', sage)
-  // TODO: Open edit modal for sage
+  detailCharacter.value = sage
+  showSageDetail.value = true
 }
 
-// Edit traveler
+// Edit traveler → show detail card
 const handleEditTraveler = (traveler: Character) => {
-  console.log('Edit traveler:', traveler)
-  // TODO: Open edit modal for traveler
+  detailCharacter.value = traveler
+  showSageDetail.value = true
 }
 
-// Select traveler
+// From detail modal, user clicks "edit" → open SageEditForm
+const openEditFromDetail = (character: { id: number; name: string; title?: string; avatar?: string; type?: string; color?: string; symbol?: string }) => {
+  showSageDetail.value = false
+  editFormCharacter.value = {
+    id: character.id,
+    name: character.name,
+    title: character.title,
+    avatar: character.avatar,
+    type: (character.type === 'sage' || character.type === 'traveler') ? character.type : 'sage',
+    color: character.color,
+    symbol: character.symbol,
+  }
+  showEditForm.value = true
+}
+
+// After edit saved → refresh world data
+const handleEditSaved = async () => {
+  showEditForm.value = false
+  await fetchWorld()
+}
+
 const selectTraveler = async (traveler: Character) => {
   try {
-    await worldApi.addCharacter(worldId.value, traveler.id, 'traveler')
+    // 使用 setPrimary API：自动处理已绑定/未绑定的角色，并设为主角色
+    await worldApi.setPrimary(worldId.value, traveler.id)
     await fetchWorld()
     showTravelerSelect.value = false
   } catch (error) {
@@ -468,6 +513,7 @@ const confirmDeleteSage = async (sage: Character) => {
 
 // Update world
 const handleUpdateWorld = async () => {
+  if (!editWorldForm.value.name.trim()) { toast.error("世界名称不能为空"); return }
   try {
     await worldApi.update(worldId.value, {
       name: editWorldForm.value.name,
@@ -496,25 +542,9 @@ const handleDeleteWorld = async () => {
   }
 }
 
-// Create course
-const handleCreateCourse = async (data: {
-  name: string
-  description: string
-  target_level: string
-  meta: Record<string, any>
-}) => {
-  try {
-    const newCourse = await worldApi.createCourse(worldId.value, {
-      name: data.name,
-      description: data.description,
-      target_level: data.target_level,
-      meta: data.meta,
-    })
-    courses.value = [...courses.value, newCourse]
-    showCreateCourse.value = false
-  } catch (error) {
-    toast.error(parseApiError(error))
-  }
+// 课程创建完成 — Modal 内部已完成创建+关联+AI 生成+跳转，此处仅刷新列表
+const handleCourseCreated = async (_courseId: number) => {
+  await fetchCourses()
 }
 
 // Start learning
@@ -531,6 +561,7 @@ const openStepCreate = (type: 'sage' | 'traveler') => {
   stepCreateDefaultType.value = type
   showStepCreate.value = true
   showTravelerSelect.value = false
+  showSageSelect.value = false
 }
 
 // Handle step create (from StepCreateModal)
@@ -571,6 +602,7 @@ const toast = useToast()
   background-position: center;
   opacity: 0.5;
   z-index: -2;
+  pointer-events: none;
 }
 
 .scene-overlay {
@@ -581,6 +613,7 @@ const toast = useToast()
     radial-gradient(ellipse at 30% 55%, rgba(255,215,0,0.05) 0%, transparent 55%),
     linear-gradient(to bottom, rgba(10,10,30,0.25) 0%, rgba(0,0,0,0.45) 100%);
   z-index: -1;
+  pointer-events: none;
 }
 
 /* Header - matching Character.vue */
@@ -1300,3 +1333,4 @@ const toast = useToast()
   opacity: 0;
 }
 </style>
+

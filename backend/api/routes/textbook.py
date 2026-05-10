@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session
 from backend.api.routes.auth import get_current_user
 from backend.core.config import get_settings
 from backend.db.database import get_db
-from backend.models.models import Course, Textbook, User, World
+from backend.models.models import Course, CourseProgress, LessonPlan, Textbook, User, World
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +25,15 @@ router = APIRouter()
 
 # ── 配置 ──────────────────────────────────────────────────────────────
 
-ALLOWED_EXTENSIONS = {".pdf", ".txt", ".md", ".markdown", ".epub"}
+# 图片走 Tesseract OCR（见 backend/services/tesseract_ocr.py）
+IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".tif", ".tiff", ".bmp"}
+ALLOWED_EXTENSIONS = {
+    ".pdf",
+    ".txt",
+    ".md",
+    ".markdown",
+    ".epub",
+} | IMAGE_EXTENSIONS
 MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB
 TEXT_PREVIEW_LENGTH = 500
 MAX_GENERATION_CHARS = 80000  # LLM context budget for course generation
@@ -171,6 +179,31 @@ class TextExtractionError(Exception):
     """
 
 
+def _extract_pdf_page_text(page) -> str:
+    """单页文本：先 ``get_text()``，空时再尝试 blocks / dict（部分版式 PDF 需如此）。"""
+    raw = page.get_text()
+    if raw.strip():
+        return raw
+    parts: list[str] = []
+    for block in page.get_text("blocks", sort=True):
+        if isinstance(block, (list, tuple)) and len(block) >= 5 and block[-1] == 0:
+            chunk = (block[4] or "").strip()
+            if chunk:
+                parts.append(chunk)
+    if parts:
+        return "\n".join(parts)
+    td = page.get_text("dict", sort=True)
+    for block in td.get("blocks", ()):
+        if block.get("type") != 0:
+            continue
+        for line in block.get("lines", ()):
+            for span in line.get("spans", ()):
+                chunk = (span.get("text") or "").strip()
+                if chunk:
+                    parts.append(chunk)
+    return "\n".join(parts)
+
+
 def _extract_pdf(content: bytes) -> tuple[str, int]:
     """[TR-X15] Extract PDF text and page count in a single fitz.open pass.
 
@@ -189,14 +222,56 @@ def _extract_pdf(content: bytes) -> tuple[str, int]:
         raise TextExtractionError(f"无法打开 PDF：{e}") from e
 
     try:
-        pages = [page.get_text() for page in doc]
-        page_count = len(doc)
+        # 加密 PDF：不调用 authenticate 时遍历页面会抛 ValueError，书架层只捕
+        # TextExtractionError 会导致 500，故在此统一处理。
+        if getattr(doc, "is_encrypted", False) or getattr(doc, "needs_pass", False):
+            if doc.authenticate("") <= 0:
+                raise TextExtractionError(
+                    "PDF 已加密，无法提取文本（请使用无密码版本或在本地解密后上传）",
+                )
+        try:
+            from backend.services import tesseract_ocr as _tocr
+
+            page_count = len(doc)
+            if page_count == 0:
+                raise TextExtractionError("PDF 无页面")
+            pages: list[str] = []
+            skipped_beyond_limit = 0
+            for i in range(page_count):
+                t = _extract_pdf_page_text(doc[i])
+                if t.strip():
+                    pages.append(t)
+                    continue
+                if i >= _tocr.MAX_OCR_PDF_PAGES:
+                    skipped_beyond_limit += 1
+                    pages.append("")
+                    continue
+                try:
+                    ocr_t = _tocr.ocr_fitz_page(doc[i])
+                except RuntimeError as e:
+                    raise TextExtractionError(str(e)) from e
+                pages.append(ocr_t if ocr_t else "")
+        except ValueError as e:
+            low = str(e).lower()
+            if "encrypt" in low:
+                raise TextExtractionError(
+                    "PDF 已加密，无法提取文本（请使用无密码版本或在本地解密后上传）",
+                ) from e
+            raise TextExtractionError(f"无法读取 PDF 页面：{e}") from e
     finally:
         doc.close()
 
     text = "\n\n".join(pages).strip()
+    if skipped_beyond_limit and text:
+        text += (
+            f"\n\n[有 {skipped_beyond_limit} 页超出 OCR 页数上限（{_tocr.MAX_OCR_PDF_PAGES}），"
+            "未识别；可拆分 PDF 或提高环境变量 TEXTBOOK_OCR_MAX_PAGES。]"
+        )
     if not text:
-        raise TextExtractionError("PDF 文本提取结果为空（可能是扫描件 / 图片型 PDF）")
+        raise TextExtractionError(
+            "PDF 无可用文本：文字层为空且 OCR 未识别到内容（请确认已安装 Tesseract 与 "
+            "chi_sim/eng 语言包，或页面非空白低清图）。",
+        )
     return text, page_count
 
 
@@ -250,6 +325,19 @@ def _decode_text_file(content: bytes) -> str:
     return content.decode("utf-8", errors="replace")
 
 
+def _extract_image_ocr(content: bytes) -> str:
+    """PNG / JPEG / WebP 等图片：Tesseract OCR。"""
+    from backend.services import tesseract_ocr as _tocr
+
+    try:
+        t = _tocr.ocr_image_bytes(content)
+    except RuntimeError as e:
+        raise TextExtractionError(str(e)) from e
+    if not t.strip():
+        raise TextExtractionError("图片 OCR 未识别到文字")
+    return t
+
+
 def _extract_text(content: bytes, filename: str) -> tuple[str, int | None]:
     """Dispatch to per-format extractor.
 
@@ -271,6 +359,9 @@ def _extract_text(content: bytes, filename: str) -> tuple[str, int | None]:
 
     if ext == ".epub":
         return _extract_epub(content), None
+
+    if ext in IMAGE_EXTENSIONS:
+        return _extract_image_ocr(content), None
 
     raise TextExtractionError(f"不支持的文件类型: {ext}")
 
@@ -317,7 +408,7 @@ async def upload_textbook(
 ):
     """上传教材文件到指定课程
 
-    支持 PDF、TXT、MD、EPUB 格式，最大 50MB。
+    支持 PDF（含扫描件 OCR）、TXT、MD、EPUB、常见图片（PNG/JPEG/WebP 等 OCR），最大 50MB。
     上传后自动提取文本内容。
     """
     from anyio import to_thread
@@ -508,14 +599,20 @@ def clear_generated_content(
 
     course = _get_course_with_auth(course_id, db, current_user)
 
+    # Delete LessonPlan rows (new source of truth)
+    db.query(LessonPlan).filter(LessonPlan.course_id == course_id).delete()
+
+    # Delete CourseProgress
+    db.query(CourseProgress).filter(
+        CourseProgress.course_id == course_id,
+        CourseProgress.user_id == current_user.id,
+    ).delete()
+
     if course.meta:
         for key in (
             "generated_overview",
             "generated_lessons",
             "concept_map",
-            # Progress cursors index into generated_lessons; once we drop
-            # the lessons their old values point at nothing, so wipe them
-            # too. The frontend confirm dialog warns about progress loss.
             "current_lesson_index",
             "completed_lessons",
         ):
@@ -553,13 +650,16 @@ async def generate_course_from_textbooks(
     # generated_lessons would invalidate that progress and confuse the
     # learner. The frontend must explicitly clear progress before regen
     # (separate endpoint, future work).
-    existing_meta = course.meta or {}
-    if existing_meta.get("generated_lessons"):
+    # Check if lessons already exist (LessonPlan rows)
+    existing_lessons = db.query(LessonPlan).filter(
+        LessonPlan.course_id == course_id,
+    ).count()
+    if existing_lessons > 0:
         raise HTTPException(
             status_code=409,
             detail=(
                 "课程已生成内容，无法直接重新生成。"
-                "请先清空课程进度（删除 generated_lessons 后再调用本接口）。"
+                "请先清空课程进度后再调用本接口。"
             ),
         )
 
@@ -610,6 +710,7 @@ async def generate_course_from_textbooks(
             target_days=req.target_days,
             user_api_key=user_api_key,
             default_provider=current_user.default_provider,
+            model=current_user.model,
         )
     except Exception as e:
         logger.error("课程生成失败: %s", e)
@@ -623,19 +724,52 @@ async def generate_course_from_textbooks(
     for t in textbooks:
         t.status = "processed"
 
+    # Store overview & concept_map in course.meta (kept for display)
     if not course.meta:
         course.meta = {}
     course.meta["generated_overview"] = result.get("overview", "")
-    course.meta["generated_lessons"] = [l.model_dump() for l in result.get("lessons", [])]
     course.meta["concept_map"] = result.get("concept_map")
+    # Backward-compat: also store generated_lessons in meta for old clients
+    course.meta["generated_lessons"] = [l.model_dump() for l in result.get("lessons", [])]
     from sqlalchemy.orm.attributes import flag_modified
     flag_modified(course, "meta")
+
+    # Write each lesson as a LessonPlan row (the new source of truth)
+    for lesson in result.get("lessons", []):
+        lp = LessonPlan(
+            course_id=course_id,
+            title=lesson.title,
+            description=lesson.description,
+            order_index=lesson.order,
+            concepts=lesson.concepts,
+            prerequisites=lesson.prerequisites,
+            content="",  # to be filled by AI teaching later
+        )
+        db.add(lp)
+
+    # Initialize CourseProgress for the user
+    existing_progress = db.query(CourseProgress).filter(
+        CourseProgress.course_id == course_id,
+        CourseProgress.user_id == current_user.id,
+    ).first()
+    if not existing_progress:
+        db.add(CourseProgress(
+            course_id=course_id,
+            user_id=current_user.id,
+            current_lesson_index=0,
+            completed_lesson_ids=[],
+        ))
+
     db.commit()
+
+    # Convert GeneratedLesson → dict so Pydantic can construct
+    # GeneratedLessonResponse (same fields, different Pydantic model).
+    lessons_data = [l.model_dump() for l in result.get("lessons", [])]
 
     return CourseGenerateResponse(
         course_id=course_id,
         overview=result.get("overview", ""),
-        lessons=result.get("lessons", []),
+        lessons=lessons_data,
         concept_map=result.get("concept_map"),
         textbook_count=len(textbooks),
         total_chars=total_chars,
@@ -643,6 +777,26 @@ async def generate_course_from_textbooks(
 
 
 # ── 课程教学进度 API (Phase 3 Step 3) ─────────────────────────────────
+
+
+class LessonResponse(BaseModel):
+    """单个 LessonPlan 行"""
+    id: int
+    title: str
+    description: str | None = None
+    order_index: int = 0
+    concepts: list[str] = []
+    prerequisites: list[str] = []
+    content: str | None = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class LessonListResponse(BaseModel):
+    """课程章节列表"""
+    course_id: int
+    total: int
+    lessons: list[LessonResponse]
 
 
 class LessonProgressResponse(BaseModel):
@@ -658,6 +812,23 @@ class LessonProgressResponse(BaseModel):
 class SetLessonRequest(BaseModel):
     """手动设置当前章节请求"""
     lesson_index: int
+
+
+@router.get("/courses/{course_id}/lessons", response_model=LessonListResponse)
+def list_lessons(
+    course_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """获取课程的章节列表（从 LessonPlan 表读取）"""
+    _get_course_with_auth(course_id, db, current_user)
+
+    rows = db.query(LessonPlan).filter(
+        LessonPlan.course_id == course_id,
+    ).order_by(LessonPlan.order_index).all()
+
+    lessons = [LessonResponse.model_validate(lp) for lp in rows]
+    return LessonListResponse(course_id=course_id, total=len(lessons), lessons=lessons)
 
 
 @router.get("/courses/{course_id}/progress", response_model=LessonProgressResponse)
@@ -714,6 +885,51 @@ def get_course_mastery(
     return mastery_tracker.get_course_mastery(db, course_id, current_user.id)
 
 
+class GenerateDescriptionRequest(BaseModel):
+    """AI 生成课程简介请求"""
+    domain: str
+    course_name: str | None = None
+    current_level: str | None = None
+    target_level: str | None = None
+
+
+class GenerateDescriptionResponse(BaseModel):
+    description: str
+
+
+@router.post("/courses/generate-description", response_model=GenerateDescriptionResponse)
+async def generate_course_description(
+    req: GenerateDescriptionRequest,
+    current_user: User = Depends(get_current_user),
+):
+    """基于学科领域、课程名称和学习水平，用 AI 生成课程简介。"""
+    domain = req.domain
+    course_name = req.course_name or "课程"
+    current_level = req.current_level or "入门"
+    target_level = req.target_level or "精通"
+
+    prompt = (
+        f"请为一门名为「{course_name}」的{domain}课程写一段简短的课程简介（50-120字）。"
+        f"学生起点水平：{current_level}，目标水平：{target_level}。"
+        f"简介应该简洁有力，描述学习目标和预期收获，不要使用Markdown格式。"
+    )
+
+    try:
+        from backend.services.llm.manager import get_llm_manager
+        adapter = get_llm_manager().get_adapter()
+        response = await adapter.chat(
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.7,
+            max_tokens=200,
+        )
+        description = response.content.strip() if response and response.content else ""
+    except Exception as e:
+        logger.warning("AI 生成课程简介失败，使用 fallback: %s", e)
+        description = f"深入学习{domain}知识，从{current_level}逐步提升至{target_level}水平。"
+
+    return GenerateDescriptionResponse(description=description)
+
+
 @router.put("/courses/{course_id}/lesson", response_model=LessonProgressResponse)
 def set_current_lesson(
     course_id: int,
@@ -731,3 +947,4 @@ def set_current_lesson(
     if "error" in result:
         raise HTTPException(status_code=400, detail=result["error"])
     return result
+

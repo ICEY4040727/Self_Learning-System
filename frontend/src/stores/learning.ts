@@ -42,6 +42,7 @@ export const useLearningStore = defineStore('learning', () => {
   const sageExpression   = ref<Expression>('default')
   const sageJumpKey      = ref(0)
   const travelerJumpKey  = ref(0)
+  const textKey          = ref(0)   // increments every time currentText changes, ensures DialogBox re-triggers even with same text
 
   // ── Relationship ─────────────────────────────────────────────
   const relationshipStage = ref<RelationshipStage>('stranger')
@@ -62,9 +63,25 @@ export const useLearningStore = defineStore('learning', () => {
   const thinking         = ref(false)
   const loadError        = ref<string | null>(null)
 
-  // ── Sage name (from teacher_persona string) ───────────────────
+  // ── Sage data (from start response) ────────────────────────────
   const _sageName = ref('知者')
   const sageName  = computed(() => _sageName.value)
+  const sageTitle = ref('智者')
+  const sageSymbol = ref('知')
+  const sageAvatar = ref<string | null>(null)
+  const sageColor = ref('#4c1d95')
+  const sageAccentColor = ref('#7c3aed')
+
+  // ── Utility ────────────────────────────────────────────────────
+  /** 将 hex 颜色亮度调高（factor 0~1） */
+  function _lightenColor(hex: string, factor: number): string {
+    const m = hex.match(/^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i)
+    if (!m) return hex
+    const r = Math.min(255, Math.round(parseInt(m[1], 16) + (255 - parseInt(m[1], 16)) * factor))
+    const g = Math.min(255, Math.round(parseInt(m[2], 16) + (255 - parseInt(m[2], 16)) * factor))
+    const b = Math.min(255, Math.round(parseInt(m[3], 16) + (255 - parseInt(m[3], 16)) * factor))
+    return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`
+  }
 
   // ── Start / resume session ────────────────────────────────────
   /**
@@ -77,6 +94,7 @@ export const useLearningStore = defineStore('learning', () => {
     _courseId: number,
     _worldId: number,
     checkpointId?: number,
+    sageId?: number,
   ) {
     courseId.value  = _courseId
     worldId.value   = _worldId
@@ -102,18 +120,34 @@ export const useLearningStore = defineStore('learning', () => {
         return
       }
 
-      // Normal start
+      // Normal start — pass sage_id so backend knows which sage to use
+      console.log('[learning store] startSession called:', { _courseId, _worldId, sageId })
       const { data } = await client.post<StartLearningResponse>(
         `/courses/${_courseId}/start`,
+        sageId ? { sage_id: sageId } : {},
       )
+      console.log('[learning store] start response:', {
+        session_id: data.session_id,
+        is_new: data.is_new,
+        greeting: data.greeting?.substring(0, 50),
+        sage: data.sage?.name,
+      })
       _applyStartResponse(data)
       sessionId.value = data.session_id
 
-      // Show greeting as first speaking turn
-      messages.value = []
-      pushSpeaking(data.greeting)
+      if (data.is_new) {
+        // 新 session：显示 greeting
+        messages.value = []
+        console.log('[learning store] pushing greeting, mode before:', mode.value)
+        pushSpeaking(data.greeting || '你好，今天我们开始学习吧。')
+        console.log('[learning store] pushed greeting, mode after:', mode.value, 'currentText:', currentText.value?.substring(0, 50))
+      } else {
+        // 恢复已有 session：加载历史对话
+        await loadHistory()
+      }
 
     } catch (e: any) {
+      console.error('[learning store] startSession error:', e?.response?.status, e?.response?.data)
       loadError.value = e?.response?.data?.detail ?? '会话启动失败'
     }
   }
@@ -123,12 +157,21 @@ export const useLearningStore = defineStore('learning', () => {
     if (!sessionId.value) sessionId.value = data.session_id
 
     // §5: teacher_persona is a plain string (the persona name), not an object
-    _sageName.value = typeof data.teacher_persona === 'string' && data.teacher_persona
-      ? data.teacher_persona
-      : '知者'
+    _sageName.value = data.sage?.name
+      || (typeof data.teacher_persona === 'string' && data.teacher_persona)
+      || '知者'
 
-    // sage_sprites / character_sprites are aliases
-    sageSprites.value     = data.sage_sprites ?? data.character_sprites ?? {}
+    // 从 sage 字段获取完整角色数据（不再硬编码）
+    if (data.sage) {
+      sageTitle.value     = data.sage.title || '智者'
+      sageSymbol.value    = data.sage.symbol || '知'
+      sageAvatar.value    = data.sage.avatar || null
+      sageColor.value     = data.sage.color || '#4c1d95'
+      sageAccentColor.value = _lightenColor(sageColor.value, 0.35)
+    }
+
+    // sage_sprites: 优先用 sage.sprites，fallback 到旧字段
+    sageSprites.value     = data.sage?.sprites ?? data.sage_sprites ?? data.character_sprites ?? {}
     travelerSprites.value = data.traveler_sprites ?? {}
     sceneBackground.value = data.scenes?.background ?? ''
     relationshipStage.value = data.relationship_stage
@@ -180,10 +223,12 @@ export const useLearningStore = defineStore('learning', () => {
     try {
       // §4: field is `message`, not `content`
       const payload: ChatRequest = { message: content }
+      console.log('[learning store] sendMessage: courseId=', courseId.value, 'sessionId=', sessionId.value)
       const { data } = await client.post<ChatResponse>(
         `/courses/${courseId.value}/chat`,
         payload,
       )
+      console.log('[learning store] chat response:', data.type, data.reply?.substring(0, 50))
 
       // §4: emotion is dict|null — extract emotion_type for Chinese display label
       if (data.emotion) {
@@ -217,7 +262,21 @@ export const useLearningStore = defineStore('learning', () => {
       masteryPercent.value = Math.min(100, masteryPercent.value + 3)
 
       // §4: type can be 'choice' (singular), not 'choices'
-      if (data.type === 'choice') {
+      if ((data as any).type === 'error') {
+        // Error from backend (e.g. no API key) — show as sage dialogue but stay in input mode
+        messages.value.push({
+          id:          Date.now(),
+          sender_type: 'assistant',
+          content:     data.reply,
+          timestamp:   new Date().toISOString(),
+          emotion:     '中性',
+        })
+        currentText.value    = data.reply
+        currentChoices.value = []
+        textKey.value++
+        // Show the error text briefly in speaking mode, then user clicks to dismiss
+        setMode('speaking')
+      } else if (data.type === 'choice') {
         pushChoices(data.reply, data.choices ?? [])
       } else {
         // type === 'text' or 'tool_request'
@@ -299,6 +358,7 @@ export const useLearningStore = defineStore('learning', () => {
     })
     currentText.value    = text
     currentChoices.value = []
+    textKey.value++
     setMode('speaking')
   }
 
@@ -312,6 +372,7 @@ export const useLearningStore = defineStore('learning', () => {
     })
     currentText.value    = question
     currentChoices.value = choices
+    textKey.value++
     setMode('choices')
   }
 
@@ -325,6 +386,14 @@ export const useLearningStore = defineStore('learning', () => {
     pendingStageEvent.value = null
     stageSpecialLine.value  = ''
     setMode('input')
+  }
+
+  /** 通知后端关闭 session（静默失败不影响流程） */
+  async function endSession() {
+    if (!sessionId.value) return
+    try {
+      await client.post(`/sessions/${sessionId.value}/end`)
+    } catch { /* 静默 */ }
   }
 
   function reset() {
@@ -358,12 +427,13 @@ export const useLearningStore = defineStore('learning', () => {
     sessionId, courseId, worldId,
     sageSprites, travelerSprites, sceneBackground,
     messages, mode, currentText, currentChoices,
-    currentEmotion, sageExpression, sageJumpKey, travelerJumpKey,
+    currentEmotion, sageExpression, sageJumpKey, travelerJumpKey, textKey,
     relationshipStage, pendingStageEvent, stageSpecialLine,
     masteryPercent, narrativeEvents, newAchievements, knowledgeGraph, thinking, loadError,
-    sageName,
-    startSession, loadHistory, sendMessage, chooseOption,
+    sageName, sageTitle, sageSymbol, sageAvatar, sageColor, sageAccentColor,
+    startSession, endSession, loadHistory, sendMessage, chooseOption,
     fetchKnowledgeGraph, createCheckpoint, fetchCheckpoints,
-    dismissStageEvent, reset,
+    dismissStageEvent, setMode, reset,
   }
 })
+

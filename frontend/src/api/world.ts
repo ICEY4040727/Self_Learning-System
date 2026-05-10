@@ -67,6 +67,13 @@ export const worldApi = {
     client.delete(`/worlds/${worldId}/characters/${characterId}`),
 
   /**
+   * 设置角色为世界的主角色（自动处理绑定/未绑定状态）
+   * 后端 PUT /worlds/{world_id}/characters/{character_id}/set-primary
+   */
+  setPrimary: (worldId: number, characterId: number) =>
+    client.put(`/worlds/${worldId}/characters/${characterId}/set-primary`).then(res => res.data),
+
+  /**
    * 获取世界的存档列表
    */
   getCheckpoints: (id: number) =>
@@ -77,4 +84,17 @@ export const worldApi = {
    */
   getTimelines: (id: number) =>
     client.get(`/worlds/${id}/timelines`).then(res => res.data),
+
+  /**
+   * AI 生成世界设定
+   */
+  generateWorld: (description: string): Promise<{
+    name_suggestion: string
+    description: string
+    theme_preset: string
+    mood_tags: string[]
+    bgm_suggestion: string
+    world_detail: string
+  }> =>
+    client.post('/world/generate', { description }).then(res => res.data),
 }

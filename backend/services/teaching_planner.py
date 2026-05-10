@@ -3,6 +3,11 @@
 管理课程教学进度：当前章节、完成状态、自动推进。
 
 Phase 3 Step 3: 课程感知教学集成
+
+数据源迁移：从 course.meta JSON → LessonPlan 表 + CourseProgress 表
+- 课程列表：LessonPlan 行（按 order_index 排序）
+- 进度状态：CourseProgress 行（current_lesson_index, completed_lesson_ids）
+- 向后兼容：如 LessonPlan 行为空，回退读 course.meta
 """
 
 import logging
@@ -12,7 +17,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.orm.attributes import flag_modified
 
 from backend.core.config import get_settings
-from backend.models.models import Course, ProgressTracking
+from backend.models.models import Course, CourseProgress, LessonPlan, ProgressTracking
 
 logger = logging.getLogger(__name__)
 
@@ -26,20 +31,86 @@ class TeachingPlanner:
     - 计算整体完成度
     """
 
-    def get_current_lesson(self, course: Course) -> dict | None:
+    def _get_lessons(self, db: Session, course: Course) -> list[dict]:
+        """获取课程的所有章节（新数据源优先，兼容旧数据）
+
+        Returns:
+            list of lesson dicts with keys: title, description, order, concepts, prerequisites
+        """
+        # 新数据源：LessonPlan 表
+        lesson_rows = db.query(LessonPlan).filter(
+            LessonPlan.course_id == course.id,
+        ).order_by(LessonPlan.order_index).all()
+
+        if lesson_rows:
+            return [
+                {
+                    "title": lp.title,
+                    "description": lp.description,
+                    "order": lp.order_index,
+                    "concepts": lp.concepts or [],
+                    "prerequisites": lp.prerequisites or [],
+                    "id": lp.id,  # include DB id for reference
+                }
+                for lp in lesson_rows
+            ]
+
+        # 向后兼容：旧数据从 course.meta 读取
+        if course.meta and course.meta.get("generated_lessons"):
+            return course.meta["generated_lessons"]
+
+        return []
+
+    def _get_progress_record(self, db: Session, course: Course, user_id: int) -> CourseProgress | None:
+        """获取 CourseProgress 行"""
+        return db.query(CourseProgress).filter(
+            CourseProgress.course_id == course.id,
+            CourseProgress.user_id == user_id,
+        ).first()
+
+    def _get_current_index(self, db: Session, course: Course, user_id: int) -> int:
+        """获取当前章节索引（新数据源优先，兼容旧数据）"""
+        progress = self._get_progress_record(db, course, user_id)
+        if progress:
+            return progress.current_lesson_index or 0
+
+        # 向后兼容
+        if course.meta:
+            return course.meta.get("current_lesson_index", 0)
+        return 0
+
+    def _get_completed(self, db: Session, course: Course, user_id: int) -> list[int]:
+        """获取已完成的章节索引列表"""
+        progress = self._get_progress_record(db, course, user_id)
+        if progress:
+            return progress.completed_lesson_ids or []
+
+        # 向后兼容
+        if course.meta:
+            return course.meta.get("completed_lessons", [])
+        return []
+
+    def _get_user_id(self, course: Course) -> int | None:
+        """从 course → world → user 获取 user_id"""
+        if course.world:
+            return course.world.user_id
+        return None
+
+    def get_current_lesson(self, db: Session, course: Course) -> dict | None:
         """获取当前课程的教学章节信息
 
         Returns:
             当前章节 dict（含 title, description, concepts 等），或 None
         """
-        if not course.meta:
-            return None
-
-        lessons = course.meta.get("generated_lessons", [])
+        lessons = self._get_lessons(db, course)
         if not lessons:
             return None
 
-        current_idx = course.meta.get("current_lesson_index", 0)
+        user_id = self._get_user_id(course)
+        if user_id is None:
+            return None
+
+        current_idx = self._get_current_index(db, course, user_id)
         if 0 <= current_idx < len(lessons):
             lesson = dict(lessons[current_idx])
             lesson["_index"] = current_idx
@@ -59,9 +130,11 @@ class TeachingPlanner:
                 "progress_pct": float,
                 "current_lesson": dict | None,
                 "lessons": list[dict],
+                "course_completed": bool,
             }
         """
-        if not course.meta:
+        lessons = self._get_lessons(db, course)
+        if not lessons:
             return {
                 "total_lessons": 0,
                 "current_index": 0,
@@ -69,11 +142,24 @@ class TeachingPlanner:
                 "progress_pct": 0.0,
                 "current_lesson": None,
                 "lessons": [],
+                "course_completed": False,
             }
 
-        lessons = course.meta.get("generated_lessons", [])
-        current_idx = course.meta.get("current_lesson_index", 0)
-        completed = course.meta.get("completed_lessons", [])
+        user_id = self._get_user_id(course)
+        if user_id is None:
+            return {
+                "total_lessons": len(lessons),
+                "current_index": 0,
+                "completed_lessons": 0,
+                "progress_pct": 0.0,
+                "current_lesson": None,
+                "lessons": [{"title": l.get("title", ""), "_status": "pending"} for l in lessons],
+                "course_completed": False,
+            }
+
+        current_idx = self._get_current_index(db, course, user_id)
+        completed_list = self._get_completed(db, course, user_id)
+        completed = set(completed_list)
 
         # current_idx 超出范围时 clamp
         if current_idx >= len(lessons):
@@ -101,7 +187,6 @@ class TeachingPlanner:
                 item["_status"] = "pending"
             lesson_list.append(item)
 
-        # [TODO-T6] course_completed: every lesson has been advanced past.
         course_completed = total > 0 and done >= total
 
         return {
@@ -118,20 +203,18 @@ class TeachingPlanner:
         """推进到下一课
 
         Marks current lesson as completed and moves to next.
-        [TODO-T6] When advancing past the last lesson, current_index stays
-        clamped to the last lesson and `course_completed=True` shows up in
-        the returned progress dict (computed by get_progress from completion
-        set size). Frontend can use that to show a completion screen.
         """
-        if not course.meta:
+        lessons = self._get_lessons(db, course)
+        if not lessons:
             return {"error": "课程无生成内容"}
 
-        lessons = course.meta.get("generated_lessons", [])
-        if not lessons:
-            return {"error": "课程无章节"}
+        user_id = self._get_user_id(course)
+        if user_id is None:
+            return {"error": "无法确定用户"}
 
-        current_idx = course.meta.get("current_lesson_index", 0)
-        completed = set(course.meta.get("completed_lessons", []))
+        current_idx = self._get_current_index(db, course, user_id)
+        completed_list = self._get_completed(db, course, user_id)
+        completed = set(completed_list)
 
         # 标记当前为完成
         completed.add(current_idx)
@@ -139,11 +222,20 @@ class TeachingPlanner:
         # 推进到下一课（不超出范围）
         next_idx = current_idx + 1
         if next_idx >= len(lessons):
-            next_idx = len(lessons) - 1  # stay on last lesson; course_completed flag carries the signal
+            next_idx = len(lessons) - 1  # stay on last lesson
 
-        course.meta["current_lesson_index"] = next_idx
-        course.meta["completed_lessons"] = sorted(completed)
-        flag_modified(course, "meta")
+        # 更新 CourseProgress 表
+        progress = self._get_progress_record(db, course, user_id)
+        if progress:
+            progress.current_lesson_index = next_idx
+            progress.completed_lesson_ids = sorted(completed)
+        else:
+            # 向后兼容：也更新 course.meta
+            if not course.meta:
+                course.meta = {}
+            course.meta["current_lesson_index"] = next_idx
+            course.meta["completed_lessons"] = sorted(completed)
+            flag_modified(course, "meta")
 
         # 记录到 ProgressTracking
         self._record_lesson_progress(db, course, next_idx)
@@ -166,18 +258,27 @@ class TeachingPlanner:
         Returns:
             更新后的进度 dict
         """
-        if not course.meta:
-            return {"error": "课程无生成内容"}
-
-        lessons = course.meta.get("generated_lessons", [])
+        lessons = self._get_lessons(db, course)
         if not lessons:
-            return {"error": "课程无章节"}
+            return {"error": "课程无生成内容"}
 
         if lesson_index < 0 or lesson_index >= len(lessons):
             return {"error": f"章节索引超出范围 (0-{len(lessons)-1})"}
 
-        course.meta["current_lesson_index"] = lesson_index
-        flag_modified(course, "meta")
+        user_id = self._get_user_id(course)
+        if user_id is None:
+            return {"error": "无法确定用户"}
+
+        # 更新 CourseProgress 表
+        progress = self._get_progress_record(db, course, user_id)
+        if progress:
+            progress.current_lesson_index = lesson_index
+        else:
+            # 向后兼容
+            if not course.meta:
+                course.meta = {}
+            course.meta["current_lesson_index"] = lesson_index
+            flag_modified(course, "meta")
 
         self._record_lesson_progress(db, course, lesson_index)
         db.flush()
@@ -189,12 +290,9 @@ class TeachingPlanner:
     def _record_lesson_progress(self, db: Session, course: Course, lesson_idx: int):
         """首次到达某 lesson 时插入 'started' 行（mastery=20）。
 
-        [TODO-T5] 不再对 existing 行 += 20。原实现把"导航到 lesson"等同于
-        "学了 20% 这节课"，导致用户从第 5 课跳回第 1 课复习时第 1 课的
-        mastery 又涨 20。Lesson 实际掌握度由 mastery_tracker 通过 concept
-        信号推动；本函数只负责"开始"标记。
+        [TODO-T5] 不再对 existing 行 += 20。
         """
-        lessons = course.meta.get("generated_lessons", [])
+        lessons = self._get_lessons(db, course)
         if not lessons or lesson_idx >= len(lessons):
             return
 
@@ -229,3 +327,4 @@ class TeachingPlanner:
 
 # Global instance
 teaching_planner = TeachingPlanner()
+

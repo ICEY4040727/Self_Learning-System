@@ -1,5 +1,5 @@
 <template>
-  <div class="main-menu-page">
+  <div class="main-menu-page" :class="{ 'has-child': hasChildRoute }">
     <!-- Fixed scene background -->
     <div class="scene-bg" :style="{ backgroundImage: `url(${homeBg})` }"></div>
     <div class="scene-overlay"></div>
@@ -76,6 +76,7 @@ const logout = () => {
 
 const MENU_ITEMS = [
   { label: '开 始 学 习', action: () => router.push('/home/worlds') },
+  { label: '我 的 书 架', action: () => router.push('/bookshelf') },
   { label: '学 习 报 告', action: () => router.push('/home/report') },
   { label: '角 色 管 理', action: () => router.push('/character') },
   { label: '档 案 管 理', action: () => router.push('/archive') },
@@ -91,6 +92,13 @@ const MENU_ITEMS = [
   height: 100vh;
   overflow: hidden;
   background: #0a0a1e;
+}
+
+/* When a child route is active, allow the page to scroll */
+.main-menu-page.has-child {
+  height: auto;
+  min-height: 100vh;
+  overflow-y: auto;
 }
 
 .scene-bg {
@@ -177,3 +185,4 @@ const MENU_ITEMS = [
   letter-spacing: 1px;
 }
 </style>
+

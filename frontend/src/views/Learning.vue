@@ -75,8 +75,9 @@
             :choices="store.currentChoices"
             placeholder="输入你的想法……"
             :skip-signal="skipSignal"
+            :text-key="store.textKey"
             :typewriter-enabled="settings.typewriterOn"
-            @continue="skipSignal++"
+            @continue="handleContinue"
             @choice-select="(i) => store.chooseOption(store.currentChoices[i])"
             @input-send="store.sendMessage"
           />
@@ -198,6 +199,7 @@ const settings = useSettingsStore()
 
 const courseId = Number(route.query.courseId || route.params.courseId)
 const worldId = Number(route.query.worldId)
+const sageId = route.query.sageId ? Number(route.query.sageId) : undefined
 const checkpointId = route.query.checkpointId
   ? Number(route.query.checkpointId) : undefined
 
@@ -266,8 +268,8 @@ watch(
     clearAutoTimer()
     if (auto && mode === 'speaking' && !thinking) {
       autoTimer = setTimeout(
-        () => { if (store.mode === 'speaking') skipSignal.value++ },
-        settings.autoModeDelay * 1000,
+        () => { if (store.mode === 'speaking') handleContinue() },
+        settings.autoModeDelay,
       )
     }
   },
@@ -278,26 +280,38 @@ function clearAutoTimer() {
 }
 
 onMounted(async () => {
-  await store.startSession(courseId, worldId, checkpointId)
+  await store.startSession(courseId, worldId, checkpointId, sageId)
   checkpoints.value = await store.fetchCheckpoints()
   // v1.0 #192: listen for memory:fresh event
   window.addEventListener('memory:fresh', onMemoryFresh)
 })
 
-onBeforeUnmount(() => {
+onBeforeUnmount(async () => {
   clearAutoTimer()
+  await store.endSession()   // 通知后端关闭 session
   store.reset()
   window.removeEventListener('memory:fresh', onMemoryFresh)
 })
+
+/** Handle "点击继续" — skip typewriter, then switch to input mode */
+function handleContinue() {
+  if (store.mode === 'speaking') {
+    // If typewriter still running, skip it first; next click will switch mode
+    skipSignal.value++
+    // Switch to input mode so user can type their response
+    store.setMode('input')
+  }
+}
 
 const sageCharacter = computed(() => ({
   id: 0,
   name: store.sageName,
   type: 'sage' as const,
-  color: '#4c1d95',
-  accentColor: '#7c3aed',
-  symbol: '知',
-  title: '智者',
+  color: store.sageColor,
+  accentColor: store.sageAccentColor,
+  symbol: store.sageSymbol,
+  title: store.sageTitle,
+  avatar: store.sageAvatar,
   sprites: store.sageSprites,
 }))
 
@@ -536,3 +550,4 @@ watch(() => store.newAchievements.length, (newLen, oldLen) => {
 .achievement-fade-leave-to { opacity: 0; }
 .achievement-fade-leave-active { transition: opacity 0.3s ease; }
 </style>
+

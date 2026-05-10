@@ -68,8 +68,24 @@ class LLMManager:
         # 锁
         self._lock = asyncio.Lock()
 
-    def get_adapter(self, provider: str) -> LLMAdapter:
-        """获取 Provider 的适配器"""
+    def get_adapter(
+        self,
+        provider: str,
+        model: str | None = None,
+        api_key: str | None = None,
+    ) -> LLMAdapter:
+        """获取 Provider 的适配器
+
+        Args:
+            provider: Provider 名称
+            model: 模型名称（可选，覆盖默认）
+            api_key: API Key（可选，覆盖配置）
+        """
+        # 当传入了 model 或 api_key 时，跳过缓存直接创建新实例
+        # （不同用户可能有不同的 key/model 组合）
+        if model or api_key:
+            return get_llm_adapter(provider, model=model, api_key=api_key)
+
         if provider not in self._adapters:
             self._adapters[provider] = get_llm_adapter(provider)
         return self._adapters[provider]
@@ -292,3 +308,4 @@ def set_llm_manager(manager: LLMManager):
     """设置全局 LLM 管理器"""
     global _llm_manager
     _llm_manager = manager
+

@@ -71,12 +71,22 @@ export interface ChatResponse {
 
 export interface StartLearningResponse {
   session_id: number
+  is_new: boolean
   teacher_persona: string | null
   course: string
   relationship_stage: RelationshipStage
   relationship: { dimensions: Record<string, number>; stage: RelationshipStage }
   greeting: string
   scenes: { background?: string; menu_background?: string }
+  sage: {
+    id: number | null
+    name: string | null
+    title: string | null
+    symbol: string | null
+    avatar: string | null
+    color: string | null
+    sprites: Sprites | null
+  } | null
   sage_sprites: Sprites | null
   traveler_sprites: Sprites | null
   character_sprites: Sprites | null
@@ -96,3 +106,4 @@ export interface DiaryCreatePayload {
   content: string
   reflection?: string
 }
+

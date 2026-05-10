@@ -937,8 +937,32 @@ def get_llm_adapter(
 
     else:
         # OpenAI 兼容模式 (deepseek, qwen, groq, etc.)
-        model = model or "default"
-        base_url = base_url or get_provider_endpoint(provider)
+        provider_cfg = settings.llm_providers.get(provider, {})
+        # 已知 provider 的默认 model（避免传 "default" 给 API）
+        _KNOWN_MODELS: dict[str, str] = {
+            "deepseek": "deepseek-chat",
+            "qwen": "qwen-turbo",
+            "qwen-code": "qwen-coder-turbo",
+            "moonshot": "moonshot-v1-8k",
+            "minimax": "MiniMax-M2.7-highspeed",
+            "doubao": "doubao-pro-4k",
+            "groq": "llama-3.1-8b-instant",
+            "together": "meta-llama/Llama-3-8b-chat-hf",
+            "mistral": "mistral-small-latest",
+            "openrouter": "openai/gpt-4o-mini",
+            "ollama": "llama3",
+            "lmstudio": "default",
+            "xai": "grok-beta",
+            "cerebras": "llama-3.1-8b",
+            "sambanova": "Meta-Llama-3.1-8B-Instruct",
+            "fireworks": "accounts/fireworks/models/llama-v3p1-8b-instruct",
+            "nebius": "meta-llama/Meta-Llama-3.1-8B-Instruct",
+            "huggingface": "mistralai/Mistral-7B-Instruct-v0.3",
+            "custom": "default",
+        }
+        model = model or provider_cfg.get("model") or _KNOWN_MODELS.get(provider, "default")
+        api_key = api_key or provider_cfg.get("api_key")
+        base_url = base_url or provider_cfg.get("base_url") or get_provider_endpoint(provider)
         return OpenAICompatibleAdapter(model=model, api_key=api_key, base_url=base_url)
 
 

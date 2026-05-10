@@ -79,14 +79,14 @@
             <input
               ref="fileInput"
               type="file"
-              accept=".pdf,.txt,.md,.epub"
+              accept=".pdf,.txt,.md,.epub,.png,.jpg,.jpeg,.webp,.gif,.tif,.tiff,.bmp"
               style="display:none"
               @change="handleFileSelect"
             />
             <button class="upload-btn" @click="(fileInput as any)?.click()" :disabled="uploading">
               {{ uploading ? `上传中 ${uploadProgress}%` : '[+] 上传教材' }}
             </button>
-            <span class="upload-hint">支持 PDF / TXT / MD / EPUB</span>
+            <span class="upload-hint">支持 PDF（含扫描 OCR）/ TXT / MD / EPUB / 图片 OCR</span>
           </div>
           <!-- Textbook list -->
           <div v-if="textbooks.length > 0" class="textbook-list">
@@ -98,24 +98,61 @@
             </div>
           </div>
           <div v-else class="empty-state">暂未上传教材</div>
-          <!-- Generate course button -->
+          <!-- Generate / Regenerate course button -->
           <button
-            v-if="textbooks.length > 0 && !hasGeneratedContent"
+            v-if="textbooks.length > 0"
             class="generate-btn"
+            :class="{ 'regenerate-btn': hasGeneratedContent }"
             :disabled="generating"
-            @click="handleGenerateCourse"
+            @click="hasGeneratedContent ? handleRegenerateCourse() : handleGenerateCourse()"
           >
-            {{ generating ? '生成中…' : '* 基于教材生成课程' }}
+            <template v-if="generating">
+              {{ hasGeneratedContent ? '重新生成中…' : '生成中…' }}
+            </template>
+            <template v-else>
+              {{ hasGeneratedContent ? '* 重新基于教材生成课程' : '* 基于教材生成课程' }}
+            </template>
           </button>
-          <!-- Regenerate (clears previous generated lessons + progress) -->
-          <button
-            v-if="textbooks.length > 0 && hasGeneratedContent"
-            class="generate-btn regenerate-btn"
-            :disabled="generating"
-            @click="handleRegenerateCourse"
+        </div>
+      </div>
+
+      <!-- Lesson List (Phase 3 Step 3: from LessonPlan table) -->
+      <div v-if="lessons.length > 0" class="section-group">
+        <div class="section-header">
+          <span class="section-label">课 程 章 节</span>
+          <span class="section-sublabel">LESSONS ({{ lessons.length }})</span>
+        </div>
+        <div class="section-line"></div>
+        <div class="lesson-list">
+          <div
+            v-for="(lesson, idx) in lessons"
+            :key="lesson.id"
+            class="lesson-item"
+            :class="{
+              'lesson-current': lessonProgress?.current_index === idx,
+              'lesson-completed': (lessonProgress?.lessons?.[idx]?._status === 'completed'),
+            }"
+            @click="handleLessonClick(idx)"
           >
-            {{ generating ? '重新生成中…' : '↻ 重新生成（会清空当前课程结构与进度）' }}
-          </button>
+            <div class="lesson-marker">
+              <span v-if="lessonProgress?.lessons?.[idx]?._status === 'completed'" class="marker-done">✓</span>
+              <span v-else-if="lessonProgress?.current_index === idx" class="marker-current">▶</span>
+              <span v-else class="marker-pending">{{ idx + 1 }}</span>
+            </div>
+            <div class="lesson-info">
+              <div class="lesson-title">{{ lesson.title }}</div>
+              <div v-if="lesson.description" class="lesson-desc">{{ lesson.description }}</div>
+              <div v-if="lesson.concepts?.length" class="lesson-concepts">
+                <span v-for="c in lesson.concepts.slice(0, 4)" :key="c" class="concept-tag">{{ c }}</span>
+              </div>
+            </div>
+            <div class="lesson-arrow">▸</div>
+          </div>
+        </div>
+        <!-- Lesson progress bar -->
+        <div v-if="lessonProgress" class="lesson-progress-bar">
+          <div class="lp-fill" :style="{ width: lessonProgress.progress_pct + '%' }"></div>
+          <span class="lp-text">{{ lessonProgress.completed_lessons }}/{{ lessonProgress.total_lessons }} 已完成</span>
         </div>
       </div>
 
@@ -255,6 +292,10 @@ const generating = ref(false)
 const hasGeneratedContent = ref(false)
 const fileInput = ref<HTMLInputElement | null>(null)
 
+// Lesson state (Phase 3 Step 3)
+const lessons = ref<any[]>([])
+const lessonProgress = ref<any>(null)
+
 // Computed
 const worldId = computed(() => Number(route.params.worldId))
 const courseId = computed(() => Number(route.params.courseId))
@@ -357,13 +398,12 @@ const confirmSageSelect = (sage: any) => {
   startLearningWithSage(sage.id)
 }
 
-const startLearningWithSage = async (sageId: number) => {
+const startLearningWithSage = async (_sageId: number) => {
   try {
-    const result = await courseApi.start(courseId.value, sageId)
-    const sessionId = result.session_id
+    // Navigate to Learning page - pass sageId so backend knows which sage to use
     router.push({
-      path: `/home/worlds/${worldId.value}/courses/${courseId.value}`,
-      query: { session_id: sessionId }
+      path: `/learning/${courseId.value}`,
+      query: { worldId: String(worldId.value), sageId: String(_sageId) }
     })
   } catch (error) {
     console.error('Failed to start session:', error)
@@ -371,10 +411,14 @@ const startLearningWithSage = async (sageId: number) => {
   }
 }
 
-const handleContinueSession = (session: any) => {
+const handleContinueSession = (_session: any) => {
   router.push({
-    path: `/home/worlds/${worldId.value}/courses/${courseId.value}`,
-    query: { session_id: session.id }
+    path: `/learning/${courseId.value}`,
+    query: {
+      worldId: String(worldId.value),
+      // 传 session 的 sage_id，后端可据此匹配已有 session
+      ...(_session.sage_character_id ? { sageId: String(_session.sage_character_id) } : {}),
+    },
   })
 }
 
@@ -394,15 +438,40 @@ const formatSessionTime = (session: any) => {
   return date.toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric' })
 }
 
+// ── Lesson handlers (Phase 3 Step 3) ─────────────────────────
+const fetchLessons = async () => {
+  try {
+    const [lessonsRes, progressRes] = await Promise.allSettled([
+      courseApi.listLessons(courseId.value),
+      courseApi.getProgress(courseId.value),
+    ])
+    if (lessonsRes.status === 'fulfilled') {
+      lessons.value = lessonsRes.value.lessons || []
+      hasGeneratedContent.value = lessons.value.length > 0
+    }
+    if (progressRes.status === 'fulfilled') {
+      lessonProgress.value = progressRes.value
+    }
+  } catch { /* ignore */ }
+}
+
+const handleLessonClick = async (idx: number) => {
+  // Navigate to learning page at this lesson — 需要传 sageId
+  const firstSageId = sages.value.length > 0 ? sages.value[0].id : undefined
+  router.push({
+    path: `/learning/${courseId.value}`,
+    query: {
+      worldId: String(worldId.value),
+      lesson: String(idx),
+      ...(firstSageId ? { sageId: String(firstSageId) } : {}),
+    },
+  })
+}
+
 // ── Textbook handlers (Phase 2C) ──────────────────────────────
 const fetchTextbooks = async () => {
   try {
     textbooks.value = await courseApi.listTextbooks(courseId.value)
-    // Backend writes to course.meta.generated_lessons (not .lessons —
-    // the previous check was always false on page reload, hiding the
-    // regenerate button after a refresh).
-    const lessons = course.value?.meta?.generated_lessons
-    hasGeneratedContent.value = Array.isArray(lessons) && lessons.length > 0
   } catch { /* ignore */ }
 }
 
@@ -452,7 +521,7 @@ const handleGenerateCourse = async () => {
     hasGeneratedContent.value = true
     toast.success(`课程已生成：${result.lessons?.length || 0} 个课时`)
     // Refresh course data to show new lessons
-    await fetchData()
+    await Promise.all([fetchData(), fetchLessons()])
   } catch (error: any) {
     toast.error(error?.response?.data?.detail || '生成失败')
   } finally {
@@ -477,7 +546,7 @@ const handleRegenerateCourse = async () => {
     await courseApi.clearGeneratedContent(courseId.value)
     const result = await courseApi.generateCourse(courseId.value)
     toast.success(`课程已重新生成：${result.lessons?.length || 0} 个课时`)
-    await fetchData()
+    await Promise.all([fetchData(), fetchLessons()])
   } catch (error: any) {
     toast.error(error?.response?.data?.detail || '重新生成失败')
   } finally {
@@ -494,7 +563,7 @@ const formatSize = (bytes: number) => {
 
 // Lifecycle
 onMounted(async () => {
-  await Promise.all([fetchData(), fetchTextbooks()])
+  await Promise.all([fetchData(), fetchTextbooks(), fetchLessons()])
   // Fetch learner profile after main data loads
   try {
     const profile = await courseApi.getLearnerProfile(worldId.value)
@@ -967,4 +1036,143 @@ onMounted(async () => {
   box-shadow: 0 4px 16px rgba(168, 85, 247, 0.2);
 }
 .generate-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.generate-btn.regenerate-btn {
+  background: linear-gradient(135deg, rgba(251, 191, 36, 0.15), rgba(168, 85, 247, 0.15));
+  border-color: rgba(251, 191, 36, 0.4);
+  color: #fbbf24;
+}
+.generate-btn.regenerate-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, rgba(251, 191, 36, 0.25), rgba(168, 85, 247, 0.25));
+  border-color: rgba(251, 191, 36, 0.6);
+  box-shadow: 0 4px 16px rgba(251, 191, 36, 0.2);
+}
+
+/* Lesson list (Phase 3 Step 3) */
+.lesson-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.lesson-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 18px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 215, 0, 0.08);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.lesson-item:hover {
+  background: rgba(255, 215, 0, 0.06);
+  border-color: rgba(255, 215, 0, 0.2);
+  padding-left: 24px;
+}
+.lesson-item.lesson-current {
+  border-color: rgba(255, 215, 0, 0.35);
+  background: rgba(255, 215, 0, 0.08);
+}
+.lesson-item.lesson-completed {
+  opacity: 0.65;
+}
+.lesson-item.lesson-completed .lesson-title {
+  text-decoration: line-through;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.lesson-marker {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  flex-shrink: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+.marker-done {
+  color: #4ade80;
+  font-size: 16px;
+}
+.marker-current {
+  color: #ffd700;
+  font-size: 12px;
+  background: rgba(255, 215, 0, 0.15);
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.marker-pending {
+  color: rgba(255, 255, 255, 0.3);
+}
+
+.lesson-info {
+  flex: 1;
+  min-width: 0;
+}
+.lesson-title {
+  font-family: "Noto Sans SC", sans-serif;
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.85);
+  margin-bottom: 2px;
+}
+.lesson-desc {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.4);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lesson-concepts {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+.concept-tag {
+  font-size: 11px;
+  padding: 2px 8px;
+  background: rgba(96, 165, 250, 0.1);
+  border: 1px solid rgba(96, 165, 250, 0.2);
+  border-radius: 10px;
+  color: #93c5fd;
+}
+.lesson-arrow {
+  color: rgba(255, 215, 0, 0.3);
+  font-size: 14px;
+}
+
+/* Lesson progress bar */
+.lesson-progress-bar {
+  margin-top: 12px;
+  position: relative;
+  height: 24px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+  overflow: hidden;
+}
+.lp-fill {
+  height: 100%;
+  background: linear-gradient(90deg, rgba(255, 215, 0, 0.3), rgba(255, 215, 0, 0.6));
+  border-radius: 12px;
+  transition: width 0.4s ease;
+}
+.lp-text {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.6);
+  font-family: "Noto Sans SC", sans-serif;
+  letter-spacing: 1px;
+}
 </style>
+

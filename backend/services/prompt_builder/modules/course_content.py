@@ -1,9 +1,10 @@
 """Course Content Module
 
-将 Course.meta 中由 AI 生成的课程结构（概览、章节、概念图）注入提示词，
+将课程结构（概览、章节、概念图）注入提示词，
 让教学引擎基于教材内容进行授课，而非泛泛而谈。
 
 Phase 3 Step 3: 课程感知教学集成
+数据源迁移：course.meta JSON → LessonPlan 表 + CourseProgress 表
 """
 
 from backend.services.prompt_builder.base import MemoryModule
@@ -12,13 +13,13 @@ from backend.services.prompt_builder.base import MemoryModule
 class CourseContentModule(MemoryModule):
     """课程内容模块
 
-    从 Course.meta 读取 AI 生成的课程结构：
-    - generated_overview: 课程概览
-    - generated_lessons: 章节列表（title, description, order, concepts, prerequisites）
-    - concept_map: 概念关系图
-    - current_lesson_index: 当前教学进度（第几课）
+    优先从 LessonPlan + CourseProgress 表读取课程结构和进度，
+    向后兼容 course.meta JSON。
 
-    这是会话级静态层，教学过程中提供知识框架。
+    数据源：
+    - LessonPlan 表：章节列表（title, description, order_index, concepts, prerequisites）
+    - CourseProgress 表：当前教学进度（current_lesson_index, completed_lesson_ids）
+    - course.meta：概览 (generated_overview)、概念图 (concept_map)、向后兼容数据
     """
 
     def get_section_name(self) -> str:
@@ -32,62 +33,111 @@ class CourseContentModule(MemoryModule):
         builder framework only consults should_include."""
         return context.get("course_id") is not None
 
-    def should_include(self, context: dict) -> bool:
-        """[TODO-T10] Skip the module entirely when the course has no
-        generated content — previously the module ran assemble() every
-        prompt build and returned "" for sessions without uploaded textbooks."""
+    def _get_course_and_user(self, context: dict):
+        """Helper: get course, user_id from context."""
         db = context.get("db")
         course_id = context.get("course_id")
         if not db or not course_id:
-            return False
+            return None, None, None
 
         from backend.models.models import Course
-
         course = db.query(Course).filter(Course.id == course_id).first()
-        if not course or not course.meta:
+        if not course:
+            return None, None, None
+
+        user_id = course.world.user_id if course.world else None
+        return db, course, user_id
+
+    def should_include(self, context: dict) -> bool:
+        """Check if there's any course content to include.
+
+        Checks LessonPlan rows first, then falls back to course.meta.
+        """
+        db, course, _ = self._get_course_and_user(context)
+        if not course:
             return False
 
+        # New data source: LessonPlan rows
+        from backend.models.models import LessonPlan
+        lesson_count = db.query(LessonPlan).filter(
+            LessonPlan.course_id == course.id,
+        ).count()
+        if lesson_count > 0:
+            return True
+
+        # Backward compat: course.meta
         meta = course.meta if isinstance(course.meta, dict) else {}
         return bool(meta.get("generated_overview") or meta.get("generated_lessons"))
 
     def assemble(self, context: dict) -> str:
-        """从 Course.meta 读取生成内容并渲染教学提示"""
-        db = context.get("db")
-        course_id = context.get("course_id")
-
-        if not db or not course_id:
+        """从 LessonPlan + CourseProgress / course.meta 读取内容并渲染教学提示"""
+        db, course, user_id = self._get_course_and_user(context)
+        if not course:
             return ""
 
-        from backend.models.models import Course
-
-        course = db.query(Course).filter(Course.id == course_id).first()
-        if not course or not course.meta:
-            return ""
-
-        meta = course.meta
+        meta = course.meta if isinstance(course.meta, dict) else {}
         parts = []
 
-        # 1. 课程概览
+        # 1. 课程概览 (still from meta - only overview/concept_map stored there)
         overview = meta.get("generated_overview")
         if overview:
             parts.append(f"## 课程概览\n{overview}")
 
-        # 2. 章节列表 + 当前进度
-        lessons = meta.get("generated_lessons", [])
+        # 2. 章节列表 + 当前进度 (new data source first)
+        lessons, current_idx = self._get_lessons_and_progress(db, course, user_id, meta)
         if lessons:
-            current_idx = meta.get("current_lesson_index", 0)
             parts.append(self._render_lessons(lessons, current_idx))
 
-        # 3. 概念图
+        # 3. 概念图 (still from meta)
         concept_map = meta.get("concept_map")
         if concept_map:
             parts.append(self._render_concept_map(concept_map))
 
         # 4. 教学指引
         if overview or lessons:
-            parts.append(self._render_teaching_guidance(lessons, meta))
+            parts.append(self._render_teaching_guidance(lessons, current_idx))
 
         return "\n\n".join(parts)
+
+    def _get_lessons_and_progress(self, db, course, user_id, meta) -> tuple[list, int]:
+        """Get lessons list and current progress index.
+
+        Tries LessonPlan table first, falls back to course.meta.
+        """
+        # New data source: LessonPlan rows
+        from backend.models.models import CourseProgress, LessonPlan
+
+        lesson_rows = db.query(LessonPlan).filter(
+            LessonPlan.course_id == course.id,
+        ).order_by(LessonPlan.order_index).all()
+
+        if lesson_rows:
+            lessons = [
+                {
+                    "title": lp.title,
+                    "description": lp.description,
+                    "concepts": lp.concepts or [],
+                    "prerequisites": lp.prerequisites or [],
+                }
+                for lp in lesson_rows
+            ]
+
+            # Progress from CourseProgress table
+            current_idx = 0
+            if user_id:
+                progress = db.query(CourseProgress).filter(
+                    CourseProgress.course_id == course.id,
+                    CourseProgress.user_id == user_id,
+                ).first()
+                if progress:
+                    current_idx = progress.current_lesson_index or 0
+
+            return lessons, current_idx
+
+        # Backward compat: course.meta
+        lessons = meta.get("generated_lessons", [])
+        current_idx = meta.get("current_lesson_index", 0)
+        return lessons, current_idx
 
     def _render_lessons(self, lessons: list, current_idx: int) -> str:
         """渲染章节列表，标注当前进度"""
@@ -145,7 +195,7 @@ class CourseContentModule(MemoryModule):
 
         return "\n".join(lines)
 
-    def _render_teaching_guidance(self, lessons: list, meta: dict) -> str:
+    def _render_teaching_guidance(self, lessons: list, current_idx: int) -> str:
         """渲染教学指引"""
         lines = [
             "## 教学指引",
@@ -156,7 +206,6 @@ class CourseContentModule(MemoryModule):
             "4. 引用课程概览中的知识框架帮助建立体系化认知",
         ]
 
-        current_idx = meta.get("current_lesson_index", 0)
         if lessons and 0 <= current_idx < len(lessons):
             current = lessons[current_idx]
             title = current.get("title", "")
@@ -167,3 +216,4 @@ class CourseContentModule(MemoryModule):
                 lines.append(f"请围绕以下概念引导学生: {', '.join(concepts[:5])}")
 
         return "\n".join(lines)
+

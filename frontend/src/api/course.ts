@@ -68,8 +68,14 @@ export const courseApi = {
    * Backend rejects (409) if generated_lessons already exist — call
    * clearGeneratedContent first if you want to regenerate.
    */
-  generateCourse: (courseId: number) =>
-    client.post(`/courses/${courseId}/generate`).then(res => res.data),
+  generateCourse: (courseId: number, customInstructions?: string) =>
+    client.post(`/courses/${courseId}/generate`,
+      {
+        course_id: courseId,
+        ...(customInstructions ? { custom_instructions: customInstructions } : {}),
+      },
+      { timeout: 120_000 }, // AI 生成可能较慢
+    ).then(res => res.data),
 
   /**
    * 清空已生成的课程内容 (overview / lessons / concept_map + progress).
@@ -78,6 +84,16 @@ export const courseApi = {
    */
   clearGeneratedContent: (courseId: number) =>
     client.delete(`/courses/${courseId}/generated`).then(() => undefined),
+
+  /** 删除课程 */
+  deleteCourse: (courseId: number) =>
+    client.delete(`/courses/${courseId}`).then(() => undefined),
+
+  /**
+   * 获取课程的章节列表（从 LessonPlan 表）
+   */
+  listLessons: (courseId: number) =>
+    client.get(`/courses/${courseId}/lessons`).then(res => res.data),
 
   /**
    * 获取课程进度（课程列表）
@@ -102,4 +118,17 @@ export const courseApi = {
    */
   getLearnerProfile: (worldId: number) =>
     client.get(`/worlds/${worldId}/learner_profile`).then(res => res.data),
+
+  /**
+   * AI 生成课程简介
+   * 基于学科领域、课程名称、学习水平等生成一段课程描述
+   */
+  generateDescription: (params: {
+    domain: string
+    course_name?: string
+    current_level?: string
+    target_level?: string
+  }): Promise<{ description: string }> =>
+    client.post('/courses/generate-description', params).then(res => res.data),
 }
+

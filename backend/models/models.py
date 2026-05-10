@@ -54,6 +54,9 @@ class User(Base):
     role = Column(String(20), default="student")
     encrypted_api_key = Column(String(255), nullable=True)
     default_provider = Column(String(50), nullable=True)
+    temperature = Column(Float, nullable=True, default=0.7)
+    max_tokens = Column(Integer, nullable=True, default=2048)
+    model = Column(String(100), nullable=True)
     created_at = Column(DateTime, default=_utcnow)
 
     worlds = orm_relationship("World", back_populates="user", cascade="all, delete-orphan")
@@ -64,7 +67,9 @@ class User(Base):
     sessions = orm_relationship("Session", back_populates="user", cascade="all, delete-orphan")
     checkpoints = orm_relationship("Checkpoint", back_populates="user", cascade="all, delete-orphan")
     textbooks = orm_relationship("Textbook", back_populates="user", cascade="all, delete-orphan")
+    textbook_library = orm_relationship("TextbookLibrary", back_populates="user", cascade="all, delete-orphan")
     user_profile = orm_relationship("UserProfile", back_populates="user", uselist=False, cascade="all, delete-orphan")
+    course_progress = orm_relationship("CourseProgress", back_populates="user", cascade="all, delete-orphan")
 
 
 class UserProfile(Base):
@@ -163,6 +168,7 @@ class Character(Base):
     system_prompt_template = Column(Text, nullable=True, comment='自定义 system prompt 模板')
     template_name = Column(String(50), nullable=True, comment='角色模板 key，如 socrates/einstein')
     is_active = Column(Boolean, default=True, comment='是否可用于教学（DD1: 替代 TeacherPersona.is_active）')
+    greeting = Column(Text, nullable=True, comment='初次见面台词')
     created_at = Column(DateTime, default=_utcnow)
 
     user = orm_relationship("User", back_populates="characters")
@@ -226,17 +232,41 @@ class Course(Base):
     progress_trackings = orm_relationship("ProgressTracking", back_populates="course", cascade="all, delete-orphan")
     sessions = orm_relationship("Session", back_populates="course", cascade="all, delete-orphan")
     textbooks = orm_relationship("Textbook", back_populates="course", cascade="all, delete-orphan")
+    course_progress = orm_relationship("CourseProgress", back_populates="course", cascade="all, delete-orphan")
 
 
 class LessonPlan(Base):
+    """课程章节（DAG 节点）"""
     __tablename__ = "lesson_plans"
 
     id = Column(Integer, primary_key=True, index=True)
-    course_id = Column(Integer, ForeignKey("courses.id"), nullable=False)
-    content = Column(Text, nullable=False)
+    course_id = Column(Integer, ForeignKey("courses.id", ondelete="CASCADE"), nullable=False)
+    title = Column(String(200), nullable=False)
+    description = Column(Text, nullable=True)
+    order_index = Column(Integer, nullable=False, default=0)
+    concepts = Column(JSON, nullable=True, default=list)        # ["概念1", "概念2"]
+    prerequisites = Column(JSON, nullable=True, default=list)   # 依赖的 lesson title 列表（DAG 边）
+    content = Column(Text, nullable=True)                       # 教师笔记/额外内容
     created_at = Column(DateTime, default=_utcnow)
+    updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow)
 
     course = orm_relationship("Course", back_populates="lesson_plans")
+
+
+class CourseProgress(Base):
+    """课程学习进度（用户级别）"""
+    __tablename__ = "course_progress"
+    __table_args__ = (UniqueConstraint("course_id", "user_id", name="uq_course_progress_user"),)
+
+    id = Column(Integer, primary_key=True, index=True)
+    course_id = Column(Integer, ForeignKey("courses.id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    current_lesson_index = Column(Integer, nullable=True, default=0)
+    completed_lesson_ids = Column(JSON, nullable=True, default=list)  # [lesson_index, ...]
+    updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow)
+
+    course = orm_relationship("Course", back_populates="course_progress")
+    user = orm_relationship("User", back_populates="course_progress")
 
 
 class LearningDiary(Base):
@@ -512,6 +542,31 @@ class Textbook(Base):
 
     course = orm_relationship("Course", back_populates="textbooks")
     user = orm_relationship("User", back_populates="textbooks")
+
+
+class TextbookLibrary(Base):
+    """书架教材 — 用户级教材库，与课程解耦
+
+    教材上传到书架后再关联到课程，解决"先有课程才能上传教材"的循环依赖。
+    同一份教材可被多个课程引用，通过 Textbook 表做关联。
+    """
+    __tablename__ = "textbook_library"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    filename = Column(String(255), nullable=False)
+    file_path = Column(String(512), nullable=False)
+    file_size = Column(Integer, nullable=True)
+    content_type = Column(String(100), nullable=True)
+    extracted_text = Column(Text, nullable=True, comment="提取的文本内容，用于 AI 处理")
+    page_count = Column(Integer, nullable=True)
+    # 状态: uploading → extracted → error
+    status = Column(String(20), default="extracted")
+    error_message = Column(Text, nullable=True)
+    title = Column(String(255), nullable=True, comment="用户可编辑的教材标题")
+    created_at = Column(DateTime, default=_utcnow)
+
+    user = orm_relationship("User", back_populates="textbook_library")
 
 
 class Checkpoint(Base):

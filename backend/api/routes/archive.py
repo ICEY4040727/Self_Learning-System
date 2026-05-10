@@ -41,6 +41,46 @@ router = APIRouter()
 #   - Session.learner_profile_id: 用户的学习档案
 # =============================================================================
 
+# World AI generate cooldown
+_world_gen_cooldowns: dict[int, float] = {}
+_WORLD_GEN_COOLDOWN = 10  # seconds
+
+WORLD_GENERATE_PROMPT = """你是一个世界构建师。用户描述了他们想要的学习世界，请生成完整的世界设定。
+
+用户描述：{description}
+
+请严格按 JSON 格式输出：
+{{
+  "name_suggestion": "世界名称（4-10字）",
+  "description": "世界简介（20-60字，描述这个世界的学习氛围）",
+  "theme_preset": "academy|library|laboratory|forest|ruins|city|space|ocean",
+  "mood_tags": ["标签1", "标签2", "标签3"],
+  "bgm_suggestion": "silent|classical|ambient|lofi|nature|epic|jazz",
+  "world_detail": "详细的世界背景描述（50-100字，用于 AI 导师了解世界设定）"
+}}
+
+注意：
+- theme_preset 必须是以上选项之一
+- mood_tags 选 2-4 个氛围关键词
+- 世界是用于学习的虚拟空间，风格可以多样
+- 直接输出 JSON，不要任何推理、思考、解释或额外内容
+- 不要输出思考过程，只输出最终 JSON"""
+
+
+class WorldGenerateRequest(BaseModel):
+    description: str = Field(..., min_length=5, max_length=500)
+    inspiration_type: str = "freeform"  # freeform | style_reference
+
+
+class WorldGenerateResponse(BaseModel):
+    name_suggestion: str
+    description: str
+    theme_preset: str
+    mood_tags: list[str]
+    bgm_suggestion: str
+    world_detail: str
+
+
 # Phase 1.5 DD1: PERSONA_TEMPLATES 保留用于提示词构建，不再用于 TeacherPersona 创建
 # Issue #15/#213: 同时支持中文名和英文 key（前端传英文 key 如 'socrates'）
 PERSONA_TEMPLATES = {
@@ -631,6 +671,73 @@ def delete_world(
         raise HTTPException(status_code=404, detail="World not found")
     db.delete(world)
     db.commit()
+
+
+@router.post("/world/generate", response_model=WorldGenerateResponse)
+async def generate_world(
+    req: WorldGenerateRequest,
+    current_user: User = Depends(get_current_user),
+):
+    """Use LLM to generate world settings from a natural language description."""
+    import json
+    import re
+    import time
+
+    from backend.core.security import decrypt_api_key
+    from backend.services.llm.adapter import get_llm_adapter
+
+    # Cooldown
+    now = time.time()
+    last = _world_gen_cooldowns.get(current_user.id, 0)
+    if now - last < _WORLD_GEN_COOLDOWN:
+        remaining = int(_WORLD_GEN_COOLDOWN - (now - last))
+        raise HTTPException(status_code=429, detail=f"请 {remaining} 秒后再试")
+    _world_gen_cooldowns[current_user.id] = now
+
+    user_api_key = None
+    provider = current_user.default_provider or "claude"
+    if current_user.encrypted_api_key:
+        user_api_key = decrypt_api_key(current_user.encrypted_api_key)
+
+    if not user_api_key:
+        raise HTTPException(status_code=400, detail="请先在设置页配置 API Key")
+
+    adapter = get_llm_adapter(provider)
+
+    prompt = WORLD_GENERATE_PROMPT.format(description=req.description)
+
+    try:
+        response = await adapter.chat(
+            messages=[{"role": "user", "content": prompt}],
+            system_prompt="你是世界构建师，只输出合法 JSON。",
+            user_api_key=user_api_key,
+            max_tokens=4096,
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=502,
+            detail=f"AI 服务调用失败，请稍后重试。错误：{str(e)[:200]}",
+        ) from e
+
+    try:
+        json_match = re.search(r"\{[\s\S]*\}", response)
+        if not json_match:
+            raise ValueError("No JSON found")
+        data = json.loads(json_match.group())
+
+        return WorldGenerateResponse(
+            name_suggestion=data.get("name_suggestion", "未命名世界"),
+            description=data.get("description", ""),
+            theme_preset=data.get("theme_preset", "academy"),
+            mood_tags=data.get("mood_tags", []),
+            bgm_suggestion=data.get("bgm_suggestion", "silent"),
+            world_detail=data.get("world_detail", ""),
+        )
+    except (json.JSONDecodeError, ValueError) as e:
+        raise HTTPException(
+            status_code=422,
+            detail=f"AI 生成格式错误，请重试。原始响应：{response[:200]}",
+        ) from e
 
 
 # WorldCharacter endpoints
