@@ -164,6 +164,34 @@ class TestWorldCRUD:
         assert payload["background_picture"] == "/themes/library.jpg"
         assert payload["scenes"] == {}
 
+    def test_partial_update_world_keeps_existing_background_picture(self, client, auth_headers):
+        create = client.post(
+            "/api/worlds",
+            json={
+                "name": "Shell World",
+                "description": "before",
+                "background_picture": "/themes/academy.jpg",
+            },
+            headers=auth_headers,
+        )
+        assert create.status_code == 200
+        world_id = create.json()["id"]
+
+        update = client.put(
+            f"/api/worlds/{world_id}",
+            json={
+                "name": "Shell World Renamed",
+                "description": "after",
+            },
+            headers=auth_headers,
+        )
+
+        assert update.status_code == 200
+        payload = update.json()
+        assert payload["name"] == "Shell World Renamed"
+        assert payload["description"] == "after"
+        assert payload["background_picture"] == "/themes/academy.jpg"
+
 
 class TestWorldCharacterCRUD:
     def _create_world(self, client, auth_headers):

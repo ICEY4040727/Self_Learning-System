@@ -186,6 +186,13 @@ class WorldCreate(BaseModel):
     scenes: dict | None = None
 
 
+class WorldUpdate(BaseModel):
+    name: str | None = None
+    description: str | None = None
+    background_picture: str | None = None
+    scenes: dict | None = None
+
+
 class WorldResponse(WorldCreate):
     id: int
     user_id: int
@@ -817,7 +824,7 @@ def get_world(
 @router.put("/worlds/{world_id}", response_model=WorldResponse)
 def update_world(
     world_id: int,
-    world: WorldCreate,
+    world: WorldUpdate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -828,10 +835,15 @@ def update_world(
     if not db_world:
         raise HTTPException(status_code=404, detail="World not found")
 
-    db_world.name = world.name
-    db_world.description = world.description
-    db_world.background_picture = (world.background_picture or "").strip() or None
-    db_world.scenes = world.scenes or {}
+    data = world.model_dump(exclude_unset=True)
+    if "name" in data:
+        db_world.name = data["name"]
+    if "description" in data:
+        db_world.description = data["description"]
+    if "background_picture" in data:
+        db_world.background_picture = (data["background_picture"] or "").strip() or None
+    if "scenes" in data:
+        db_world.scenes = data["scenes"] or {}
     db.commit()
     db.refresh(db_world)
     return _build_world_response(db_world, db, current_user.id)
