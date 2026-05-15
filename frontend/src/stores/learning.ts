@@ -173,7 +173,7 @@ export const useLearningStore = defineStore('learning', () => {
     // sage_sprites: 优先用 sage.sprites，fallback 到旧字段
     sageSprites.value     = data.sage?.sprites ?? data.sage_sprites ?? data.character_sprites ?? {}
     travelerSprites.value = data.traveler_sprites ?? {}
-    sceneBackground.value = data.scenes?.background_picture ?? data.scenes?.background ?? ''
+    sceneBackground.value = data.background_picture ?? data.scenes?.background_picture ?? data.scenes?.background ?? ''
     relationshipStage.value = data.relationship_stage
   }
 

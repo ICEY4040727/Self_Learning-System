@@ -133,8 +133,7 @@ class TestWorldCRUD:
         assert resp.status_code == 200
         payload = resp.json()
         assert payload["background_picture"] == "/themes/academy.jpg"
-        assert payload["scenes"]["background_picture"] == "/themes/academy.jpg"
-        assert payload["scenes"]["background"] == "/themes/academy.jpg"
+        assert payload["scenes"] == {}
 
     def test_update_world_preserves_background_picture_contract(self, client, auth_headers):
         create = client.post(
@@ -163,8 +162,7 @@ class TestWorldCRUD:
         payload = update.json()
         assert payload["name"] == "Shell World Updated"
         assert payload["background_picture"] == "/themes/library.jpg"
-        assert payload["scenes"]["background_picture"] == "/themes/library.jpg"
-        assert payload["scenes"]["background"] == "/themes/library.jpg"
+        assert payload["scenes"] == {}
 
 
 class TestWorldCharacterCRUD:

@@ -361,10 +361,11 @@ async def _build_start_response(
     )
 
     scenes = dict(course.world.scenes or {}) if course.world and course.world.scenes else {}
-    background_picture = scenes.get("background_picture") or scenes.get("background")
-    if background_picture:
-        scenes["background_picture"] = background_picture
-        scenes.setdefault("background", background_picture)
+    background_picture = None
+    if course.world:
+        background_picture = course.world.background_picture
+    if not background_picture:
+        background_picture = scenes.get("background_picture") or scenes.get("background")
 
     return {
         "session_id": session_id,
@@ -374,6 +375,7 @@ async def _build_start_response(
         "relationship_stage": stage,
         "relationship": relationship,
         "greeting": greeting,
+        "background_picture": background_picture,
         "scenes": scenes,
         "sage": {
             "id": sage_character.id if sage_character else None,
