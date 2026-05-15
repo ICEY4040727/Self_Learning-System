@@ -13,10 +13,13 @@ class TestCharacterCRUD:
             "name": "Socrates",
             "type": "sage",
             "personality": "Wise philosopher",
+            "speech_style": "温和追问",
+            "greeting": "让我们从最简单的问题开始。",
         }, headers=auth_headers)
         assert resp.status_code == 200
         assert resp.json()["name"] == "Socrates"
         assert resp.json()["type"] == "sage"
+        assert resp.json()["greeting"] == "让我们从最简单的问题开始。"
 
     def test_list_characters(self, client, auth_headers):
         client.post("/api/character", json={"name": "Teacher1"}, headers=auth_headers)
@@ -32,13 +35,19 @@ class TestCharacterCRUD:
         assert resp.status_code == 204
 
     def test_update_character(self, client, auth_headers):
-        create = client.post("/api/character", json={"name": "Original"}, headers=auth_headers)
+        create = client.post("/api/character", json={
+            "name": "Original",
+            "greeting": "你好，欢迎来到这里。",
+            "template_name": "socratic",
+        }, headers=auth_headers)
         char_id = create.json()["id"]
         resp = client.put(f"/api/character/{char_id}", json={
             "name": "Updated",
         }, headers=auth_headers)
         assert resp.status_code == 200
         assert resp.json()["name"] == "Updated"
+        assert resp.json()["greeting"] == "你好，欢迎来到这里。"
+        assert resp.json()["template_name"] == "socratic"
 
     def test_list_characters_filters_by_current_user(self, client, auth_headers):
         own = client.post("/api/character", json={"name": "OwnerChar"}, headers=auth_headers)
@@ -109,6 +118,55 @@ class TestCourseCRUD:
         assert listed.json()[0]["id"] == course_id
 
 
+class TestWorldCRUD:
+    def test_create_world_accepts_top_level_background_picture(self, client, auth_headers):
+        resp = client.post(
+            "/api/worlds",
+            json={
+                "name": "Shell World",
+                "description": "A stable learning world shell.",
+                "background_picture": "/themes/academy.jpg",
+            },
+            headers=auth_headers,
+        )
+
+        assert resp.status_code == 200
+        payload = resp.json()
+        assert payload["background_picture"] == "/themes/academy.jpg"
+        assert payload["scenes"]["background_picture"] == "/themes/academy.jpg"
+        assert payload["scenes"]["background"] == "/themes/academy.jpg"
+
+    def test_update_world_preserves_background_picture_contract(self, client, auth_headers):
+        create = client.post(
+            "/api/worlds",
+            json={
+                "name": "Shell World",
+                "description": "before",
+                "background_picture": "/themes/academy.jpg",
+            },
+            headers=auth_headers,
+        )
+        assert create.status_code == 200
+        world_id = create.json()["id"]
+
+        update = client.put(
+            f"/api/worlds/{world_id}",
+            json={
+                "name": "Shell World Updated",
+                "description": "after",
+                "background_picture": "/themes/library.jpg",
+            },
+            headers=auth_headers,
+        )
+
+        assert update.status_code == 200
+        payload = update.json()
+        assert payload["name"] == "Shell World Updated"
+        assert payload["background_picture"] == "/themes/library.jpg"
+        assert payload["scenes"]["background_picture"] == "/themes/library.jpg"
+        assert payload["scenes"]["background"] == "/themes/library.jpg"
+
+
 class TestWorldCharacterCRUD:
     def _create_world(self, client, auth_headers):
         resp = client.post(
@@ -134,7 +192,15 @@ class TestWorldCharacterCRUD:
 
         bind_resp = client.post(
             f"/api/worlds/{world_id}/characters",
-            json={"character_id": character_id, "role": "sage", "is_primary": True},
+            json={
+                "character_id": character_id,
+                "role": "sage",
+                "is_primary": True,
+                "world_title": "学院导师",
+                "world_background": "在这个世界里，他负责引导新生。",
+                "relationship_seed": "第一次在图书馆相遇。",
+                "world_greeting": "欢迎来到学院，我们从最基本的概念开始。",
+            },
             headers=auth_headers,
         )
         assert bind_resp.status_code == 200
@@ -143,12 +209,17 @@ class TestWorldCharacterCRUD:
         assert bind_resp.json()["role"] == "sage"
         assert bind_resp.json()["is_primary"] is True
         assert bind_resp.json()["character_name"] == "Socrates"
+        assert bind_resp.json()["world_title"] == "学院导师"
+        assert bind_resp.json()["world_background"] == "在这个世界里，他负责引导新生。"
+        assert bind_resp.json()["relationship_seed"] == "第一次在图书馆相遇。"
+        assert bind_resp.json()["world_greeting"] == "欢迎来到学院，我们从最基本的概念开始。"
 
         list_resp = client.get(f"/api/worlds/{world_id}/characters", headers=auth_headers)
         assert list_resp.status_code == 200
         assert len(list_resp.json()) == 1
         assert list_resp.json()[0]["character_id"] == character_id
         assert list_resp.json()[0]["role"] == "sage"
+        assert list_resp.json()[0]["world_background"] == "在这个世界里，他负责引导新生。"
 
         delete_resp = client.delete(
             f"/api/worlds/{world_id}/characters/{character_id}",
@@ -177,6 +248,103 @@ class TestWorldCharacterCRUD:
             headers=auth_headers,
         )
         assert second.status_code == 409
+
+    def test_update_world_character_context(self, client, auth_headers):
+        world_id = self._create_world(client, auth_headers)
+        character_id = self._create_character(client, auth_headers)
+
+        bind_resp = client.post(
+            f"/api/worlds/{world_id}/characters",
+            json={"character_id": character_id, "role": "sage"},
+            headers=auth_headers,
+        )
+        assert bind_resp.status_code == 200
+
+        update_resp = client.patch(
+            f"/api/worlds/{world_id}/characters/{character_id}",
+            json={
+                "world_title": "山中书院导师",
+                "world_background": "在这座山中的世界里，他是负责守护知识的导师。",
+                "relationship_seed": "曾在山门前引路相识。",
+                "world_greeting": "进来吧，今天我们先看整体。",
+            },
+            headers=auth_headers,
+        )
+        assert update_resp.status_code == 200
+        assert update_resp.json()["world_title"] == "山中书院导师"
+        assert update_resp.json()["world_background"] == "在这座山中的世界里，他是负责守护知识的导师。"
+        assert update_resp.json()["relationship_seed"] == "曾在山门前引路相识。"
+        assert update_resp.json()["world_greeting"] == "进来吧，今天我们先看整体。"
+
+    def test_generate_world_character_context(self, client, auth_headers, db_session, monkeypatch):
+        from backend.models.models import User
+
+        world_resp = client.post(
+            "/api/worlds",
+            json={
+                "name": "雾港学院",
+                "description": "一座适合学习逻辑与表达的学院。",
+                "scenes": {
+                    "mood": ["安静", "理性"],
+                    "narrative": {
+                        "world_theme": "雾港学院",
+                        "learner_role": "新生",
+                        "sage_role": "学院导师",
+                    },
+                },
+            },
+            headers=auth_headers,
+        )
+        assert world_resp.status_code == 200
+        world_id = world_resp.json()["id"]
+
+        character_resp = client.post(
+            "/api/character",
+            json={
+                "name": "林问之",
+                "type": "sage",
+                "title": "循证式学习引导者",
+                "personality": "温和，喜欢通过追问帮助学生澄清问题。",
+            },
+            headers=auth_headers,
+        )
+        assert character_resp.status_code == 200
+        character_id = character_resp.json()["id"]
+
+        user = db_session.query(User).filter_by(username="testuser").one()
+        user.default_provider = "local"
+        db_session.commit()
+
+        captured = {}
+
+        class FakeAdapter:
+            async def chat(self, **kwargs):
+                captured.update(kwargs)
+                return """{
+                    "world_title": "雾港学院导师",
+                    "world_background": "在雾港学院里，林问之负责带领新生拆解复杂问题，将模糊困惑整理成可验证的学习路径。",
+                    "relationship_seed": "学习者第一次来到雾港学院时，在图书馆入口遇见了正在整理问题卡片的林问之。",
+                    "world_greeting": "欢迎来到雾港学院。先告诉我，你现在最想弄清楚的问题是什么？"
+                }"""
+
+        import backend.services.llm.adapter as adapter_module
+
+        monkeypatch.setattr(adapter_module, "get_llm_adapter", lambda *args, **kwargs: FakeAdapter())
+
+        resp = client.post(
+            f"/api/worlds/{world_id}/characters/{character_id}/generate-context",
+            json={"role": "sage"},
+            headers=auth_headers,
+        )
+
+        assert resp.status_code == 200, resp.text
+        payload = resp.json()
+        assert payload["world_title"] == "雾港学院导师"
+        assert "雾港学院" in payload["world_background"]
+        assert "图书馆入口" in payload["relationship_seed"]
+        assert payload["world_greeting"].startswith("欢迎来到雾港学院")
+        assert "雾港学院" in captured["messages"][0]["content"]
+        assert "林问之" in captured["messages"][0]["content"]
 
 
 @pytest.mark.skip(reason="Knowledge model removed - knowledge graph not in current schema")

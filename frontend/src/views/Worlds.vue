@@ -83,6 +83,7 @@ interface World {
   user_id: number
   name: string
   description?: string
+  background_picture?: string
   scenes?: { background?: string; [key: string]: any }
   sages?: Sage[]
   courses?: Course[]
@@ -119,11 +120,12 @@ const selectWorld = (world: World) => {
   router.push(`/home/worlds/${world.id}`)
 }
 
-const handleCreateWorld = async (data: { name: string; description: string; scenes: Record<string, any> }) => {
+const handleCreateWorld = async (data: { name: string; description: string; background_picture: string }) => {
   try {
     const newWorld = await worldApi.create({
       name: data.name,
       description: data.description,
+      background_picture: data.background_picture,
     }) as any
     worlds.value = [...worlds.value, { ...newWorld, sages: [], courses: [], stageLabel: '初识' }]
     showCreateWorld.value = false

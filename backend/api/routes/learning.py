@@ -5,7 +5,6 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from backend.api.routes.auth import get_current_user
-from backend.core.security import decrypt_api_key
 from backend.db.database import get_db
 from backend.models.models import (
     Character,
@@ -25,6 +24,7 @@ from backend.models.models import (
     Session as SessionModel,
 )
 from backend.services.learning_engine import learning_engine
+from backend.services.character_llm_settings import get_effective_character_llm_config
 
 router = APIRouter()
 
@@ -106,6 +106,8 @@ async def _generate_contextual_greeting(
     sage_character,
     stage: str,
     current_user: User,
+    sage_world_link=None,
+    traveler_world_link=None,
 ) -> str | None:
     """基于课程进度、章节内容、学生掌握度，调用 LLM 生成开场白。
 
@@ -168,6 +170,18 @@ async def _generate_contextual_greeting(
         f"课程名称: {course.name}",
         f"关系阶段: {stage}",
     ]
+    if sage_world_link:
+        if getattr(sage_world_link, "world_title", None):
+            parts.append(f"世界内身份: {sage_world_link.world_title}")
+        if getattr(sage_world_link, "world_background", None):
+            parts.append(f"世界背景: {sage_world_link.world_background}")
+        if getattr(sage_world_link, "relationship_seed", None):
+            parts.append(f"相识前提: {sage_world_link.relationship_seed}")
+    if traveler_world_link:
+        if getattr(traveler_world_link, "world_title", None):
+            parts.append(f"学习者世界身份: {traveler_world_link.world_title}")
+        if getattr(traveler_world_link, "world_background", None):
+            parts.append(f"学习者世界背景: {traveler_world_link.world_background}")
     if current_lesson:
         parts.append(f"当前章节: {current_lesson.title}")
         if current_lesson.concepts:
@@ -186,27 +200,25 @@ async def _generate_contextual_greeting(
 
     # 3) 调用 LLM（轻量、短输出）
     try:
-        user_api_key = None
-        provider = current_user.default_provider or "claude"
-        if current_user.encrypted_api_key:
-            user_api_key = decrypt_api_key(current_user.encrypted_api_key)
+        config = get_effective_character_llm_config(current_user, sage_character)
 
         from backend.services.llm.providers import provider_needs_api_key
-        if provider_needs_api_key(provider) and not user_api_key:
+        if provider_needs_api_key(config.provider) and not config.api_key:
             return None
 
         from backend.services.llm.manager import get_llm_manager
         adapter = get_llm_manager().get_adapter(
-            provider=provider,
-            model=current_user.model,
-            api_key=user_api_key,
+            provider=config.provider,
+            model=config.model,
+            api_key=config.api_key,
+            base_url=config.base_url,
         )
         response = await adapter.chat(
             messages=[{"role": "user", "content": user_prompt}],
             system_prompt=_GREETING_SYSTEM_PROMPT,
-            user_api_key=user_api_key,
-            temperature=0.8,
-            max_tokens=200,
+            user_api_key=config.api_key,
+            temperature=config.temperature,
+            max_tokens=min(config.max_tokens, 200),
         )
         # 清理 LLM 可能输出的思考过程
         import re as _re
@@ -278,6 +290,17 @@ def _get_session_characters(db: Session, session_obj):
     return sage_character, traveler_character
 
 
+def _get_world_character_link(db: Session, world_id: int, character_id: int, role: str | None = None):
+    """Resolve a world-character binding for a specific world + character."""
+    query = db.query(WorldCharacter).filter(
+        WorldCharacter.world_id == world_id,
+        WorldCharacter.character_id == character_id,
+    )
+    if role:
+        query = query.filter(WorldCharacter.role == role)
+    return query.first()
+
+
 async def _build_start_response(
     session_id: int,
     course: Course,
@@ -285,6 +308,8 @@ async def _build_start_response(
     traveler_character,
     relationship: dict,
     stage: str,
+    sage_world_link=None,
+    traveler_world_link=None,
     db: Session = None,
     current_user: User = None,
     is_new: bool = True,
@@ -294,7 +319,8 @@ async def _build_start_response(
     Uses LLM-generated contextual greeting when possible, falls back to
     static templates when LLM is unavailable.
     """
-    # 1) 尝试角色自定义 greeting
+    # 1) 优先使用世界绑定的 greeting，再降级到角色全局 greeting
+    world_greeting = sage_world_link.world_greeting if sage_world_link and sage_world_link.world_greeting else None
     custom_greeting = sage_character.greeting if sage_character and sage_character.greeting else None
 
     # 2) 尝试 LLM 动态生成课程感知 greeting（失败不影响主流程）
@@ -307,6 +333,8 @@ async def _build_start_response(
                 sage_character=sage_character,
                 stage=stage,
                 current_user=current_user,
+                sage_world_link=sage_world_link,
+                traveler_world_link=traveler_world_link,
             )
         except Exception:
             import logging as _l
@@ -315,8 +343,8 @@ async def _build_start_response(
     # 3) Fallback 到静态模板（始终有效）
     fallback = _fallback_greeting(stage, sage_character.name if sage_character else None)
 
-    # 三级优先级: 角色 greeting → LLM 动态 → 静态模板
-    greeting = custom_greeting or dynamic_greeting or fallback
+    # 优先级: world greeting → 角色 greeting → LLM 动态 → 静态模板
+    greeting = world_greeting or custom_greeting or dynamic_greeting or fallback
     # 兜底：确保 greeting 永远不为空
     if not greeting:
         greeting = f"你好，我是{sage_character.name if sage_character else '老师'}。今天我们开始学习吧。"
@@ -324,12 +352,19 @@ async def _build_start_response(
     # Debug: log which greeting source was used
     import logging as _log
     _log.getLogger(__name__).info(
-        "greeting sources: custom=%r, dynamic=%r, fallback=%r → final=%r",
+        "greeting sources: world=%r, custom=%r, dynamic=%r, fallback=%r → final=%r",
+        world_greeting[:50] if world_greeting else None,
         custom_greeting[:50] if custom_greeting else None,
         dynamic_greeting[:50] if dynamic_greeting else None,
         fallback[:50] if fallback else None,
         greeting[:50] if greeting else None,
     )
+
+    scenes = dict(course.world.scenes or {}) if course.world and course.world.scenes else {}
+    background_picture = scenes.get("background_picture") or scenes.get("background")
+    if background_picture:
+        scenes["background_picture"] = background_picture
+        scenes.setdefault("background", background_picture)
 
     return {
         "session_id": session_id,
@@ -339,7 +374,7 @@ async def _build_start_response(
         "relationship_stage": stage,
         "relationship": relationship,
         "greeting": greeting,
-        "scenes": course.world.scenes if course.world and course.world.scenes else {},
+        "scenes": scenes,
         "sage": {
             "id": sage_character.id if sage_character else None,
             "name": sage_character.name if sage_character else None,
@@ -372,8 +407,9 @@ async def start_learning(
     if not course:
         raise HTTPException(status_code=404, detail="Course not found")
 
-    # 如果前端指定了 sage_id（Character.id），必须使用它（不允许 fallback）
-    requested_sage_id = body.sage_id if body else None
+    # 优先使用前端显式传入的 sage_id；否则回退到课程 meta / 世界主 sage
+    explicit_sage_id = body.sage_id if body else None
+    requested_sage_id = explicit_sage_id
 
     # Reuse existing active session — BUT only if sage matches or no sage specified
     existing = _get_active_session(db, course_id, current_user.id)
@@ -387,6 +423,8 @@ async def start_learning(
 
     if existing:
         sage_character, traveler_character = _get_session_characters(db, existing)
+        sage_link = _get_world_character_link(db, course.world_id, existing.sage_character_id, "sage") if existing.sage_character_id else None
+        traveler_link = _get_world_character_link(db, course.world_id, existing.traveler_character_id, "traveler") if existing.traveler_character_id else None
         relationship = existing.relationship or _default_relationship()
         stage = relationship.get("stage", "stranger")
         return await _build_start_response(
@@ -394,6 +432,8 @@ async def start_learning(
             course=course,
             sage_character=sage_character,
             traveler_character=traveler_character,
+            sage_world_link=sage_link,
+            traveler_world_link=traveler_link,
             relationship=relationship,
             stage=stage,
             db=db,
@@ -402,12 +442,17 @@ async def start_learning(
         )
 
     # ── 创建新 session ──
-    # sage_id 是必须的（前端必须传），没有 fallback
+    # 若前端未显式指定 sage_id，则优先用课程 meta 里的 sage_ids，再回退到世界主 sage
     if not requested_sage_id:
-        raise HTTPException(
-            status_code=400,
-            detail="sage_id is required to start a new session",
-        )
+        meta_sage_ids = course.meta.get("sage_ids", []) if course.meta else []
+        if meta_sage_ids:
+            requested_sage_id = meta_sage_ids[0]
+        else:
+            primary_sage_link = db.query(WorldCharacter).filter(
+                WorldCharacter.world_id == course.world_id,
+                WorldCharacter.role == "sage",
+            ).order_by(WorldCharacter.is_primary.desc(), WorldCharacter.id.asc()).first()
+            requested_sage_id = primary_sage_link.character_id if primary_sage_link else None
 
     # 清理该 course 下可能残留的 active session（race condition 防护）
     stale = db.query(SessionModel).filter(
@@ -420,16 +465,20 @@ async def start_learning(
     if stale:
         db.commit()
 
-    sage_link = db.query(WorldCharacter).filter(
-        WorldCharacter.world_id == course.world_id,
-        WorldCharacter.character_id == requested_sage_id,
-        WorldCharacter.role == "sage",
-    ).first()
-    if not sage_link:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Sage character {requested_sage_id} not found in this world",
-        )
+    sage_link = None
+    if requested_sage_id:
+        sage_link = db.query(WorldCharacter).filter(
+            WorldCharacter.world_id == course.world_id,
+            WorldCharacter.character_id == requested_sage_id,
+            WorldCharacter.role == "sage",
+        ).first()
+        if not sage_link and explicit_sage_id is not None:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Sage character {requested_sage_id} not found in this world",
+            )
+        if not sage_link:
+            requested_sage_id = None
     traveler_link = db.query(WorldCharacter).filter(
         WorldCharacter.world_id == course.world_id,
         WorldCharacter.role == "traveler",
@@ -473,6 +522,7 @@ async def start_learning(
             db=db,
             sage_character_id=sage_character_id,
             traveler_character=traveler_character,
+            traveler_world_link=traveler_link,
             learner_profile=learner_profile,
         )
 
@@ -484,6 +534,8 @@ async def start_learning(
         course=course,
         sage_character=sage_character,
         traveler_character=traveler_character,
+        sage_world_link=sage_link,
+        traveler_world_link=traveler_link,
         relationship=db_session.relationship,
         stage="stranger",
         db=db,
@@ -508,17 +560,12 @@ async def send_message(
             detail="No active session. Please call POST /courses/{course_id}/start with a sage_id first.",
         )
 
-    # Get user's API key and provider
-    user_api_key = None
-    provider = "claude"
-    if current_user.encrypted_api_key:
-        user_api_key = decrypt_api_key(current_user.encrypted_api_key)
-    if current_user.default_provider:
-        provider = current_user.default_provider
+    sage_character, _traveler_character = _get_session_characters(db, db_session)
+    config = get_effective_character_llm_config(current_user, sage_character)
 
     # Check if API key is configured (local models don't need one)
     from backend.services.llm.providers import provider_needs_api_key
-    if provider_needs_api_key(provider) and not user_api_key:
+    if provider_needs_api_key(config.provider) and not config.api_key:
         return ChatResponse(
             type="error",
             reply="⚠️ 请先在「系统设置」中配置 API Key，才能使用 AI 对话功能。\n\n点击右上角设置图标 → 填写对应 Provider 的 API Key → 保存设置",
@@ -533,12 +580,13 @@ async def send_message(
     result = await learning_engine.process_message(
         session_id=db_session.id,
         user_message=chat_request.message,
-        user_api_key=user_api_key,
-        provider=provider,
+        user_api_key=config.api_key,
+        provider=config.provider,
         db=db,
-        temperature=current_user.temperature if current_user.temperature is not None else 0.7,
-        max_tokens=current_user.max_tokens if current_user.max_tokens is not None else 2048,
-        model=current_user.model,
+        temperature=config.temperature,
+        max_tokens=config.max_tokens,
+        model=config.model,
+        base_url=config.base_url,
     )
 
     # Save user message to database

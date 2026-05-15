@@ -1,7 +1,7 @@
 <template>
   <div class="world-detail-page">
     <!-- Background -->
-    <div class="scene-bg" :style="{ backgroundImage: `url(${BG_URL})` }"></div>
+    <div class="scene-bg" :style="{ backgroundImage: `url(${worldBackgroundUrl})` }"></div>
     <div class="scene-overlay"></div>
 
     <!-- Header -->
@@ -149,20 +149,10 @@
       @created="handleCourseCreated"
     />
 
-    <!-- Create Persona Modal -->
-    <CreatePersonaModal
-      :show="showCreatePersona"
-      :world-id="worldId"
-      :character-type="'sage'"
-      @close="showCreatePersona = false"
-      @create="handleCreatePersona"
-    />
-
     <!-- Step Create Modal (for Traveler or Sage) -->
     <StepCreateModal
       :show="showStepCreate"
       :default-type="stepCreateDefaultType"
-      :world-id="worldId"
       :edit-character="editCharacter"
       @close="showStepCreate = false; editCharacter = undefined"
       @create="handleStepCreate"
@@ -304,12 +294,9 @@ import { PAGE_BACKGROUNDS } from '@/constants/ui'
 
 import { parseApiError } from '@/utils/error'
 import CreateCourseModal from '@/components/CreateCourseModal.vue'
-import CreatePersonaModal from '@/components/CreatePersonaModal.vue'
 import StepCreateModal from '@/components/StepCreateModal.vue'
 import SageDetailModal from '@/components/SageDetailModal.vue'
 import SageEditForm from '@/components/SageEditForm.vue'
-
-const BG_URL = PAGE_BACKGROUNDS.worldDetail
 
 const route = useRoute()
 const router = useRouter()
@@ -328,8 +315,9 @@ interface World {
   id: number
   name: string
   description?: string
+  background_picture?: string
   symbol?: string
-  scenes?: { background?: string }
+  scenes?: { background?: string; background_picture?: string }
   relationship?: {
     stage?: string
     dimensions?: Record<string, number>
@@ -346,16 +334,29 @@ interface Course {
   progress?: number
 }
 
+interface WorldCharacterContext {
+  world_title?: string | null
+  world_background?: string | null
+  relationship_seed?: string | null
+  world_greeting?: string | null
+  warnings?: string[]
+}
+
 const worldId = computed(() => Number(route.params.worldId))
 
 const selectedWorld = ref<World | null>(null)
 const courses = ref<Course[]>([])
 const allCharacters = ref<Character[]>([])
 const loading = ref(false)
+const worldBackgroundUrl = computed(() =>
+  selectedWorld.value?.background_picture
+  || selectedWorld.value?.scenes?.background_picture
+  || selectedWorld.value?.scenes?.background
+  || PAGE_BACKGROUNDS.worldDetail
+)
 
 // Modal states
 const showCreateCourse = ref(false)
-const showCreatePersona = ref(false)
 const showStepCreate = ref(false)
 const stepCreateDefaultType = ref<'sage' | 'traveler'>('traveler')
 const showEditWorld = ref(false)
@@ -433,15 +434,15 @@ const fetchCharacters = async () => {
   }
 }
 
-// Create sage persona
-const handleCreatePersona = async (data: Record<string, any>) => {
+const generateWorldCharacterContext = async (
+  character: Character,
+  role: 'sage' | 'traveler',
+): Promise<WorldCharacterContext | null> => {
   try {
-    const newCharacter = await characterApi.create(data as any)
-    await worldApi.addCharacter(worldId.value, newCharacter.id, 'sage')
-    await fetchWorld()
-    showCreatePersona.value = false
+    return await worldApi.generateCharacterContext(worldId.value, character.id, role)
   } catch (error) {
-    toast.error(parseApiError(error))
+    console.debug('[WorldDetail] world character context generation failed', error)
+    return null
   }
 }
 
@@ -482,6 +483,10 @@ const selectTraveler = async (traveler: Character) => {
   try {
     // 使用 setPrimary API：自动处理已绑定/未绑定的角色，并设为主角色
     await worldApi.setPrimary(worldId.value, traveler.id)
+    const context = await generateWorldCharacterContext(traveler, 'traveler')
+    if (context) {
+      await worldApi.updateWorldCharacterContext(worldId.value, traveler.id, context)
+    }
     await fetchWorld()
     showTravelerSelect.value = false
   } catch (error) {
@@ -492,7 +497,8 @@ const selectTraveler = async (traveler: Character) => {
 // Select sage (link existing sage to this world)
 const selectSage = async (sage: Character) => {
   try {
-    await worldApi.addCharacter(worldId.value, sage.id, 'sage')
+    const context = await generateWorldCharacterContext(sage, 'sage')
+    await worldApi.addCharacter(worldId.value, sage.id, 'sage', context || {})
     await fetchWorld()
     await fetchCharacters()
     showSageSelect.value = false
@@ -569,7 +575,8 @@ const handleStepCreate = async (data: Record<string, any>) => {
   try {
     const newCharacter = await characterApi.create(data as any)
     const role = newCharacter.type === 'traveler' ? 'traveler' : 'sage'
-    await worldApi.addCharacter(worldId.value, newCharacter.id, role)
+    const context = await generateWorldCharacterContext(newCharacter as Character, role)
+    await worldApi.addCharacter(worldId.value, newCharacter.id, role, context || {})
     await fetchWorld()
     showStepCreate.value = false
   } catch (error) {

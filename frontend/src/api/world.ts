@@ -3,7 +3,7 @@
  * Issue #29 + #32: 统一 API 调用层
  */
 import client from './client'
-import type { World } from '@/types'
+import type { World, WorldCharacter, WorldCharacterContextInput } from '@/types'
 
 export const worldApi = {
   /**
@@ -21,7 +21,7 @@ export const worldApi = {
   /**
    * 创建新世界
    */
-  create: (data: { name: string; description?: string }): Promise<World> =>
+  create: (data: { name: string; description?: string; background_picture?: string }): Promise<World> =>
     client.post('/worlds', data).then(res => res.data),
 
   /**
@@ -57,8 +57,41 @@ export const worldApi = {
   /**
    * 向世界添加角色
    */
-  addCharacter: (worldId: number, characterId: number, role: 'sage' | 'traveler') =>
-    client.post(`/worlds/${worldId}/characters`, { character_id: characterId, role }),
+  addCharacter: (
+    worldId: number,
+    characterId: number,
+    role: 'sage' | 'traveler',
+    context: WorldCharacterContextInput = {},
+  ): Promise<WorldCharacter> =>
+    client.post(`/worlds/${worldId}/characters`, {
+      character_id: characterId,
+      role,
+      ...context,
+    }).then(res => res.data),
+
+  /**
+   * 生成世界角色上下文
+   */
+  generateCharacterContext: (
+    worldId: number,
+    characterId: number,
+    role?: 'sage' | 'traveler',
+    seedHint?: string,
+  ): Promise<WorldCharacterContextInput & { warnings?: string[] }> =>
+    client.post(`/worlds/${worldId}/characters/${characterId}/generate-context`, {
+      role,
+      seed_hint: seedHint,
+    }).then(res => res.data),
+
+  /**
+   * 更新世界角色上下文
+   */
+  updateWorldCharacterContext: (
+    worldId: number,
+    characterId: number,
+    context: WorldCharacterContextInput,
+  ): Promise<WorldCharacter> =>
+    client.patch(`/worlds/${worldId}/characters/${characterId}`, context).then(res => res.data),
 
   /**
    * 从世界移除角色
@@ -91,10 +124,11 @@ export const worldApi = {
   generateWorld: (description: string): Promise<{
     name_suggestion: string
     description: string
-    theme_preset: string
-    mood_tags: string[]
-    bgm_suggestion: string
-    world_detail: string
+    background_picture?: string
+    theme_preset?: string
+    mood_tags?: string[]
+    bgm_suggestion?: string
+    world_detail?: string
   }> =>
     client.post('/world/generate', { description }).then(res => res.data),
 }

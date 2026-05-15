@@ -22,6 +22,13 @@ from backend.models.models import (
     World,
     WorldCharacter,
 )
+from backend.services.character_llm_settings import normalize_character_llm_settings
+from backend.services.user_llm_settings import (
+    get_effective_llm_config,
+    normalize_base_url,
+    serialize_provider_settings,
+    update_provider_settings,
+)
 from backend.services import spaced_repetition
 
 router = APIRouter()
@@ -106,15 +113,36 @@ class CharacterCreate(BaseModel):
     personality: str | None = None
     background: str | None = None
     speech_style: str | None = None
+    greeting: str | None = None
     tags: list[str] | None = None
     title: str | None = None
     sprites: dict | None = None
+    llm_settings: dict | None = None
+    system_prompt_template: str | None = None
     template_name: str | None = "默认"  # 人格模板名称（用于生成 traits）
     # 性格滑块值 (Phase 1 新增)
     # 格式: {"strictness": 5, "pace": 5, "questioning": 5, "warmth": 5, "humor": 5}
     traits: dict | None = None
     # Phase 1.5 DD1: is_active 替代 TeacherPersona.is_active
     is_active: bool = True
+
+
+class CharacterUpdate(BaseModel):
+    name: str | None = None
+    type: str | None = None
+    avatar: str | None = None
+    personality: str | None = None
+    background: str | None = None
+    speech_style: str | None = None
+    greeting: str | None = None
+    tags: list[str] | None = None
+    title: str | None = None
+    sprites: dict | None = None
+    llm_settings: dict | None = None
+    system_prompt_template: str | None = None
+    template_name: str | None = None
+    traits: dict | None = None
+    is_active: bool | None = None
 
 
 class CharacterResponse(CharacterCreate):
@@ -154,6 +182,7 @@ class SageInfo(BaseModel):
 class WorldCreate(BaseModel):
     name: str
     description: str | None = None
+    background_picture: str | None = None
     scenes: dict | None = None
 
 
@@ -169,10 +198,55 @@ class WorldResponse(WorldCreate):
     model_config = ConfigDict(from_attributes=True)
 
 
+def _normalize_world_scenes(scenes: dict | None, background_picture: str | None) -> dict:
+    normalized = dict(scenes or {})
+    background = (background_picture or "").strip()
+
+    if background:
+        normalized["background_picture"] = background
+        normalized.setdefault("background", background)
+    else:
+        existing_background = normalized.get("background_picture") or normalized.get("background")
+        if existing_background:
+            normalized["background_picture"] = existing_background
+            normalized.setdefault("background", existing_background)
+
+    return normalized
+
+
+def _extract_world_background_picture(world: World) -> str | None:
+    scenes = world.scenes or {}
+    return scenes.get("background_picture") or scenes.get("background")
+
+
 class WorldCharacterCreate(BaseModel):
     character_id: int
     role: str = Field(..., pattern=r"^(sage|traveler)$")
     is_primary: bool = False
+    world_title: str | None = None
+    world_background: str | None = None
+    relationship_seed: str | None = None
+    world_greeting: str | None = None
+
+
+class WorldCharacterUpdate(BaseModel):
+    world_title: str | None = None
+    world_background: str | None = None
+    relationship_seed: str | None = None
+    world_greeting: str | None = None
+
+
+class WorldCharacterContextGenerateRequest(BaseModel):
+    role: Literal["sage", "traveler"] | None = None
+    seed_hint: str | None = Field(default=None, max_length=500)
+
+
+class WorldCharacterContextGenerateResponse(BaseModel):
+    world_title: str
+    world_background: str
+    relationship_seed: str
+    world_greeting: str | None = None
+    warnings: list[str] | None = None
 
 
 class WorldCharacterResponse(BaseModel):
@@ -181,9 +255,98 @@ class WorldCharacterResponse(BaseModel):
     character_id: int
     role: str
     is_primary: bool
+    world_title: str | None = None
+    world_background: str | None = None
+    relationship_seed: str | None = None
+    world_greeting: str | None = None
     character_name: str | None = None
 
     model_config = ConfigDict(from_attributes=True)
+
+
+WORLD_CHARACTER_CONTEXT_GENERATE_PROMPT = """你是一个学习世界的角色上下文设计师。
+
+请根据“世界设定”和“角色本体”，生成这个角色进入当前世界后的绑定上下文。
+
+角色在当前世界中的职责：{role}
+
+世界设定：
+{world_context}
+
+角色本体：
+{character_context}
+
+用户额外提示：
+{seed_hint}
+
+请严格输出 JSON，不要 markdown 代码块：
+{{
+  "world_title": "该世界内的身份或称号，4-14字",
+  "world_background": "该角色在这个世界里的背景，80-160字，只写当前世界，不改写角色本体",
+  "relationship_seed": "该角色与学习者/导师在这个世界的相识或关系起点，30-80字",
+  "world_greeting": "如果该角色是 sage，写一句首次进入课程时的开场白；如果是 traveler，可以写 null"
+}}
+
+规则：
+- 这是学习系统，不是普通小说设定；背景必须服务于后续学习对话。
+- 不要把世界背景写回角色本体；只写“当前世界里”的身份、经历和相识前提。
+- sage 的 world_greeting 要自然、短，像对唯一学生说话，不要说“大家好”。
+- traveler 不是 LLM 发言角色，world_greeting 可以为 null。
+- 不要输出解释、推理过程或额外字段。
+"""
+
+
+def _world_context_for_character_generation(world: World) -> str:
+    scenes = world.scenes or {}
+    parts = [f"世界名称: {world.name}"]
+    if world.description:
+        parts.append(f"世界简介: {world.description}")
+
+    mood = scenes.get("mood") or scenes.get("mood_tags")
+    if mood:
+        mood_text = "、".join(mood) if isinstance(mood, list) else str(mood)
+        parts.append(f"氛围: {mood_text}")
+
+    theme = scenes.get("theme_preset") or scenes.get("theme")
+    if theme:
+        parts.append(f"主题风格: {theme}")
+
+    world_detail = scenes.get("world_detail")
+    if world_detail:
+        parts.append(f"世界背景: {world_detail}")
+
+    narrative = scenes.get("narrative") or scenes.get("narrative_input")
+    if isinstance(narrative, dict) and "ai_generated" in narrative:
+        narrative = narrative.get("ai_generated")
+    if isinstance(narrative, dict):
+        narrative_parts = []
+        for key in ("world_theme", "learner_role", "sage_role", "knowledge_metaphor", "progression_arc"):
+            value = narrative.get(key)
+            if value:
+                narrative_parts.append(f"{key}: {value}")
+        if narrative_parts:
+            parts.append("叙事框架: " + "；".join(narrative_parts))
+
+    return "\n".join(parts)
+
+
+def _character_context_for_world_generation(character: Character) -> str:
+    parts = [
+        f"角色名: {character.name}",
+        f"角色类型: {character.type}",
+    ]
+    if character.title:
+        parts.append(f"全局称号: {character.title}")
+    if character.personality:
+        parts.append(f"人格/学习风格: {character.personality}")
+    if character.tags:
+        tags = "、".join(character.tags) if isinstance(character.tags, list) else str(character.tags)
+        parts.append(f"标签: {tags}")
+    if character.background:
+        parts.append(f"旧全局背景，仅作参考: {character.background}")
+    if character.greeting:
+        parts.append(f"全局兜底开场白: {character.greeting}")
+    return "\n".join(parts)
 
 
 # Phase 1.5 DD1: TeacherPersona 相关类已删除，人格数据直接存储在 Character 模型中
@@ -279,6 +442,7 @@ def create_character(
     # Phase 1.5 DD1: template_name 和 traits 直接存储在 Character 模型中
     template_name = character.template_name
     traits = character.traits
+    llm_settings = normalize_character_llm_settings(character.llm_settings)
 
     # 只传递 Character 模型支持的字段
     # sprites 不能是空列表，必须是 dict 或 None
@@ -294,7 +458,10 @@ def create_character(
         personality=character.personality,
         background=character.background,
         speech_style=character.speech_style,
+        greeting=character.greeting,
         sprites=sprites,
+        llm_settings=llm_settings,
+        system_prompt_template=character.system_prompt_template,
         title=character.title,
         tags=character.tags,
         # Phase 1.5 DD1: traits 和 template_name 直接存入 Character
@@ -367,7 +534,7 @@ def get_character(
 @router.put("/character/{character_id}", response_model=CharacterResponse)
 def update_character(
     character_id: int,
-    character: CharacterCreate,
+    character: CharacterUpdate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -378,8 +545,13 @@ def update_character(
     if not db_character:
         raise HTTPException(status_code=404, detail="Character not found")
 
-    # Phase 1.5 DD1: 更新所有字段包括 template_name, traits, is_active
-    for key, value in character.model_dump().items():
+    # Phase 1.5 DD1: 仅更新显式传入的字段，避免把未提交字段重置为默认值
+    data = character.model_dump(exclude_unset=True)
+    if "llm_settings" in data:
+        data["llm_settings"] = normalize_character_llm_settings(data.get("llm_settings"))
+    if "sprites" in data and isinstance(data["sprites"], list) and len(data["sprites"]) == 0:
+        data["sprites"] = None
+    for key, value in data.items():
         setattr(db_character, key, value)
 
     db.commit()
@@ -499,6 +671,25 @@ def character_levelup(
 
 
 # World endpoints
+def _world_character_response(
+    link: WorldCharacter,
+    character: Character | None = None,
+) -> WorldCharacterResponse:
+    """Serialize a world-character binding with its world-scoped context."""
+    return WorldCharacterResponse(
+        id=link.id,
+        world_id=link.world_id,
+        character_id=link.character_id,
+        role=link.role,
+        is_primary=link.is_primary,
+        world_title=link.world_title,
+        world_background=link.world_background,
+        relationship_seed=link.relationship_seed,
+        world_greeting=link.world_greeting,
+        character_name=character.name if character else None,
+    )
+
+
 def _get_world_characters_by_role(db: Session, world_id: int, role: str) -> list[SageInfo]:
     """Get all characters of a given role bound to a world. Primary first."""
     links = db.query(WorldCharacter).filter(
@@ -516,7 +707,7 @@ def _get_world_characters_by_role(db: Session, world_id: int, role: str) -> list
             result.append(SageInfo(
                 id=char.id,
                 name=char.name,
-                title=char.title or char.personality or "",
+                title=link.world_title or char.title or char.personality or "",
                 symbol=char.avatar or default_symbol,
                 color=(char.sprites or {}).get("color", default_color),
                 accentColor=(char.sprites or {}).get("accentColor", "#fbbf24"),
@@ -578,6 +769,7 @@ def _build_world_response(world: World, db: Session, current_user_id: int = None
         user_id=world.user_id,
         name=world.name,
         description=world.description,
+        background_picture=_extract_world_background_picture(world),
         scenes=world.scenes,
         sages=sages if sages else None,
         travelers=travelers if travelers else None,
@@ -597,7 +789,7 @@ def create_world(
         user_id=current_user.id,
         name=world.name,
         description=world.description,
-        scenes=world.scenes or {},
+        scenes=_normalize_world_scenes(world.scenes, world.background_picture),
     )
     db.add(db_world)
     db.flush()
@@ -651,7 +843,7 @@ def update_world(
 
     db_world.name = world.name
     db_world.description = world.description
-    db_world.scenes = world.scenes or {}
+    db_world.scenes = _normalize_world_scenes(world.scenes, world.background_picture)
     db.commit()
     db.refresh(db_world)
     return _build_world_response(db_world, db, current_user.id)
@@ -683,8 +875,8 @@ async def generate_world(
     import re
     import time
 
-    from backend.core.security import decrypt_api_key
     from backend.services.llm.adapter import get_llm_adapter
+    from backend.services.llm.providers import provider_needs_api_key
 
     # Cooldown
     now = time.time()
@@ -694,15 +886,17 @@ async def generate_world(
         raise HTTPException(status_code=429, detail=f"请 {remaining} 秒后再试")
     _world_gen_cooldowns[current_user.id] = now
 
-    user_api_key = None
-    provider = current_user.default_provider or "claude"
-    if current_user.encrypted_api_key:
-        user_api_key = decrypt_api_key(current_user.encrypted_api_key)
+    config = get_effective_llm_config(current_user)
 
-    if not user_api_key:
+    if provider_needs_api_key(config.provider) and not config.api_key:
         raise HTTPException(status_code=400, detail="请先在设置页配置 API Key")
 
-    adapter = get_llm_adapter(provider)
+    adapter = get_llm_adapter(
+        config.provider,
+        model=config.model,
+        api_key=config.api_key,
+        base_url=config.base_url,
+    )
 
     prompt = WORLD_GENERATE_PROMPT.format(description=req.description)
 
@@ -710,7 +904,7 @@ async def generate_world(
         response = await adapter.chat(
             messages=[{"role": "user", "content": prompt}],
             system_prompt="你是世界构建师，只输出合法 JSON。",
-            user_api_key=user_api_key,
+            user_api_key=config.api_key,
             max_tokens=4096,
         )
     except Exception as e:
@@ -781,18 +975,125 @@ def create_world_character(
         character_id=wc.character_id,
         role=wc.role,
         is_primary=wc.is_primary,
+        world_title=wc.world_title,
+        world_background=wc.world_background,
+        relationship_seed=wc.relationship_seed,
+        world_greeting=wc.world_greeting,
     )
     db.add(db_wc)
     db.commit()
     db.refresh(db_wc)
-    return WorldCharacterResponse(
-        id=db_wc.id,
-        world_id=db_wc.world_id,
-        character_id=db_wc.character_id,
-        role=db_wc.role,
-        is_primary=db_wc.is_primary,
-        character_name=character.name,
+    return _world_character_response(db_wc, character)
+
+
+@router.post(
+    "/worlds/{world_id}/characters/{character_id}/generate-context",
+    response_model=WorldCharacterContextGenerateResponse,
+)
+async def generate_world_character_context(
+    world_id: int,
+    character_id: int,
+    req: WorldCharacterContextGenerateRequest | None = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Generate world-scoped context for binding a character into a world.
+
+    This endpoint is intentionally side-effect free. Callers can preview or
+    edit the result, then persist it through the bind/update endpoints.
+    """
+    import json
+    import re
+
+    from backend.services.llm.adapter import get_llm_adapter
+    from backend.services.llm.providers import provider_needs_api_key
+
+    world = db.query(World).filter(
+        World.id == world_id,
+        World.user_id == current_user.id,
+    ).first()
+    if not world:
+        raise HTTPException(status_code=404, detail="World not found")
+
+    character = db.query(Character).filter(
+        Character.id == character_id,
+        Character.user_id == current_user.id,
+    ).first()
+    if not character:
+        raise HTTPException(status_code=404, detail="Character not found")
+
+    req = req or WorldCharacterContextGenerateRequest()
+    existing = db.query(WorldCharacter).filter(
+        WorldCharacter.world_id == world_id,
+        WorldCharacter.character_id == character_id,
+    ).first()
+    inferred_role = req.role or (existing.role if existing else None) or character.type or "sage"
+    role = inferred_role if inferred_role in ("sage", "traveler") else "sage"
+
+    config = get_effective_llm_config(current_user)
+    if provider_needs_api_key(config.provider) and not config.api_key:
+        raise HTTPException(status_code=400, detail="请先在设置页配置 API Key")
+
+    adapter = get_llm_adapter(
+        config.provider,
+        model=config.model,
+        api_key=config.api_key,
+        base_url=config.base_url,
     )
+
+    prompt = WORLD_CHARACTER_CONTEXT_GENERATE_PROMPT.format(
+        role=role,
+        world_context=_world_context_for_character_generation(world),
+        character_context=_character_context_for_world_generation(character),
+        seed_hint=req.seed_hint or "无",
+    )
+
+    response = await adapter.chat(
+        messages=[{"role": "user", "content": prompt}],
+        system_prompt="你是世界角色上下文设计师，只输出合法 JSON。",
+        user_api_key=config.api_key,
+        temperature=config.temperature,
+        max_tokens=min(config.max_tokens or 2048, 800),
+    )
+
+    try:
+        json_match = re.search(r"\{[\s\S]*\}", response)
+        if not json_match:
+            raise ValueError("No JSON found")
+        data = json.loads(json_match.group())
+
+        warnings: list[str] = []
+        world_title = data.get("world_title") or (existing.world_title if existing else None) or character.title
+        if not world_title:
+            world_title = "知者" if role == "sage" else "旅者"
+            warnings.append("AI 未返回 world_title，已使用默认值。")
+
+        world_background = data.get("world_background") or (existing.world_background if existing else None) or character.background
+        if not world_background:
+            world_background = f"{character.name}进入《{world.name}》，以{world_title}的身份参与学习旅程。"
+            warnings.append("AI 未返回 world_background，已使用默认值。")
+
+        relationship_seed = data.get("relationship_seed") or (existing.relationship_seed if existing else None)
+        if not relationship_seed:
+            relationship_seed = f"{character.name}与学习者在《{world.name}》中初次相遇。"
+            warnings.append("AI 未返回 relationship_seed，已使用默认值。")
+
+        world_greeting = data.get("world_greeting")
+        if role != "sage":
+            world_greeting = None
+
+        return WorldCharacterContextGenerateResponse(
+            world_title=str(world_title),
+            world_background=str(world_background),
+            relationship_seed=str(relationship_seed),
+            world_greeting=str(world_greeting) if world_greeting else None,
+            warnings=warnings or None,
+        )
+    except (json.JSONDecodeError, ValueError) as e:
+        raise HTTPException(
+            status_code=422,
+            detail=f"AI 生成格式错误，请重试。原始响应：{response[:200]}",
+        ) from e
 
 
 @router.get("/worlds/{world_id}/characters", response_model=list[WorldCharacterResponse])
@@ -816,15 +1117,46 @@ def get_world_characters(
     result = []
     for link in links:
         char = db.query(Character).filter(Character.id == link.character_id).first()
-        result.append(WorldCharacterResponse(
-            id=link.id,
-            world_id=link.world_id,
-            character_id=link.character_id,
-            role=link.role,
-            is_primary=link.is_primary,
-            character_name=char.name if char else None,
-        ))
+        result.append(_world_character_response(link, char))
     return result
+
+
+@router.patch("/worlds/{world_id}/characters/{character_id}", response_model=WorldCharacterResponse)
+def update_world_character(
+    world_id: int,
+    character_id: int,
+    wc: WorldCharacterUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    world = db.query(World).filter(
+        World.id == world_id,
+        World.user_id == current_user.id,
+    ).first()
+    if not world:
+        raise HTTPException(status_code=404, detail="World not found")
+
+    character = db.query(Character).filter(
+        Character.id == character_id,
+        Character.user_id == current_user.id,
+    ).first()
+    if not character:
+        raise HTTPException(status_code=404, detail="Character not found")
+
+    link = db.query(WorldCharacter).filter(
+        WorldCharacter.world_id == world_id,
+        WorldCharacter.character_id == character_id,
+    ).first()
+    if not link:
+        raise HTTPException(status_code=404, detail="WorldCharacter binding not found")
+
+    data = wc.model_dump(exclude_unset=True)
+    for key, value in data.items():
+        setattr(link, key, value)
+
+    db.commit()
+    db.refresh(link)
+    return _world_character_response(link, character)
 
 
 @router.put("/worlds/{world_id}/characters/{character_id}/set-primary", response_model=WorldCharacterResponse)
@@ -883,14 +1215,7 @@ def set_world_character_primary(
 
     db.commit()
     db.refresh(link)
-    return WorldCharacterResponse(
-        id=link.id,
-        world_id=link.world_id,
-        character_id=link.character_id,
-        role=link.role,
-        is_primary=link.is_primary,
-        character_name=character.name,
-    )
+    return _world_character_response(link, character)
 
 
 @router.delete("/worlds/{world_id}/characters/{character_id}", status_code=204)
@@ -1265,38 +1590,76 @@ def get_course_sages(
     """
     获取课程关联的 Sage 角色列表。
 
-    通过 Course.meta.sage_ids 获取，如果没有则返回世界级别的 Sage。
+    优先返回当前世界里真正可用的 Sage。
+    如果 Course.meta.sage_ids 存在，则只保留已经绑定到该世界的 Sage，
+    避免课程页展示点了会 404 的老师。
     """
     course = _get_course_with_auth(course_id, db, current_user)
 
-    # 优先从 meta.sage_ids 获取
-    sage_ids = course.meta.get("sage_ids", []) if course.meta else []
+    world_sage_links = db.query(WorldCharacter).filter(
+        WorldCharacter.world_id == course.world_id,
+        WorldCharacter.role == "sage",
+    ).order_by(WorldCharacter.is_primary.desc(), WorldCharacter.id.asc()).all()
+    world_sage_ids = [link.character_id for link in world_sage_links]
+    world_link_by_character_id = {link.character_id: link for link in world_sage_links}
 
-    if sage_ids:
-        # 从指定 sage_ids 获取
+    # Course.meta.sage_ids 只作为课程级优先顺序，不再返回未绑定到该世界的角色。
+    requested_ids = course.meta.get("sage_ids", []) if course.meta else []
+    selected_ids = [sage_id for sage_id in requested_ids if sage_id in world_sage_ids]
+    if not selected_ids:
+        selected_ids = world_sage_ids
+
+    if selected_ids:
         sages = db.query(Character).filter(
-            Character.id.in_(sage_ids),
+            Character.id.in_(selected_ids),
             Character.user_id == current_user.id,
         ).all()
     else:
-        # Fallback: 获取世界级别的 Sage
-        sage_links = db.query(WorldCharacter).filter(
-            WorldCharacter.world_id == course.world_id,
-            WorldCharacter.role == "sage",
-        ).order_by(WorldCharacter.is_primary.desc()).all()
-        sage_ids = [link.character_id for link in sage_links]
-        sages = db.query(Character).filter(Character.id.in_(sage_ids)).all() if sage_ids else []
+        sages = []
 
-    return [
-        {
-            "id": s.id,
-            "name": s.name,
-            "title": s.title,
-            "personality": s.personality,
-            "avatar": s.avatar,
-        }
-        for s in sages
-    ]
+    sage_by_id = {sage.id: sage for sage in sages}
+
+    from backend.models.models import Session as SessionModel
+    latest_sessions = db.query(SessionModel).filter(
+        SessionModel.course_id == course_id,
+        SessionModel.user_id == current_user.id,
+        SessionModel.sage_character_id.in_(selected_ids if selected_ids else [0]),
+    ).order_by(SessionModel.started_at.desc()).all()
+    latest_session_by_sage_id: dict[int, SessionModel] = {}
+    for session in latest_sessions:
+        if session.sage_character_id and session.sage_character_id not in latest_session_by_sage_id:
+            latest_session_by_sage_id[session.sage_character_id] = session
+
+    def _fallback_symbol(character: Character) -> str:
+        if character.tags and isinstance(character.tags, list) and character.tags:
+            first = str(character.tags[0]).strip()
+            if first:
+                return first[:2]
+        return character.name[:1]
+
+    result = []
+    for character_id in selected_ids:
+        sage = sage_by_id.get(character_id)
+        if not sage:
+            continue
+        link = world_link_by_character_id.get(character_id)
+        latest_session = latest_session_by_sage_id.get(character_id)
+        relationship_stage = None
+        if latest_session and latest_session.relationship:
+            relationship_stage = latest_session.relationship.get("stage", "stranger")
+
+        result.append({
+            "id": sage.id,
+            "name": sage.name,
+            "title": (link.world_title if link and link.world_title else None) or sage.title or sage.personality or "",
+            "personality": sage.personality,
+            "avatar": sage.avatar,
+            "symbol": _fallback_symbol(sage),
+            "relationshipStage": relationship_stage or "stranger",
+            "lastSessionTime": latest_session.started_at.isoformat() if latest_session else None,
+        })
+
+    return result
 
 
 @router.get("/courses/{course_id}/sessions", response_model=list[CourseSessionResponse])
@@ -1624,10 +1987,74 @@ def get_due_reviews(
 class SettingsUpdate(BaseModel):
     default_provider: str | None = None
     api_key: str | None = None
+    clear_api_key: bool = False
+    temperature: float | None = Field(default=None, ge=0, le=2)
+    max_tokens: int | None = Field(default=None, ge=1, le=200000)
+    model: str | None = None
+    base_url: str | None = None
 
 
 class SettingsResponse(BaseModel):
     default_provider: str | None = None
+    api_key_configured: bool = False
+    temperature: float | None = None
+    max_tokens: int | None = None
+    model: str | None = None
+    base_url: str | None = None
+    provider_settings: dict[str, dict[str, str | bool | None]] = Field(default_factory=dict)
+
+
+class SettingsTestRequest(BaseModel):
+    default_provider: str | None = None
+    api_key: str | None = None
+    temperature: float | None = Field(default=None, ge=0, le=2)
+    max_tokens: int | None = Field(default=None, ge=1, le=200000)
+    model: str | None = None
+    base_url: str | None = None
+
+
+class SettingsTestResponse(BaseModel):
+    ok: bool
+    provider: str
+    model: str | None = None
+    base_url: str | None = None
+    message: str
+
+
+class SettingsModelsRequest(BaseModel):
+    default_provider: str | None = None
+    api_key: str | None = None
+    model: str | None = None
+    base_url: str | None = None
+
+
+class SettingsModelsResponse(BaseModel):
+    provider: str
+    base_url: str | None = None
+    source: str
+    models: list[str] = Field(default_factory=list)
+    message: str | None = None
+
+
+def _normalize_settings_base_url(provider: str, base_url: str | None) -> str | None:
+    return normalize_base_url(provider, base_url)
+
+
+def _fallback_settings_models(provider: str) -> list[str]:
+    from backend.services.llm.models import (
+        CLAUDE_MODELS,
+        OPENAI_COMPATIBLE_MODELS,
+        OPENAI_MODELS,
+        OLLAMA_MODELS,
+    )
+
+    if provider == "claude":
+        return list(CLAUDE_MODELS.keys())
+    if provider == "openai":
+        return list(OPENAI_MODELS.keys())
+    if provider == "local":
+        return list(OLLAMA_MODELS.keys())
+    return list(OPENAI_COMPATIBLE_MODELS.keys())
 
 
 @router.get("/settings", response_model=SettingsResponse)
@@ -1635,8 +2062,15 @@ def get_settings(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
+    active = get_effective_llm_config(current_user)
     return SettingsResponse(
-        default_provider=current_user.default_provider
+        default_provider=active.provider,
+        api_key_configured=active.api_key_configured,
+        temperature=active.temperature,
+        max_tokens=active.max_tokens,
+        model=active.model,
+        base_url=active.base_url,
+        provider_settings=serialize_provider_settings(current_user),
     )
 
 
@@ -1646,15 +2080,153 @@ def update_settings(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    if settings.default_provider:
-        current_user.default_provider = settings.default_provider
+    target_provider = settings.default_provider or current_user.default_provider or "claude"
 
-    if settings.api_key:
-        from backend.core.security import encrypt_api_key
-        current_user.encrypted_api_key = encrypt_api_key(settings.api_key)
+    if settings.temperature is not None:
+        current_user.temperature = settings.temperature
+
+    if settings.max_tokens is not None:
+        current_user.max_tokens = settings.max_tokens
+
+    update_provider_settings(
+        current_user,
+        target_provider,
+        api_key=settings.api_key,
+        clear_api_key=settings.clear_api_key,
+        model=settings.model,
+        base_url=settings.base_url,
+    )
 
     db.commit()
     return {"message": "Settings updated"}
+
+
+@router.post("/settings/test-connection", response_model=SettingsTestResponse)
+async def test_settings_connection(
+    settings: SettingsTestRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    config = get_effective_llm_config(
+        current_user,
+        provider=settings.default_provider,
+        api_key=settings.api_key,
+        model=settings.model,
+        base_url=settings.base_url,
+        temperature=settings.temperature,
+        max_tokens=settings.max_tokens,
+    )
+
+    from backend.services.llm.providers import provider_needs_api_key
+    if provider_needs_api_key(config.provider) and not config.api_key:
+        return SettingsTestResponse(
+            ok=False,
+            provider=config.provider,
+            model=config.model,
+            base_url=config.base_url,
+            message="API Key is not configured for this provider.",
+        )
+
+    try:
+        from backend.services.llm.manager import get_llm_manager
+
+        adapter = get_llm_manager().get_adapter(
+            provider=config.provider,
+            model=config.model,
+            api_key=config.api_key,
+            base_url=config.base_url,
+        )
+        await adapter.chat(
+            messages=[{"role": "user", "content": "ping"}],
+            system_prompt="Reply with a short ok.",
+            user_api_key=config.api_key,
+            temperature=config.temperature,
+            max_tokens=min(config.max_tokens, 32),
+        )
+    except Exception as exc:
+        return SettingsTestResponse(
+            ok=False,
+            provider=config.provider,
+            model=config.model,
+            base_url=config.base_url,
+            message=f"{type(exc).__name__}: {str(exc)[:300]}",
+        )
+
+    return SettingsTestResponse(
+        ok=True,
+        provider=config.provider,
+        model=config.model,
+        base_url=config.base_url,
+        message="Connection test succeeded.",
+    )
+
+
+@router.post("/settings/models", response_model=SettingsModelsResponse)
+async def list_settings_models(
+    settings: SettingsModelsRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    config = get_effective_llm_config(
+        current_user,
+        provider=settings.default_provider,
+        api_key=settings.api_key,
+        model=settings.model,
+        base_url=settings.base_url,
+    )
+
+    if config.provider == "local":
+        return SettingsModelsResponse(
+            provider=config.provider,
+            base_url=config.base_url,
+            source="preset",
+            models=_fallback_settings_models(config.provider),
+            message="Local provider uses preset model suggestions.",
+        )
+
+    try:
+        from backend.services.llm.manager import get_llm_manager
+        from backend.services.llm.providers import provider_needs_api_key
+
+        if provider_needs_api_key(config.provider) and not config.api_key:
+            return SettingsModelsResponse(
+                provider=config.provider,
+                base_url=config.base_url,
+                source="preset",
+                models=_fallback_settings_models(config.provider),
+                message="API Key is not configured; showing preset model suggestions.",
+            )
+
+        adapter = get_llm_manager().get_adapter(
+            provider=config.provider,
+            model=config.model,
+            api_key=config.api_key,
+            base_url=config.base_url,
+        )
+        remote_models = await adapter.list_models(user_api_key=config.api_key)
+        if remote_models:
+            return SettingsModelsResponse(
+                provider=config.provider,
+                base_url=config.base_url,
+                source="remote",
+                models=remote_models,
+                message="Fetched models from gateway.",
+            )
+        return SettingsModelsResponse(
+            provider=config.provider,
+            base_url=config.base_url,
+            source="preset",
+            models=_fallback_settings_models(config.provider),
+            message="Gateway returned no models; showing preset suggestions.",
+        )
+    except Exception as exc:
+        return SettingsModelsResponse(
+            provider=config.provider,
+            base_url=config.base_url,
+            source="fallback",
+            models=_fallback_settings_models(config.provider),
+            message=f"{type(exc).__name__}: {str(exc)[:300]}",
+        )
 
 
 # Persona generation endpoint
@@ -1729,8 +2301,8 @@ async def generate_persona(
     import re
     import time
 
-    from backend.core.security import decrypt_api_key
     from backend.services.llm.adapter import get_llm_adapter
+    from backend.services.llm.providers import provider_needs_api_key
 
     # Cooldown check
     now = time.time()
@@ -1740,15 +2312,17 @@ async def generate_persona(
         raise HTTPException(status_code=429, detail=f"请 {remaining} 秒后再试")
     _generate_cooldowns[current_user.id] = now
 
-    user_api_key = None
-    provider = current_user.default_provider or "claude"
-    if current_user.encrypted_api_key:
-        user_api_key = decrypt_api_key(current_user.encrypted_api_key)
+    config = get_effective_llm_config(current_user)
 
-    if not user_api_key:
+    if provider_needs_api_key(config.provider) and not config.api_key:
         raise HTTPException(status_code=400, detail="请先在设置页配置 API Key")
 
-    adapter = get_llm_adapter(provider)
+    adapter = get_llm_adapter(
+        config.provider,
+        model=config.model,
+        api_key=config.api_key,
+        base_url=config.base_url,
+    )
 
     # 构建 world_context
     world_context = ""
@@ -1769,8 +2343,8 @@ async def generate_persona(
     response = await adapter.chat(
         messages=[{"role": "user", "content": prompt}],
         system_prompt="你是人格设计师，只输出合法 JSON。",
-        user_api_key=user_api_key,
-        max_length=1000,  # 增大 max_length：角色描述可能更长
+        user_api_key=config.api_key,
+        max_tokens=1000,
     )
 
     # Parse JSON from response

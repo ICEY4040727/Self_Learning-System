@@ -77,7 +77,7 @@ export interface StartLearningResponse {
   relationship_stage: RelationshipStage
   relationship: { dimensions: Record<string, number>; stage: RelationshipStage }
   greeting: string
-  scenes: { background?: string; menu_background?: string }
+  scenes: { background?: string; background_picture?: string; menu_background?: string }
   sage: {
     id: number | null
     name: string | null
