@@ -84,7 +84,15 @@ class TestCourseSessionRelationship:
 
         bind_resp = client.post(
             f"/api/worlds/{world_id}/characters",
-            json={"character_id": character_id, "role": "sage", "is_primary": True},
+            json={
+                "character_id": character_id,
+                "role": "sage",
+                "is_primary": True,
+                "world_title": "学院导师",
+                "world_background": "这是一个专注于逻辑与提问的世界。",
+                "relationship_seed": "第一次在图书馆门口遇见。",
+                "world_greeting": "欢迎来到学院，今天我们先看整体结构。",
+            },
             headers=auth_headers,
         )
         assert bind_resp.status_code == 200
@@ -112,11 +120,31 @@ class TestCourseSessionRelationship:
         assert start_resp.status_code == 200
         payload = start_resp.json()
         assert payload["teacher_persona"] == "Socrates"  # DD1: TeacherPersona merged into Character
+        assert payload["greeting"] == "欢迎来到学院，今天我们先看整体结构。"
         assert payload["relationship_stage"] == "stranger"
         assert payload["relationship"]["dimensions"]["trust"] == 0.0
         assert payload["scenes"] == {"default": "/scenes/academy.png"}
         assert payload["sage_sprites"] == {"default": "/sprites/socrates-default.png"}
         assert payload["traveler_sprites"] == {"default": "/sprites/traveler-default.png"}
+
+    def test_start_learning_returns_top_level_background_picture(self, client, auth_headers):
+        world_resp = client.post(
+            "/api/worlds",
+            json={
+                "name": "Session World with Background",
+                "description": "world",
+                "background_picture": "/themes/academy.jpg",
+            },
+            headers=auth_headers,
+        )
+        assert world_resp.status_code == 200
+        world_id = world_resp.json()["id"]
+        course_id = _create_course(client, auth_headers, world_id)
+
+        start_resp = client.post(f"/api/courses/{course_id}/start", headers=auth_headers)
+        assert start_resp.status_code == 200
+        payload = start_resp.json()
+        assert payload["background_picture"] == "/themes/academy.jpg"
 
     @pytest.mark.skip(reason="knowledge-graph endpoint not yet implemented")
     def test_chat_updates_world_knowledge_graph(self, client, auth_headers):

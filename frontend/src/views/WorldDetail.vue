@@ -317,7 +317,6 @@ interface World {
   description?: string
   background_picture?: string
   symbol?: string
-  scenes?: { background?: string; background_picture?: string }
   relationship?: {
     stage?: string
     dimensions?: Record<string, number>
@@ -350,8 +349,6 @@ const allCharacters = ref<Character[]>([])
 const loading = ref(false)
 const worldBackgroundUrl = computed(() =>
   selectedWorld.value?.background_picture
-  || selectedWorld.value?.scenes?.background_picture
-  || selectedWorld.value?.scenes?.background
   || PAGE_BACKGROUNDS.worldDetail
 )
 

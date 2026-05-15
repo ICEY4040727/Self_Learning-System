@@ -84,7 +84,6 @@ interface World {
   name: string
   description?: string
   background_picture?: string
-  scenes?: { background?: string; [key: string]: any }
   sages?: Sage[]
   courses?: Course[]
   stageLabel?: string

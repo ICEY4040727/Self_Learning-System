@@ -17,11 +17,6 @@ export interface World {
   name: string
   description: string
   background_picture?: string
-  scenes?: {
-    background?: string
-    background_picture?: string
-    menu_background?: string
-  }
   characters?: WorldCharacter[]
   courses?: Course[]
 }
