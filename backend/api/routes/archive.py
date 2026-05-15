@@ -215,7 +215,17 @@ def _normalize_world_scenes(scenes: dict | None, background_picture: str | None)
 
 
 def _extract_world_background_picture(world: World) -> str | None:
+    if world.background_picture:
+        return world.background_picture
     scenes = world.scenes or {}
+    return scenes.get("background_picture") or scenes.get("background")
+
+
+def _resolve_world_background_picture(background_picture: str | None, scenes: dict | None) -> str | None:
+    background = (background_picture or "").strip()
+    if background:
+        return background
+    scenes = scenes or {}
     return scenes.get("background_picture") or scenes.get("background")
 
 
@@ -789,6 +799,7 @@ def create_world(
         user_id=current_user.id,
         name=world.name,
         description=world.description,
+        background_picture=_resolve_world_background_picture(world.background_picture, world.scenes),
         scenes=_normalize_world_scenes(world.scenes, world.background_picture),
     )
     db.add(db_world)
@@ -843,6 +854,7 @@ def update_world(
 
     db_world.name = world.name
     db_world.description = world.description
+    db_world.background_picture = _resolve_world_background_picture(world.background_picture, world.scenes)
     db_world.scenes = _normalize_world_scenes(world.scenes, world.background_picture)
     db.commit()
     db.refresh(db_world)

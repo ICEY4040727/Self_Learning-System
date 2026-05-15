@@ -54,9 +54,11 @@ class User(Base):
     role = Column(String(20), default="student")
     encrypted_api_key = Column(String(255), nullable=True)
     default_provider = Column(String(50), nullable=True)
+    llm_provider_settings = Column(JSON, nullable=True, default=dict)
     temperature = Column(Float, nullable=True, default=0.7)
     max_tokens = Column(Integer, nullable=True, default=2048)
     model = Column(String(100), nullable=True)
+    llm_base_url = Column(String(500), nullable=True)
     created_at = Column(DateTime, default=_utcnow)
 
     worlds = orm_relationship("World", back_populates="user", cascade="all, delete-orphan")
@@ -70,6 +72,7 @@ class User(Base):
     textbook_library = orm_relationship("TextbookLibrary", back_populates="user", cascade="all, delete-orphan")
     user_profile = orm_relationship("UserProfile", back_populates="user", uselist=False, cascade="all, delete-orphan")
     course_progress = orm_relationship("CourseProgress", back_populates="user", cascade="all, delete-orphan")
+    learning_plan_drafts = orm_relationship("LearningPlanDraft", back_populates="user", cascade="all, delete-orphan")
 
 
 class UserProfile(Base):
@@ -128,6 +131,7 @@ class World(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     name = Column(String(100), nullable=False)
     description = Column(Text, nullable=True)
+    background_picture = Column(String(255), nullable=True)
     scenes = Column(JSON, nullable=False, default=dict)
     created_at = Column(DateTime, default=_utcnow)
 
@@ -157,6 +161,7 @@ class Character(Base):
     background = Column(Text, nullable=True)
     speech_style = Column(Text, nullable=True)
     sprites = Column(JSON, nullable=True)
+    llm_settings = Column(JSON, nullable=True, default=dict)
     title = Column(String(100), nullable=True)  # 知者名片头衔
     tags = Column(JSON, nullable=True, default=list)  # 角色标签列表
     # TODO [2E-01]: experience_points/level 已决定不做经验值系统 (Plan E2)，
@@ -186,6 +191,10 @@ class WorldCharacter(Base):
     character_id = Column(Integer, ForeignKey("characters.id", ondelete="CASCADE"), nullable=False)
     role = Column(String(20), nullable=False)
     is_primary = Column(Boolean, default=False)
+    world_title = Column(String(100), nullable=True, comment="该角色在此世界内的称号或身份")
+    world_background = Column(Text, nullable=True, comment="该角色在此世界内的背景")
+    relationship_seed = Column(Text, nullable=True, comment="该世界内 sage/traveler 的初始相识前提")
+    world_greeting = Column(Text, nullable=True, comment="该世界内优先使用的开场白")
 
     world = orm_relationship("World", back_populates="world_characters")
     character = orm_relationship("Character", back_populates="world_links")
@@ -529,6 +538,7 @@ class Textbook(Base):
     id = Column(Integer, primary_key=True, index=True)
     course_id = Column(Integer, ForeignKey("courses.id", ondelete="CASCADE"), nullable=False)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    library_id = Column(Integer, ForeignKey("textbook_library.id", ondelete="RESTRICT"), nullable=True, index=True)
     filename = Column(String(255), nullable=False)
     file_path = Column(String(512), nullable=False)
     file_size = Column(Integer, nullable=True)
@@ -538,10 +548,16 @@ class Textbook(Base):
     # 状态: uploaded → extracting → extracted → processing → processed / error
     status = Column(String(20), default="uploaded")
     error_message = Column(Text, nullable=True)
+    owns_file = Column(Boolean, nullable=False, default=True)
     created_at = Column(DateTime, default=_utcnow)
 
     course = orm_relationship("Course", back_populates="textbooks")
     user = orm_relationship("User", back_populates="textbooks")
+    library = orm_relationship("TextbookLibrary", back_populates="textbooks")
+
+    @property
+    def is_usable(self) -> bool:
+        return self.status == "extracted" and bool(self.extracted_text)
 
 
 class TextbookLibrary(Base):
@@ -567,6 +583,39 @@ class TextbookLibrary(Base):
     created_at = Column(DateTime, default=_utcnow)
 
     user = orm_relationship("User", back_populates="textbook_library")
+    textbooks = orm_relationship("Textbook", back_populates="library")
+
+    @property
+    def is_usable(self) -> bool:
+        return self.status == "extracted" and bool(self.extracted_text)
+
+
+class LearningPlanDraft(Base):
+    """Textbook-first staged setup state.
+
+    This table bridges the product flow (material -> blueprint -> course ->
+    world -> characters) with the current schema where Course requires a
+    World. Drafts persist the early layers before a Course row exists.
+    """
+    __tablename__ = "learning_plan_drafts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    material_ids = Column(JSON, nullable=False, default=list)
+    goal = Column(Text, nullable=False)
+    course_form = Column(JSON, nullable=True, default=dict)
+    material_analysis = Column(JSON, nullable=True, default=dict)
+    knowledge_blueprint = Column(JSON, nullable=True, default=dict)
+    course_blueprint = Column(JSON, nullable=True, default=dict)
+    world_plan = Column(JSON, nullable=True, default=dict)
+    character_plan = Column(JSON, nullable=True, default=dict)
+    stage = Column(String(40), nullable=False, default="blueprint")
+    committed_world_id = Column(Integer, ForeignKey("worlds.id", ondelete="SET NULL"), nullable=True)
+    committed_course_id = Column(Integer, ForeignKey("courses.id", ondelete="SET NULL"), nullable=True)
+    created_at = Column(DateTime, default=_utcnow)
+    updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow)
+
+    user = orm_relationship("User", back_populates="learning_plan_drafts")
 
 
 class Checkpoint(Base):
