@@ -10,7 +10,7 @@
 
 ## 任务管理
 
-**以 GitHub Issues 为主，仓库文件为辅。**
+**以 GitHub Issues 为主，仓库文件为辅。** 可配合 GitHub Projects 看板统一追踪进度，设置方法见 [`docs/github-projects-setup.md`](docs/github-projects-setup.md)。
 
 ### Issue 模板
 

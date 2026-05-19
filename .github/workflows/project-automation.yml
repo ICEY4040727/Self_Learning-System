@@ -1,0 +1,23 @@
+name: Project Automation
+
+on:
+  issues:
+    types: [opened]
+  pull_request:
+    types: [opened]
+
+jobs:
+  add-to-project:
+    name: Add issue or PR to GitHub Project
+    runs-on: ubuntu-latest
+    permissions:
+      issues: read
+      pull-requests: read
+    steps:
+      - uses: actions/add-to-project@v1.0.2
+        with:
+          # Replace <PROJECT_NUMBER> with your actual project number, e.g.:
+          #   https://github.com/users/ICEY4040727/projects/1  →  project-url below
+          # See docs/github-projects-setup.md for full setup instructions.
+          project-url: https://github.com/users/ICEY4040727/projects/<PROJECT_NUMBER>
+          github-token: ${{ secrets.PROJECT_TOKEN }}
