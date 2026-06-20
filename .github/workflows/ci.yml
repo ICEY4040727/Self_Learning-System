@@ -183,7 +183,11 @@ jobs:
           cat docker-health.json
           docker compose logs backend --tail=120 > docker-backend.log
           docker compose logs frontend --tail=120 > docker-frontend.log
-          docker compose logs user-llm-patrol --tail=40 > docker-user-llm-patrol.log
+          for i in {1..40}; do
+            docker compose logs user-llm-patrol --tail=120 > docker-user-llm-patrol.log
+            if grep -q "User LLM patrol scheduler active" docker-user-llm-patrol.log; then break; fi
+            sleep 3
+          done
           grep -q "User LLM patrol scheduler active" docker-user-llm-patrol.log
       - name: Upload docker smoke artifacts
         if: always()
