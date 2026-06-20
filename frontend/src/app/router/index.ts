@@ -62,7 +62,7 @@ const routes: RouteRecordRaw[] = [
 ]
 
 const router = createRouter({
-  // Hash 路由更适合 Electron 打包
+  // hash 路由更适合 Electron 打包
   history: createWebHashHistory(),
   routes
 })
