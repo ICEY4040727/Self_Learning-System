@@ -89,6 +89,10 @@ class LearningEngine:
         db: Session,
         user_api_key: str = None,
         provider: str = "claude",
+        temperature: float = 0.7,
+        max_tokens: int = 2048,
+        model: str | None = None,
+        base_url: str | None = None,
     ) -> dict:
         """Process user message and generate teacher response"""
 
@@ -173,11 +177,18 @@ class LearningEngine:
             messages.append({"role": "user", "content": user_message})
 
             # 9. Call LLM
-            llm_adapter = get_llm_adapter(provider)
+            llm_adapter = get_llm_adapter(
+                provider,
+                model=model,
+                api_key=user_api_key,
+                base_url=base_url,
+            )
             llm_response = await llm_adapter.chat(
                 messages=messages,
                 system_prompt=system_prompt,
-                user_api_key=user_api_key
+                user_api_key=user_api_key,
+                temperature=temperature,
+                max_tokens=max_tokens,
             )
 
             # 10. Parse tool request
@@ -192,7 +203,13 @@ class LearningEngine:
                 }
 
             # 11. Analyze emotion
-            emotion = await self.analyzer.analyze_emotion(user_message, user_api_key, provider)
+            emotion = await self.analyzer.analyze_emotion(
+                user_message,
+                user_api_key,
+                provider,
+                model=model,
+                base_url=base_url,
+            )
 
             # 12. Update relationship dimensions/stage
             old_relationship = dict(session.relationship or _default_relationship())
@@ -264,7 +281,7 @@ class LearningEngine:
             # heuristics — letting them swing mastery scores ±15/+25 makes
             # the score reflect emotion more than understanding. LLM extraction
             # uses surrounding context and is the single source of truth here.
-            mastery_result = mastery_tracker.update_from_memories(
+            mastery_tracker.update_from_memories(
                 db=db,
                 memories=recent_facts,
                 course_id=session.course_id,
@@ -337,6 +354,7 @@ class LearningEngine:
         db: Session,
         sage_character_id: int,
         traveler_character: Character,
+        traveler_world_link=None,
         learner_profile: LearnerProfile | None = None,
     ) -> list[int]:
         """
@@ -348,6 +366,7 @@ class LearningEngine:
             db=db,
             sage_character_id=sage_character_id,
             traveler_character=traveler_character,
+            traveler_world_link=traveler_world_link,
             learner_profile=learner_profile,
         )
 

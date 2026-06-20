@@ -52,11 +52,11 @@ class User(Base):
     username = Column(String(50), unique=True, index=True, nullable=False)
     password_hash = Column(String(255), nullable=False)
     role = Column(String(20), default="student")
-    
+
     encrypted_api_key = Column(String(255), nullable=True)
     default_provider = Column(String(50), nullable=True)
     llm_provider_settings = Column(JSON, nullable=True, default=dict)
-    
+
     temperature = Column(Float, nullable=True, default=0.7)
     max_tokens = Column(Integer, nullable=True, default=2048)
     model = Column(String(100), nullable=True)

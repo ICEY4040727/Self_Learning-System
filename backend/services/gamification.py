@@ -163,7 +163,6 @@ class GamificationEngine:
                     return True, {"stage": current_stage}
 
         elif condition_type == "fact_transition":
-            from_type = params.get("from", "")
             to_type = params.get("to", "")
             # Check if recent facts include the target type
             matching = [f for f in recent_facts if f.fact_type == to_type]
