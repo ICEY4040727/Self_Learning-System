@@ -164,32 +164,31 @@ def _persist_provider_json_backfill(session: Session, user: User, backfill: Lega
         return False
 
     trace_id = ""
-    with session.no_autoflush:
-        with authorized_user_llm_write(
-            source="persist_legacy_backfill",
-            user_id=user.id,
-            session=session,
-        ) as trace_id:
-            settings_map = {
-                key: dict(value)
-                for key, value in _raw_provider_settings(user).items()
-                if isinstance(value, dict)
-            }
-            entry = dict(settings_map.get(backfill.provider, {}))
-            if current.encrypted_api_key:
-                entry["encrypted_api_key"] = current.encrypted_api_key
-            if current.model:
-                entry["model"] = current.model
-            if current.base_url:
-                entry["base_url"] = current.base_url
-            settings_map[backfill.provider] = entry
-            user.llm_provider_settings = settings_map
+    with session.no_autoflush, authorized_user_llm_write(
+        source="persist_legacy_backfill",
+        user_id=user.id,
+        session=session,
+    ) as trace_id:
+        settings_map = {
+            key: dict(value)
+            for key, value in _raw_provider_settings(user).items()
+            if isinstance(value, dict)
+        }
+        entry = dict(settings_map.get(backfill.provider, {}))
+        if current.encrypted_api_key:
+            entry["encrypted_api_key"] = current.encrypted_api_key
+        if current.model:
+            entry["model"] = current.model
+        if current.base_url:
+            entry["base_url"] = current.base_url
+        settings_map[backfill.provider] = entry
+        user.llm_provider_settings = settings_map
 
-            if backfill.provider == normalize_provider(user.default_provider):
-                user.default_provider = backfill.provider
-                user.encrypted_api_key = entry.get("encrypted_api_key")
-                user.model = entry.get("model")
-                user.llm_base_url = entry.get("base_url")
+        if backfill.provider == normalize_provider(user.default_provider):
+            user.default_provider = backfill.provider
+            user.encrypted_api_key = entry.get("encrypted_api_key")
+            user.model = entry.get("model")
+            user.llm_base_url = entry.get("base_url")
 
     log_gateway_write(
         source="persist_legacy_backfill",
@@ -340,16 +339,15 @@ def update_generation_params(
         fields.append("max_tokens")
 
     flush_ctx = session.no_autoflush if session is not None else nullcontext()
-    with flush_ctx:
-        with authorized_user_llm_write(
-            source="update_generation_params",
-            user_id=user.id,
-            session=session,
-        ) as trace_id:
-            if temperature is not None:
-                user.temperature = temperature
-            if max_tokens is not None:
-                user.max_tokens = max_tokens
+    with flush_ctx, authorized_user_llm_write(
+        source="update_generation_params",
+        user_id=user.id,
+        session=session,
+    ) as trace_id:
+        if temperature is not None:
+            user.temperature = temperature
+        if max_tokens is not None:
+            user.max_tokens = max_tokens
 
     if fields:
         log_gateway_write(
@@ -381,53 +379,52 @@ def update_provider_settings(
         fields.append("llm_base_url")
 
     flush_ctx = session.no_autoflush if session is not None else nullcontext()
-    with flush_ctx:
-        with authorized_user_llm_write(
-            source="update_provider_settings",
-            user_id=user.id,
-            session=session,
-        ) as trace_id:
-            settings_map = {
-                key: dict(value)
-                for key, value in _raw_provider_settings(user).items()
-                if isinstance(value, dict)
-            }
-            entry = dict(settings_map.get(active_provider, {}))
+    with flush_ctx, authorized_user_llm_write(
+        source="update_provider_settings",
+        user_id=user.id,
+        session=session,
+    ) as trace_id:
+        settings_map = {
+            key: dict(value)
+            for key, value in _raw_provider_settings(user).items()
+            if isinstance(value, dict)
+        }
+        entry = dict(settings_map.get(active_provider, {}))
 
-            if clear_api_key:
-                entry.pop("encrypted_api_key", None)
+        if clear_api_key:
+            entry.pop("encrypted_api_key", None)
 
-            submitted_key = api_key.strip() if api_key and api_key.strip() else None
-            if submitted_key:
-                entry["encrypted_api_key"] = encrypt_api_key(submitted_key)
+        submitted_key = api_key.strip() if api_key and api_key.strip() else None
+        if submitted_key:
+            entry["encrypted_api_key"] = encrypt_api_key(submitted_key)
 
-            if model is not None:
-                cleaned_model = model.strip()
-                if cleaned_model:
-                    entry["model"] = cleaned_model
-                else:
-                    entry.pop("model", None)
-
-            if base_url is not None:
-                cleaned_base_url = normalize_base_url(active_provider, base_url)
-                if cleaned_base_url:
-                    entry["base_url"] = cleaned_base_url
-                else:
-                    entry.pop("base_url", None)
-
-            if entry:
-                settings_map[active_provider] = entry
+        if model is not None:
+            cleaned_model = model.strip()
+            if cleaned_model:
+                entry["model"] = cleaned_model
             else:
-                settings_map.pop(active_provider, None)
+                entry.pop("model", None)
 
-            user.llm_provider_settings = settings_map
+        if base_url is not None:
+            cleaned_base_url = normalize_base_url(active_provider, base_url)
+            if cleaned_base_url:
+                entry["base_url"] = cleaned_base_url
+            else:
+                entry.pop("base_url", None)
 
-            # Compatibility mirror for code or old clients that still read the legacy
-            # top-level columns.
-            user.default_provider = active_provider
-            user.encrypted_api_key = entry.get("encrypted_api_key")
-            user.model = entry.get("model")
-            user.llm_base_url = entry.get("base_url")
+        if entry:
+            settings_map[active_provider] = entry
+        else:
+            settings_map.pop(active_provider, None)
+
+        user.llm_provider_settings = settings_map
+
+        # Compatibility mirror for code or old clients that still read the legacy
+        # top-level columns.
+        user.default_provider = active_provider
+        user.encrypted_api_key = entry.get("encrypted_api_key")
+        user.model = entry.get("model")
+        user.llm_base_url = entry.get("base_url")
 
     log_gateway_write(
         source="update_provider_settings",
