@@ -16,22 +16,8 @@ on:
 jobs:
   user-llm-consistency-patrol:
     runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:16
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: selflearn_patrol
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U postgres"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
     env:
-      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/selflearn_patrol
+      DATABASE_URL: "sqlite:///../.ci-user-llm-patrol.db"
       SECRET_KEY: ci-user-llm-patrol-secret
       TESTING: "1"
     steps:
@@ -47,17 +33,18 @@ jobs:
       - name: Initialize database
         run: |
           cd backend
-          PYTHONPATH=.. alembic upgrade head
+          rm -f ../.ci-user-llm-patrol.db
+          PYTHONPATH=.. python -c "from backend.db.database import init_db; init_db(); print('Database initialized')"
       - name: Run User LLM consistency patrol
         run: |
           cd backend
           if [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref }}" = "refs/heads/main" ]; then
-            PATROL_ARGS="--sql --fail-on-issues"
+            PATROL_ARGS="--fail-on-issues"
           elif [ "${{ github.event_name }}" = "schedule" ]; then
-            PATROL_ARGS="--sql --repair --fail-on-issues"
+            PATROL_ARGS="--repair --fail-on-issues"
           elif [ "${{ inputs.dry_run }}" = "true" ]; then
-            PATROL_ARGS="--sql --dry-run --fail-on-issues"
+            PATROL_ARGS="--dry-run --fail-on-issues"
           else
-            PATROL_ARGS="--sql --repair --fail-on-issues"
+            PATROL_ARGS="--repair --fail-on-issues"
           fi
           PYTHONPATH=.. python -m backend.scripts.audit_user_llm_consistency_job $PATROL_ARGS
