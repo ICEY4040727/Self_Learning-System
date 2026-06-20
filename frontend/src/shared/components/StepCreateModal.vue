@@ -5,18 +5,18 @@
         <!-- Header -->
         <div class="modal-header">
           <div class="modal-subtitle">{{ isSage ? 'NEW SAGE' : 'NEW TRAVELER' }}</div>
-          <div class="modal-title">{{ isSage ? '创 建 新 知 者' : '创 建 新 旅 者' }}</div>
-        <div class="gold-line"></div>
-      </div>
+          <div class="modal-title">{{ isSage ? '创建新角色' : '创建新旅者' }}</div>
+          <div class="gold-line"></div>
+        </div>
 
         <!-- Sage Flow -->
-        <SageCreateFlow 
+        <SageCreateFlow
           v-if="isSage"
           @create="handleCreate"
         />
 
         <!-- Traveler Flow -->
-        <TravelerCreateFlow 
+        <TravelerCreateFlow
           v-else
           @create="handleCreate"
         />
@@ -127,7 +127,6 @@ const handleCreate = (data: any) => {
   margin: 12px auto 0;
 }
 
-/* Identity Phase */
 .phase-content {
   animation: fadeIn 0.3s ease;
 }
@@ -216,7 +215,6 @@ const handleCreate = (data: any) => {
   color: rgba(255, 255, 255, 0.5);
 }
 
-/* Transitions */
 .modal-fade-enter-active,
 .modal-fade-leave-active {
   transition: opacity 0.25s ease;
