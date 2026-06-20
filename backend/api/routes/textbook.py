@@ -18,6 +18,7 @@ from backend.api.routes.auth import get_current_user
 from backend.core.config import get_settings
 from backend.db.database import get_db
 from backend.models.models import Course, CourseProgress, LessonPlan, Textbook, User, World
+from backend.services.user_llm_settings import get_effective_llm_config
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +35,6 @@ ALLOWED_EXTENSIONS = {
     ".markdown",
     ".epub",
 } | IMAGE_EXTENSIONS
-MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB
 TEXT_PREVIEW_LENGTH = 500
 MAX_GENERATION_CHARS = 80000  # LLM context budget for course generation
 
@@ -92,6 +92,7 @@ class TextbookResponse(BaseModel):
     page_count: int | None = None
     status: str = "uploaded"
     error_message: str | None = None
+    is_usable: bool = False
     # Pydantic serializes datetime → ISO string; the column is a DateTime
     # so accept both rather than the previous (broken) ``str | None``.
     created_at: datetime | None = None
@@ -151,6 +152,19 @@ def _textbook_dir(course_id: int) -> Path:
     base = Path(get_settings().upload_dir).resolve() / "textbooks" / str(course_id)
     base.mkdir(parents=True, exist_ok=True)
     return base
+
+
+def _max_file_size() -> int:
+    return get_settings().textbook_max_upload_size_bytes
+
+
+def _format_size_limit(limit: int) -> str:
+    if limit < 1024:
+        return f"{limit}B"
+    if limit < 1024 * 1024:
+        return f"{limit / 1024:g}KB"
+    mb = limit / (1024 * 1024)
+    return f"{mb:g}MB"
 
 
 def _safe_upload_filename(raw_filename: str) -> str:
@@ -224,11 +238,12 @@ def _extract_pdf(content: bytes) -> tuple[str, int]:
     try:
         # 加密 PDF：不调用 authenticate 时遍历页面会抛 ValueError，书架层只捕
         # TextExtractionError 会导致 500，故在此统一处理。
-        if getattr(doc, "is_encrypted", False) or getattr(doc, "needs_pass", False):
-            if doc.authenticate("") <= 0:
-                raise TextExtractionError(
-                    "PDF 已加密，无法提取文本（请使用无密码版本或在本地解密后上传）",
-                )
+        if (
+            getattr(doc, "is_encrypted", False) or getattr(doc, "needs_pass", False)
+        ) and doc.authenticate("") <= 0:
+            raise TextExtractionError(
+                "PDF 已加密，无法提取文本（请使用无密码版本或在本地解密后上传）",
+            )
         try:
             from backend.services import tesseract_ocr as _tocr
 
@@ -394,7 +409,7 @@ async def _read_with_limit(file: UploadFile, limit: int) -> bytes:
             break
         total += len(chunk)
         if total > limit:
-            raise HTTPException(status_code=413, detail="文件超过 50MB 限制")
+            raise HTTPException(status_code=413, detail=f"文件超过 {_format_size_limit(limit)} 限制")
         chunks.append(chunk)
     return b"".join(chunks)
 
@@ -408,12 +423,13 @@ async def upload_textbook(
 ):
     """上传教材文件到指定课程
 
-    支持 PDF（含扫描件 OCR）、TXT、MD、EPUB、常见图片（PNG/JPEG/WebP 等 OCR），最大 50MB。
+    支持 PDF（含扫描件 OCR）、TXT、MD、EPUB、常见图片（PNG/JPEG/WebP 等 OCR）。
+    上传大小上限由 TEXTBOOK_MAX_UPLOAD_SIZE_BYTES 配置决定。
     上传后自动提取文本内容。
     """
     from anyio import to_thread
 
-    course = _get_course_with_auth(course_id, db, current_user)
+    _get_course_with_auth(course_id, db, current_user)
 
     # 验证文件类型
     filename = file.filename or "unknown.txt"
@@ -425,7 +441,7 @@ async def upload_textbook(
         )
 
     # [TR-X6] Streaming size check — reject before allocating the whole file.
-    content = await _read_with_limit(file, MAX_FILE_SIZE)
+    content = await _read_with_limit(file, _max_file_size())
 
     # [TR-X2/X16] Store outside backend/static so the public /static mount
     # cannot serve uploaded files; access goes through GET /textbooks/{id}/file.
@@ -469,6 +485,7 @@ async def upload_textbook(
         file_path=str(file_path),
         file_size=len(content),
         content_type=file.content_type,
+        owns_file=True,
         extracted_text=extracted_text,
         page_count=page_count,
         status=status,
@@ -568,7 +585,8 @@ def delete_textbook(
     # DELETE → commit) left a ghost row pointing at a missing file when
     # commit failed. After commit succeeds, even an unlink failure is
     # benign — at worst a stray file on disk to clean up later.
-    file_path = Path(textbook.file_path) if textbook.file_path else None
+    should_delete_file = textbook.library_id is None and textbook.owns_file
+    file_path = Path(textbook.file_path) if should_delete_file and textbook.file_path else None
     db.delete(textbook)
     db.commit()
 
@@ -654,7 +672,8 @@ async def generate_course_from_textbooks(
     existing_lessons = db.query(LessonPlan).filter(
         LessonPlan.course_id == course_id,
     ).count()
-    if existing_lessons > 0:
+    has_generated_meta = bool((course.meta or {}).get("generated_lessons"))
+    if existing_lessons > 0 or has_generated_meta:
         raise HTTPException(
             status_code=409,
             detail=(
@@ -692,13 +711,7 @@ async def generate_course_from_textbooks(
     generator = CourseGenerator()
 
     # 获取用户的 API key
-    user_api_key = None
-    if current_user.encrypted_api_key:
-        from backend.core.security import decrypt_api_key
-        try:
-            user_api_key = decrypt_api_key(current_user.encrypted_api_key)
-        except Exception:
-            pass
+    config = get_effective_llm_config(current_user)
 
     try:
         result = await generator.generate(
@@ -708,9 +721,10 @@ async def generate_course_from_textbooks(
             target_level=course.target_level,
             custom_instructions=req.custom_instructions,
             target_days=req.target_days,
-            user_api_key=user_api_key,
-            default_provider=current_user.default_provider,
-            model=current_user.model,
+            user_api_key=config.api_key,
+            default_provider=config.provider,
+            model=config.model,
+            base_url=config.base_url,
         )
     except Exception as e:
         logger.error("课程生成失败: %s", e)
@@ -730,7 +744,9 @@ async def generate_course_from_textbooks(
     course.meta["generated_overview"] = result.get("overview", "")
     course.meta["concept_map"] = result.get("concept_map")
     # Backward-compat: also store generated_lessons in meta for old clients
-    course.meta["generated_lessons"] = [l.model_dump() for l in result.get("lessons", [])]
+    course.meta["generated_lessons"] = [
+        lesson.model_dump() for lesson in result.get("lessons", [])
+    ]
     from sqlalchemy.orm.attributes import flag_modified
     flag_modified(course, "meta")
 
@@ -764,7 +780,7 @@ async def generate_course_from_textbooks(
 
     # Convert GeneratedLesson → dict so Pydantic can construct
     # GeneratedLessonResponse (same fields, different Pydantic model).
-    lessons_data = [l.model_dump() for l in result.get("lessons", [])]
+    lessons_data = [lesson.model_dump() for lesson in result.get("lessons", [])]
 
     return CourseGenerateResponse(
         course_id=course_id,
@@ -914,15 +930,23 @@ async def generate_course_description(
         f"简介应该简洁有力，描述学习目标和预期收获，不要使用Markdown格式。"
     )
 
+    config = get_effective_llm_config(current_user)
+
     try:
         from backend.services.llm.manager import get_llm_manager
-        adapter = get_llm_manager().get_adapter()
+        adapter = get_llm_manager().get_adapter(
+            provider=config.provider,
+            model=config.model,
+            api_key=config.api_key,
+            base_url=config.base_url,
+        )
         response = await adapter.chat(
             messages=[{"role": "user", "content": prompt}],
+            system_prompt="你是课程设计助手，直接输出课程简介文本。",
             temperature=0.7,
             max_tokens=200,
         )
-        description = response.content.strip() if response and response.content else ""
+        description = response.strip() if response else ""
     except Exception as e:
         logger.warning("AI 生成课程简介失败，使用 fallback: %s", e)
         description = f"深入学习{domain}知识，从{current_level}逐步提升至{target_level}水平。"

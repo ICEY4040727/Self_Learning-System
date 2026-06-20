@@ -360,12 +360,9 @@ async def _build_start_response(
         greeting[:50] if greeting else None,
     )
 
-    scenes = dict(course.world.scenes or {}) if course.world and course.world.scenes else {}
     background_picture = None
     if course.world:
         background_picture = course.world.background_picture
-    if not background_picture:
-        background_picture = scenes.get("background_picture") or scenes.get("background")
 
     return {
         "session_id": session_id,
@@ -376,7 +373,6 @@ async def _build_start_response(
         "relationship": relationship,
         "greeting": greeting,
         "background_picture": background_picture,
-        "scenes": scenes,
         "sage": {
             "id": sage_character.id if sage_character else None,
             "name": sage_character.name if sage_character else None,
@@ -416,12 +412,10 @@ async def start_learning(
     # Reuse existing active session — BUT only if sage matches or no sage specified
     existing = _get_active_session(db, course_id, current_user.id)
 
-    if existing:
-        # 如果指定了 sage_id 但和已有 session 的 sage 不同 → 结束旧 session，创建新的
-        if requested_sage_id and existing.sage_character_id != requested_sage_id:
-            existing.ended_at = datetime.now(UTC)
-            db.commit()
-            existing = None  # fall through to create new session
+    if existing and requested_sage_id and existing.sage_character_id != requested_sage_id:
+        existing.ended_at = datetime.now(UTC)
+        db.commit()
+        existing = None  # fall through to create new session
 
     if existing:
         sage_character, traveler_character = _get_session_characters(db, existing)

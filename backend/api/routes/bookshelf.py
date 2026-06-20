@@ -6,19 +6,20 @@
 
 import logging
 import secrets
+from contextlib import suppress
 from datetime import datetime
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile
-from pydantic import BaseModel, ConfigDict
+from fastapi import APIRouter, Body, Depends, HTTPException, UploadFile
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
 from backend.api.routes.auth import get_current_user
 from backend.api.routes.textbook import (
     ALLOWED_EXTENSIONS,
-    MAX_FILE_SIZE,
     TextExtractionError,
     _extract_text,
+    _max_file_size,
     _read_with_limit,
     _safe_upload_filename,
 )
@@ -42,6 +43,7 @@ class BookshelfItemResponse(BaseModel):
     page_count: int | None = None
     status: str = "extracted"
     error_message: str | None = None
+    is_usable: bool = False
     title: str | None = None
     created_at: datetime | None = None
 
@@ -57,9 +59,10 @@ class BookshelfListResponse(BaseModel):
     page_count: int | None = None
     status: str = "extracted"
     error_message: str | None = None
+    is_usable: bool = False
     title: str | None = None
     created_at: datetime | None = None
-    linked_course_ids: list[int] = []
+    linked_course_ids: list[int] = Field(default_factory=list)
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -100,7 +103,7 @@ async def upload_to_bookshelf(
         )
 
     # 流式读取，带大小限制
-    content = await _read_with_limit(file, MAX_FILE_SIZE)
+    content = await _read_with_limit(file, _max_file_size())
 
     # 安全存储
     upload_root = _library_dir()
@@ -145,10 +148,8 @@ async def upload_to_bookshelf(
         db.refresh(item)
     except Exception:
         db.rollback()
-        try:
+        with suppress(OSError):
             file_path.unlink(missing_ok=True)
-        except OSError:
-            pass
         raise
 
     logger.info("书架教材上传成功: user_id=%d, library_id=%d, filename=%s",
@@ -173,8 +174,8 @@ def list_bookshelf(
         # 所以我们在 Textbook 表上加 library_id 字段来追踪关联）
         linked_courses = db.query(Textbook.course_id).filter(
             Textbook.user_id == current_user.id,
-            Textbook.file_path == item.file_path,
-        ).all()
+            Textbook.library_id == item.id,
+        ).distinct().order_by(Textbook.course_id).all()
         linked_course_ids = [c[0] for c in linked_courses]
 
         result.append(BookshelfListResponse(
@@ -206,6 +207,22 @@ def delete_from_bookshelf(
     ).first()
     if not item:
         raise HTTPException(status_code=404, detail="书架教材不存在")
+
+    linked_course_ids = [
+        row[0]
+        for row in db.query(Textbook.course_id).filter(
+            Textbook.user_id == current_user.id,
+            Textbook.library_id == item.id,
+        ).distinct().order_by(Textbook.course_id).all()
+    ]
+    if linked_course_ids:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "message": "教材已被课程引用，请先在课程中移除关联",
+                "linked_course_ids": linked_course_ids,
+            },
+        )
 
     file_path = Path(item.file_path) if item.file_path else None
     db.delete(item)
@@ -242,13 +259,13 @@ def link_textbook_to_course(
     if not lib_item:
         raise HTTPException(status_code=404, detail="书架教材不存在")
 
-    if lib_item.status == "error":
+    if not lib_item.is_usable:
         raise HTTPException(status_code=400, detail="教材文本提取失败，无法关联")
 
     # 检查是否已经关联
     existing = db.query(Textbook).filter(
         Textbook.course_id == course_id,
-        Textbook.file_path == lib_item.file_path,
+        Textbook.library_id == lib_item.id,
         Textbook.user_id == current_user.id,
     ).first()
     if existing:
@@ -258,10 +275,12 @@ def link_textbook_to_course(
     textbook = Textbook(
         course_id=course_id,
         user_id=current_user.id,
+        library_id=lib_item.id,
         filename=lib_item.filename,
         file_path=lib_item.file_path,
         file_size=lib_item.file_size,
         content_type=lib_item.content_type,
+        owns_file=False,
         extracted_text=lib_item.extracted_text,
         page_count=lib_item.page_count,
         status="extracted",
@@ -279,7 +298,7 @@ def link_textbook_to_course(
 @router.post("/courses/batch-link-textbooks")
 def batch_link_textbooks(
     course_id: int,
-    library_ids: list[int],
+    library_ids: list[int] = Body(...),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -304,13 +323,13 @@ def batch_link_textbooks(
         if not lib_item:
             raise HTTPException(status_code=404, detail=f"书架教材 {lib_id} 不存在")
 
-        if lib_item.status == "error":
+        if not lib_item.is_usable:
             raise HTTPException(status_code=400, detail=f"教材 '{lib_item.filename}' 文本提取失败，无法关联")
 
         # 检查重复
         existing = db.query(Textbook).filter(
             Textbook.course_id == course_id,
-            Textbook.file_path == lib_item.file_path,
+            Textbook.library_id == lib_item.id,
             Textbook.user_id == current_user.id,
         ).first()
         if existing:
@@ -320,16 +339,19 @@ def batch_link_textbooks(
         textbook = Textbook(
             course_id=course_id,
             user_id=current_user.id,
+            library_id=lib_item.id,
             filename=lib_item.filename,
             file_path=lib_item.file_path,
             file_size=lib_item.file_size,
             content_type=lib_item.content_type,
+            owns_file=False,
             extracted_text=lib_item.extracted_text,
             page_count=lib_item.page_count,
             status="extracted",
         )
         db.add(textbook)
-        results.append({"textbook_id": None, "library_id": lib_id, "skipped": False})
+        db.flush()
+        results.append({"textbook_id": textbook.id, "library_id": lib_id, "skipped": False})
 
     db.commit()
     return results
