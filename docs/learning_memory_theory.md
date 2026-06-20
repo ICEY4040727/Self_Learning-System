@@ -177,7 +177,7 @@ MSKT（Metacognitive Skills-driven Knowledge Tracing）论文的核心观点：�
   能做: 编写阶乘函数(0.8), 读递归代码(0.7)
   需练习: 编写树遍历(0.3)
 
-【⚠️ 误解】— 源自 ITS Perturbation Model
+【误解】— 源自 ITS Perturbation Model
   [moderate] 认为递归一定需要函数自调用（未纠正）
 
 【近期关键事件】— 源自 Episodic Memory
@@ -206,7 +206,7 @@ MSKT（Metacognitive Skills-driven Knowledge Tracing）论文的核心观点：�
 
 ### 为什么有些记忆随存档回滚，有些不回滚
 
-**随存档回滚的**（事实知识、误解、技能、交互摘要）：
+**随存档回滚的**（知识状态、程序性技能、误解、近期关键事件）：
 
 这些是**关于学习内容的记忆**——学生在特定时间点对特定主题的理解。从某个检查点分叉意味着"如果从那个时候重新来过"，所以这些记忆应该回到那个时候的状态。
 
@@ -220,18 +220,18 @@ MSKT（Metacognitive Skills-driven Knowledge Tracing）论文的核心观点：�
 
 但为了精确性，这些特征也带 `t_updated` 时间戳。分叉时间线中，如果某个特征是在检查点之后才被观察到的，那条时间线中不应该使用该特征（因为"在那个时候我们还不知道这一点"）。
 
+### 如何处理分支点合并
 ---
 
 ## 五、UserProfile 全局画像 — 跨世界特征聚合
 
 ### 5.1 设计定位
 
-根据设计决策，UserProfile 仅用于**用户成长展示**，不作为提示词注入内容。
 
 **目的**：
 - 让用户了解自己的学习风格和成长趋势
 - 提供成就感（看到自己进步）
-- 不干扰世界内教学逻辑和知者角色演绎
+
 
 ### 5.2 数据分类与计算
 
@@ -245,7 +245,7 @@ def compute_metacognition_trend(world_profiles: list[dict]) -> dict:
     计算元认知趋势 - 展示成长而非快照
     
     设计原则：
-    - 需要 ≥2 个世界的数据才能计算趋势
+    - 需要 ≥2 个世界的数据才能计算趋势 
     - 值可能是 "weak/moderate/strong"，需要归一化处理
     """
     MSKT_DIMENSIONS = ["planning", "monitoring", "regulating", "reflecting"]
