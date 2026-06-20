@@ -133,7 +133,20 @@ class TestWorldCRUD:
         assert resp.status_code == 200
         payload = resp.json()
         assert payload["background_picture"] == "/themes/academy.jpg"
-        assert payload["scenes"] == {}
+        assert "scenes" not in payload
+
+    def test_create_world_rejects_legacy_scenes_field(self, client, auth_headers):
+        resp = client.post(
+            "/api/worlds",
+            json={
+                "name": "Legacy Shell World",
+                "description": "legacy payload",
+                "scenes": {"background": "/themes/legacy.jpg"},
+            },
+            headers=auth_headers,
+        )
+
+        assert resp.status_code == 422
 
     def test_update_world_preserves_background_picture_contract(self, client, auth_headers):
         create = client.post(
@@ -162,7 +175,7 @@ class TestWorldCRUD:
         payload = update.json()
         assert payload["name"] == "Shell World Updated"
         assert payload["background_picture"] == "/themes/library.jpg"
-        assert payload["scenes"] == {}
+        assert "scenes" not in payload
 
     def test_partial_update_world_keeps_existing_background_picture(self, client, auth_headers):
         create = client.post(
@@ -310,14 +323,6 @@ class TestWorldCharacterCRUD:
             json={
                 "name": "雾港学院",
                 "description": "一座适合学习逻辑与表达的学院。",
-                "scenes": {
-                    "mood": ["安静", "理性"],
-                    "narrative": {
-                        "world_theme": "雾港学院",
-                        "learner_role": "新生",
-                        "sage_role": "学院导师",
-                    },
-                },
             },
             headers=auth_headers,
         )
@@ -370,6 +375,7 @@ class TestWorldCharacterCRUD:
         assert "图书馆入口" in payload["relationship_seed"]
         assert payload["world_greeting"].startswith("欢迎来到雾港学院")
         assert "雾港学院" in captured["messages"][0]["content"]
+        assert "一座适合学习逻辑与表达的学院。" in captured["messages"][0]["content"]
         assert "林问之" in captured["messages"][0]["content"]
 
 

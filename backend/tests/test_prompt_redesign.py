@@ -89,32 +89,42 @@ class TestPrioritySorting:
 
 
 class TestNarrativeModuleAssemble:
-    """验证 NarrativeModule 从 World.scenes 读取叙事配置"""
+    """验证 NarrativeModule 从 Course.meta 读取叙事配置"""
 
     def test_assemble_with_narrative_config(self, db_session):
         """有叙事配置时正确注入"""
-        from backend.models.models import World
+        from backend.models.models import Course, World
 
-        # 创建带叙事配置的世界
         world = World(
             user_id=1,
             name="赛博之城",
             description="测试世界",
-            scenes={
-                "narrative": {
-                    "world_theme": "赛博朋克黑客城市",
-                    "learner_role": "新晋黑客",
-                    "sage_role": "传奇黑客导师",
-                    "knowledge_metaphor": "编程概念=黑客技能",
-                    "progression_arc": "从街头混混到传说级黑客",
-                }
-            },
         )
         db_session.add(world)
         db_session.commit()
 
+        course = Course(
+            world_id=world.id,
+            name="赛博课程",
+            meta={
+                "course_narrative_plan": {
+                    "world": {"name": "赛博之城"},
+                    "route_bible": {"main_arc": "从街头混混到传说级黑客"},
+                    "narrative_input": {
+                        "world_theme": "赛博朋克黑客城市",
+                        "learner_role": "新晋黑客",
+                        "sage_role": "传奇黑客导师",
+                        "knowledge_metaphor": "编程概念=黑客技能",
+                        "progression_arc": "从街头混混到传说级黑客",
+                    },
+                }
+            },
+        )
+        db_session.add(course)
+        db_session.commit()
+
         module = NarrativeModule()
-        context = {"db": db_session, "world_id": world.id}
+        context = {"db": db_session, "course_id": course.id}
         result = module.assemble(context)
 
         assert result is not None
@@ -127,31 +137,40 @@ class TestNarrativeModuleAssemble:
 
     def test_assemble_with_ai_generated_wrapper(self, db_session):
         """兼容 narrative_input.ai_generated 结构"""
-        from backend.models.models import World
+        from backend.models.models import Course, World
 
         world = World(
             user_id=1,
             name="魔法学院",
             description="",
-            scenes={
-                "narrative_input": {
-                    "mode": "prompt",
-                    "user_prompt": "我想在魔法学院学魔法",
-                    "ai_generated": {
-                        "world_theme": "魔法学院",
-                        "learner_role": "新生",
-                        "sage_role": "大法师",
-                        "knowledge_metaphor": "知识=魔法",
-                        "progression_arc": "从学徒到大法师",
-                    },
-                }
-            },
         )
         db_session.add(world)
         db_session.commit()
 
+        course = Course(
+            world_id=world.id,
+            name="魔法课程",
+            meta={
+                "course_narrative_plan": {
+                    "narrative_input": {
+                        "mode": "prompt",
+                        "user_prompt": "我想在魔法学院学魔法",
+                        "ai_generated": {
+                            "world_theme": "魔法学院",
+                            "learner_role": "新生",
+                            "sage_role": "大法师",
+                            "knowledge_metaphor": "知识=魔法",
+                            "progression_arc": "从学徒到大法师",
+                        },
+                    }
+                }
+            },
+        )
+        db_session.add(course)
+        db_session.commit()
+
         module = NarrativeModule()
-        context = {"db": db_session, "world_id": world.id}
+        context = {"db": db_session, "course_id": course.id}
         result = module.assemble(context)
 
         assert result is not None
@@ -160,14 +179,46 @@ class TestNarrativeModuleAssemble:
 
     def test_assemble_no_narrative(self, db_session):
         """无叙事配置时返回 None"""
-        from backend.models.models import World
+        from backend.models.models import Course, World
 
-        world = World(user_id=1, name="空白世界", description="", scenes={})
+        world = World(user_id=1, name="空白世界", description="")
         db_session.add(world)
         db_session.commit()
 
+        course = Course(world_id=world.id, name="空白课程", meta={})
+        db_session.add(course)
+        db_session.commit()
+
         module = NarrativeModule()
-        context = {"db": db_session, "world_id": world.id}
+        context = {"db": db_session, "course_id": course.id}
+        result = module.assemble(context)
+
+        assert result is None
+
+    def test_assemble_ignores_legacy_world_plan_key(self, db_session):
+        """只写旧 world_plan 时不再注入课程叙事"""
+        from backend.models.models import Course, World
+
+        world = World(user_id=1, name="旧结构世界", description="测试")
+        db_session.add(world)
+        db_session.commit()
+
+        course = Course(
+            world_id=world.id,
+            name="旧结构课程",
+            meta={
+                "world_plan": {
+                    "narrative_input": {
+                        "world_theme": "不应再被读取",
+                    }
+                }
+            },
+        )
+        db_session.add(course)
+        db_session.commit()
+
+        module = NarrativeModule()
+        context = {"db": db_session, "course_id": course.id}
         result = module.assemble(context)
 
         assert result is None
@@ -181,26 +232,36 @@ class TestPromptBuilderIntegration:
 
     def test_dynamic_layer_includes_fixed_modules(self, db_session):
         """build_dynamic_layer 包含固定层模块"""
-        from backend.models.models import World
+        from backend.models.models import Course, World
 
         world = World(
             user_id=1,
             name="测试世界",
             description="一个测试世界",
-            scenes={
-                "narrative": {
-                    "world_theme": "测试世界主题",
-                    "sage_role": "测试导师",
+        )
+        db_session.add(world)
+        db_session.commit()
+
+        course = Course(
+            world_id=world.id,
+            name="测试课程",
+            meta={
+                "course_narrative_plan": {
+                    "narrative_input": {
+                        "world_theme": "测试世界主题",
+                        "sage_role": "测试导师",
+                    }
                 }
             },
         )
-        db_session.add(world)
+        db_session.add(course)
         db_session.commit()
 
         builder = PromptBuilder(db=db_session)
         context = {
             "db": db_session,
             "world_id": world.id,
+            "course_id": course.id,
             "session_id": 1,
             "learner_profile": None,
             "prev_emotion": None,
@@ -218,7 +279,7 @@ class TestPromptBuilderIntegration:
 
     def test_full_build_structure(self, db_session):
         """完整 build 包含静态层和动态层"""
-        from backend.models.models import Character, World
+        from backend.models.models import Character, Course, World, WorldCharacter
 
         char = Character(
             user_id=1,
@@ -232,19 +293,41 @@ class TestPromptBuilderIntegration:
             user_id=1,
             name="完整测试世界",
             description="测试",
-            scenes={
-                "narrative": {
-                    "world_theme": "完整测试主题",
+        )
+        db_session.add(world)
+        db_session.commit()
+
+        course = Course(
+            world_id=world.id,
+            name="完整测试课程",
+            meta={
+                "course_narrative_plan": {
+                    "narrative_input": {
+                        "world_theme": "完整测试主题",
+                    }
                 }
             },
         )
-        db_session.add(world)
+        db_session.add(course)
+        db_session.commit()
+
+        db_session.add(WorldCharacter(
+            world_id=world.id,
+            character_id=char.id,
+            role="sage",
+            is_primary=True,
+            world_title="世界导师",
+            world_background="这个世界中的测试背景",
+            relationship_seed="在图书馆门口第一次见面",
+            world_greeting="欢迎来到这个世界，我们从整体开始。",
+        ))
         db_session.commit()
 
         builder = PromptBuilder(db=db_session)
         context = {
             "db": db_session,
             "world_id": world.id,
+            "course_id": course.id,
             "session_id": 1,
             "learner_profile": None,
             "prev_emotion": None,
@@ -257,6 +340,9 @@ class TestPromptBuilderIntegration:
 
         # 静态层
         assert "测试Sage" in result
+        assert "这个世界中的测试背景" in result
+        assert "在图书馆门口第一次见面" in result
+        assert "一个测试角色" not in result
         assert "苏格拉底" in result
         # 动态层
         assert "【当前世界】" in result

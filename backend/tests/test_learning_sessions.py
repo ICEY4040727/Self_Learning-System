@@ -59,9 +59,9 @@ class TestCourseSessionRelationship:
         world_resp = client.post(
             "/api/worlds",
             json={
-                "name": "Session World with Scene",
+                "name": "Session World with Background",
                 "description": "world",
-                "scenes": {"default": "/scenes/academy.png"},
+                "background_picture": "/themes/academy.jpg",
             },
             headers=auth_headers,
         )
@@ -123,7 +123,8 @@ class TestCourseSessionRelationship:
         assert payload["greeting"] == "欢迎来到学院，今天我们先看整体结构。"
         assert payload["relationship_stage"] == "stranger"
         assert payload["relationship"]["dimensions"]["trust"] == 0.0
-        assert payload["scenes"] == {"default": "/scenes/academy.png"}
+        assert payload["background_picture"] == "/themes/academy.jpg"
+        assert "scenes" not in payload
         assert payload["sage_sprites"] == {"default": "/sprites/socrates-default.png"}
         assert payload["traveler_sprites"] == {"default": "/sprites/traveler-default.png"}
 
@@ -145,6 +146,7 @@ class TestCourseSessionRelationship:
         assert start_resp.status_code == 200
         payload = start_resp.json()
         assert payload["background_picture"] == "/themes/academy.jpg"
+        assert "scenes" not in payload
 
     @pytest.mark.skip(reason="knowledge-graph endpoint not yet implemented")
     def test_chat_updates_world_knowledge_graph(self, client, auth_headers):

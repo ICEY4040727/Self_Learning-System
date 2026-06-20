@@ -160,19 +160,20 @@ class TestWorldContextInjection:
             world_context="",
         )
 
-        assert "目标世界氛围" not in prompt
+        assert "目标世界说明" not in prompt
 
-    def test_world_context_contains_mood(self):
-        """When world has mood, it should appear in world_context."""
+    def test_world_context_contains_description(self):
+        """When world has description, it should appear in world_context."""
         from backend.api.routes.archive import PERSONA_GENERATE_PROMPT
 
         prompt = PERSONA_GENERATE_PROMPT.format(
             description="测试描述",
             inspiration_type="freeform",
-            world_context="目标世界氛围：温暖, 神秘。",
+            world_context="目标世界名称：雾港学院。目标世界说明：一座适合长期学习与讨论的学院。",
         )
 
-        assert "目标世界氛围：温暖, 神秘。" in prompt
+        assert "目标世界名称：雾港学院。" in prompt
+        assert "目标世界说明：一座适合长期学习与讨论的学院。" in prompt
 
 
 # Integration test fixtures
@@ -188,10 +189,11 @@ def mock_user():
 
 @pytest.fixture
 def mock_world():
-    """Create a mock world with scenes."""
+    """Create a mock world with the minimal world-shell contract."""
     world = MagicMock()
     world.id = 1
-    world.scenes = {"mood": ["温暖", "治愈"], "theme_preset": "academy"}
+    world.name = "雾港学院"
+    world.description = "一座适合长期学习与讨论的学院。"
     return world
 
 

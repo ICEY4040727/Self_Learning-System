@@ -50,9 +50,12 @@ class TestCourseSagesAPI:
         sages = resp.json()
         assert len(sages) >= 1
         assert any(s["id"] == sage_id for s in sages)
+        bound_sage = next(s for s in sages if s["id"] == sage_id)
+        assert bound_sage["relationshipStage"] == "stranger"
+        assert bound_sage["lastSessionTime"] is None
 
-    def test_get_course_sages_returns_meta_sage_ids(self, client, auth_headers):
-        """验证优先从 meta.sage_ids 获取"""
+    def test_get_course_sages_ignores_unbound_meta_sage_ids(self, client, auth_headers):
+        """课程 meta.sage_ids 只作为排序参考，未绑定到世界的角色应被忽略"""
         # 创建测试数据
         world_resp = client.post("/api/worlds", json={"name": "TestWorld2"}, headers=auth_headers)
         world_id = world_resp.json()["id"]
@@ -89,7 +92,7 @@ class TestCourseSagesAPI:
         sages = resp.json()
         sage_ids = [s["id"] for s in sages]
         assert sage1_id in sage_ids
-        assert sage2_id in sage_ids
+        assert sage2_id not in sage_ids
 
 
 class TestCourseSessionsAPI:
