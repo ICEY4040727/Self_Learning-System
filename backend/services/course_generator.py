@@ -110,6 +110,7 @@ class CourseGenerator:
         user_api_key: str | None = None,
         default_provider: str | None = None,
         model: str | None = None,
+        base_url: str | None = None,
     ) -> dict[str, Any]:
         """生成课程结构
 
@@ -140,6 +141,7 @@ class CourseGenerator:
             user_api_key=user_api_key,
             default_provider=default_provider,
             model=model,
+            base_url=base_url,
         )
 
         # 解析 JSON 结果
@@ -154,12 +156,16 @@ class CourseGenerator:
         user_api_key: str | None = None,
         default_provider: str | None = None,
         model: str | None = None,
+        base_url: str | None = None,
     ) -> str:
         """调用 LLM 获取生成结果"""
         from backend.services.llm.manager import get_llm_manager
 
         adapter = get_llm_manager().get_adapter(
-            provider=default_provider, model=model, api_key=user_api_key,
+            provider=default_provider,
+            model=model,
+            api_key=user_api_key,
+            base_url=base_url,
         )
         messages = [{"role": "user", "content": user_prompt}]
 

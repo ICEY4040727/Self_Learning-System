@@ -92,6 +92,7 @@ class MemoryFactsService:
         db: Session,
         sage_character_id: int,
         traveler_character: Character,
+        traveler_world_link=None,
         learner_profile: LearnerProfile | None = None,
     ) -> list[int]:
         """
@@ -138,15 +139,21 @@ class MemoryFactsService:
                 }],
             ))
 
-        # 学习背景
-        if traveler_character.background:
+        # 学习背景（优先使用世界级背景）
+        traveler_background = None
+        if traveler_world_link and getattr(traveler_world_link, "world_background", None):
+            traveler_background = traveler_world_link.world_background
+        elif traveler_character.background:
+            traveler_background = traveler_character.background
+
+        if traveler_background:
             memory_ids.extend(self.write_memory_facts(
                 db=db,
                 character_id=sage_character_id,
                 world_id=None,
                 memories=[{
                     "fact_type": self.FACT_TYPE_STUDENT_STATE,
-                    "content": f"学生背景: {traveler_character.background}",
+                    "content": f"学生背景: {traveler_background}",
                     "salience": 0.6,
                 }],
             ))

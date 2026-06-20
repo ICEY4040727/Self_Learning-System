@@ -34,6 +34,9 @@ PROVIDERS = load_providers()
 # Provider 映射，方便快速查找
 PROVIDERS_MAP: dict[str, ProviderInfo] = {p["value"]: p for p in PROVIDERS}
 
+# Providers that can be called without a configured API key.
+NO_API_KEY_PROVIDERS = {"local", "ollama", "lmstudio"}
+
 
 def get_provider_info(provider: str) -> ProviderInfo | None:
     """
@@ -72,6 +75,13 @@ def list_providers() -> list[ProviderInfo]:
 def list_provider_values() -> list[str]:
     """获取所有 Provider 值列表"""
     return [p["value"] for p in PROVIDERS]
+
+
+def provider_needs_api_key(provider: str | None) -> bool:
+    """Return whether a provider should require an API key."""
+    if not provider:
+        return True
+    return provider not in NO_API_KEY_PROVIDERS
 
 
 # ============================================================================
@@ -132,7 +142,8 @@ def get_provider_endpoint(provider: str, base_url: str | None = None) -> str:
         API 端点 URL
     """
     if base_url:
-        return base_url.rstrip("/") + "/v1"
+        base = base_url.rstrip("/")
+        return base if base.endswith("/v1") else f"{base}/v1"
 
     if provider == "claude":
         return ANTHROPIC_ENDPOINT

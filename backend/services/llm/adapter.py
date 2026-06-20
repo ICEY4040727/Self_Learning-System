@@ -22,10 +22,66 @@ from backend.services.llm.errors import (
     from_http_response,
 )
 from backend.services.llm.models import ModelInfo, get_model_info
-from backend.services.llm.providers import get_provider_endpoint
+from backend.services.llm.providers import get_provider_endpoint, provider_needs_api_key
 from backend.services.llm.types import Tool, ToolCall
 
 logger = logging.getLogger(__name__)
+
+
+def _normalize_openai_base_url(base_url: str | None) -> str | None:
+    """Normalize OpenAI-compatible gateway inputs to their /v1 API base."""
+    if not base_url:
+        return None
+    normalized = base_url.strip().split("?", 1)[0].split("#", 1)[0].rstrip("/")
+    if not normalized:
+        return None
+    lowered = normalized.lower()
+    marker = "/v1/"
+    if marker in lowered:
+        return normalized[:lowered.index(marker) + len("/v1")]
+    if normalized.endswith("/v1"):
+        return normalized
+    return f"{normalized}/v1"
+
+
+def _extract_model_ids(payload: object) -> list[str]:
+    """Extract model IDs from common OpenAI-compatible response shapes."""
+    candidates: list[str] = []
+
+    def push(value: object) -> None:
+        if isinstance(value, str):
+            item = value.strip()
+            if item:
+                candidates.append(item)
+
+    if isinstance(payload, list):
+        for item in payload:
+            if isinstance(item, str):
+                push(item)
+            elif isinstance(item, dict):
+                for key in ("id", "model", "name", "slug"):
+                    if key in item:
+                        push(item.get(key))
+                        break
+    elif isinstance(payload, dict):
+        for key in ("data", "models", "items", "result"):
+            value = payload.get(key)
+            if isinstance(value, list):
+                candidates.extend(_extract_model_ids(value))
+                break
+        else:
+            for key in ("id", "model", "name", "slug"):
+                if key in payload:
+                    push(payload.get(key))
+                    break
+
+    seen: set[str] = set()
+    unique: list[str] = []
+    for item in candidates:
+        if item not in seen:
+            seen.add(item)
+            unique.append(item)
+    return unique
 
 
 class LLMAdapter(ABC):
@@ -94,6 +150,10 @@ class LLMAdapter(ABC):
         """获取模型信息"""
         return get_model_info(self.model)
 
+    async def list_models(self, user_api_key: str | None = None) -> list[str]:
+        """列出可用模型。默认返回空列表。"""
+        return []
+
 
 class ClaudeAdapter(LLMAdapter):
     """Anthropic Claude API 适配器"""
@@ -117,6 +177,11 @@ class ClaudeAdapter(LLMAdapter):
     @property
     def model(self) -> str:
         return self._model
+
+    async def list_models(self, user_api_key: str | None = None) -> list[str]:
+        from backend.services.llm.models import CLAUDE_MODELS
+
+        return list(CLAUDE_MODELS.keys())
 
     def _get_api_key(self, user_api_key: str | None = None) -> str:
         """获取 API Key"""
@@ -300,6 +365,34 @@ class OpenAIAdapter(LLMAdapter):
     def model(self) -> str:
         return self._model
 
+    async def list_models(self, user_api_key: str | None = None) -> list[str]:
+        api_key = self._get_api_key(user_api_key)
+        if not api_key:
+            raise AuthError(self.provider, "API key not configured")
+
+        async with httpx.AsyncClient() as client:
+            try:
+                response = await client.get(
+                    f"{self._base_url}/models",
+                    headers={
+                        "Authorization": f"Bearer {api_key}",
+                        "content-type": "application/json",
+                    },
+                    timeout=self._timeout,
+                )
+                if response.status_code == 200:
+                    return _extract_model_ids(response.json())
+                error = from_http_response(self.provider, response.status_code, response.text)
+                raise error
+            except httpx.TimeoutException:
+                raise NetworkError(self.provider, f"Request timeout after {self._timeout}s")
+            except httpx.NetworkError as e:
+                raise NetworkError(self.provider, f"Network error: {str(e)}")
+            except LLMError:
+                raise
+            except Exception as e:
+                raise NetworkError(self.provider, f"Unexpected error: {str(e)}")
+
     def _get_api_key(self, user_api_key: str | None = None) -> str:
         """获取 API Key"""
         if user_api_key:
@@ -476,6 +569,11 @@ class LocalAdapter(LLMAdapter):
     def model(self) -> str:
         return self._model
 
+    async def list_models(self, user_api_key: str | None = None) -> list[str]:
+        from backend.services.llm.models import OLLAMA_MODELS
+
+        return list(OLLAMA_MODELS.keys())
+
     async def chat(
         self,
         messages: list[dict],
@@ -612,6 +710,32 @@ class OpenAICompatibleAdapter(LLMAdapter):
     @property
     def model(self) -> str:
         return self._model
+
+    async def list_models(self, user_api_key: str | None = None) -> list[str]:
+        api_key = user_api_key or self._api_key or ""
+        headers = {"content-type": "application/json"}
+        if api_key:
+            headers["Authorization"] = f"Bearer {api_key}"
+
+        async with httpx.AsyncClient() as client:
+            try:
+                response = await client.get(
+                    f"{self._base_url}/models",
+                    headers=headers,
+                    timeout=self._timeout,
+                )
+                if response.status_code == 200:
+                    return _extract_model_ids(response.json())
+                error = from_http_response(self.provider, response.status_code, response.text)
+                raise error
+            except httpx.TimeoutException:
+                raise NetworkError(self.provider, f"Request timeout after {self._timeout}s")
+            except httpx.NetworkError as e:
+                raise NetworkError(self.provider, f"Network error: {str(e)}")
+            except LLMError:
+                raise
+            except Exception as e:
+                raise NetworkError(self.provider, f"Unexpected error: {str(e)}")
 
     async def chat(
         self,
@@ -919,6 +1043,7 @@ def get_llm_adapter(
     from backend.core.config import get_settings
 
     settings = get_settings()
+    provider = provider or "claude"
 
     if provider == "claude":
         model = model or settings.llm_providers.get("claude", {}).get("model", "claude-3-5-sonnet-20241022")
@@ -928,7 +1053,9 @@ def get_llm_adapter(
     elif provider == "openai":
         model = model or settings.llm_providers.get("openai", {}).get("model", "gpt-4")
         api_key = api_key or settings.llm_providers.get("openai", {}).get("api_key")
-        return OpenAIAdapter(model=model, api_key=api_key)
+        configured_base_url = settings.llm_providers.get("openai", {}).get("base_url")
+        base_url = _normalize_openai_base_url(base_url or configured_base_url)
+        return OpenAIAdapter(model=model, api_key=api_key, base_url=base_url)
 
     elif provider == "local":
         model = model or "llama3"
@@ -958,11 +1085,13 @@ def get_llm_adapter(
             "fireworks": "accounts/fireworks/models/llama-v3p1-8b-instruct",
             "nebius": "meta-llama/Meta-Llama-3.1-8B-Instruct",
             "huggingface": "mistralai/Mistral-7B-Instruct-v0.3",
-            "custom": "default",
+            "custom": "gpt-4o-mini",
         }
         model = model or provider_cfg.get("model") or _KNOWN_MODELS.get(provider, "default")
         api_key = api_key or provider_cfg.get("api_key")
-        base_url = base_url or provider_cfg.get("base_url") or get_provider_endpoint(provider)
+        if not api_key and not provider_needs_api_key(provider):
+            api_key = "local"
+        base_url = _normalize_openai_base_url(base_url or provider_cfg.get("base_url")) or get_provider_endpoint(provider)
         return OpenAICompatibleAdapter(model=model, api_key=api_key, base_url=base_url)
 
 

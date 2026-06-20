@@ -70,9 +70,10 @@ class LLMManager:
 
     def get_adapter(
         self,
-        provider: str,
+        provider: str | None = None,
         model: str | None = None,
         api_key: str | None = None,
+        base_url: str | None = None,
     ) -> LLMAdapter:
         """获取 Provider 的适配器
 
@@ -83,8 +84,10 @@ class LLMManager:
         """
         # 当传入了 model 或 api_key 时，跳过缓存直接创建新实例
         # （不同用户可能有不同的 key/model 组合）
-        if model or api_key:
-            return get_llm_adapter(provider, model=model, api_key=api_key)
+        provider = provider or self.default_provider
+
+        if model or api_key or base_url:
+            return get_llm_adapter(provider, model=model, api_key=api_key, base_url=base_url)
 
         if provider not in self._adapters:
             self._adapters[provider] = get_llm_adapter(provider)

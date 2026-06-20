@@ -137,6 +137,8 @@ class DynamicAnalyzer:
         text: str,
         user_api_key: str = None,
         provider: str = None,
+        model: str | None = None,
+        base_url: str | None = None,
     ) -> dict:
         """
         Analyze emotion from text.
@@ -148,7 +150,13 @@ class DynamicAnalyzer:
         """
         if user_api_key and provider:
             try:
-                result = await self._llm_analyze(text, user_api_key, provider)
+                result = await self._llm_analyze(
+                    text,
+                    user_api_key,
+                    provider,
+                    model=model,
+                    base_url=base_url,
+                )
                 if result:
                     return result
             except Exception as e:
@@ -160,12 +168,17 @@ class DynamicAnalyzer:
     # LLM-based analysis
     # ------------------------------------------------------------------
     async def _llm_analyze(
-        self, text: str, user_api_key: str, provider: str
+        self,
+        text: str,
+        user_api_key: str,
+        provider: str,
+        model: str | None = None,
+        base_url: str | None = None,
     ) -> dict | None:
         """Call LLM for structured emotion classification."""
         from backend.services.llm.adapter import get_llm_adapter
 
-        adapter = get_llm_adapter(provider)
+        adapter = get_llm_adapter(provider, model=model, api_key=user_api_key, base_url=base_url)
         prompt = EMOTION_ANALYSIS_PROMPT + text[:500]
 
         response = await adapter.chat(

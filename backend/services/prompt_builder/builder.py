@@ -121,11 +121,32 @@ class PromptBuilder:
 
         return None
 
+    def _get_world_character_link(self, character, world_id: int | None, db=None):
+        """Resolve the role instance for this character in the current world."""
+        if character is None or not world_id:
+            return None
+
+        target_db = db or self.db
+        if target_db is None:
+            return None
+
+        from backend.models.models import WorldCharacter
+
+        character_id = getattr(character, "id", None)
+        if not character_id:
+            return None
+
+        return target_db.query(WorldCharacter).filter(
+            WorldCharacter.world_id == world_id,
+            WorldCharacter.character_id == character_id,
+        ).first()
+
     def build_static_layer(
         self,
         character,
         traveler_character=None,
         db=None,
+        world_id: int | None = None,
     ) -> str:
         """构建静态层
 
@@ -141,15 +162,32 @@ class PromptBuilder:
 
         # 1. Teacher Persona - 从 Character 获取信息
         char = self._get_character(character, db)
+        char_world_link = self._get_world_character_link(char, world_id, db)
+        teacher_relationship_seed = None
 
         if char:
             # 角色身份（必填）
             parts.append(f"你是 {char.name}")
 
-            # 注入 background（角色背景故事）
-            background = getattr(char, 'background', None)
+            # 注入世界内身份
+            world_title = getattr(char_world_link, "world_title", None) if char_world_link else None
+            if world_title:
+                parts.append(f"你在当前世界中的身份: {world_title}")
+
+            # 注入世界级 background；Character.background 只作为旧数据兜底
+            background = (
+                getattr(char_world_link, "world_background", None)
+                if char_world_link
+                else None
+            ) or getattr(char, 'background', None)
             if background:
                 parts.append(background)
+
+            # 注入世界内关系起点
+            relationship_seed = getattr(char_world_link, "relationship_seed", None) if char_world_link else None
+            if relationship_seed:
+                teacher_relationship_seed = relationship_seed
+                parts.append(f"你和学习者在当前世界中的相识前提: {relationship_seed}")
 
             # 注入 personality（性格特点）
             personality = getattr(char, 'personality', None)
@@ -204,12 +242,23 @@ class PromptBuilder:
 
         # 4. Traveler 角色信息（可选）
         if traveler_character:
+            traveler_world_link = self._get_world_character_link(traveler_character, world_id, db)
             name = getattr(traveler_character, "name", "学习者")
             parts.append(f"""【学习者身份】
 用户扮演的角色是 "{name}"。""")
-            background = getattr(traveler_character, "background", None)
+            world_title = getattr(traveler_world_link, "world_title", None) if traveler_world_link else None
+            if world_title:
+                parts.append(f"学习者在当前世界中的身份: {world_title}")
+            background = (
+                getattr(traveler_world_link, "world_background", None)
+                if traveler_world_link
+                else None
+            ) or getattr(traveler_character, "background", None)
             if background:
                 parts.append(f"角色背景: {background}")
+            relationship_seed = getattr(traveler_world_link, "relationship_seed", None) if traveler_world_link else None
+            if relationship_seed and relationship_seed != teacher_relationship_seed:
+                parts.append(f"学习者与导师的世界相识前提: {relationship_seed}")
             tags = getattr(traveler_character, "tags", None)
             if tags and isinstance(tags, (list, tuple)):
                 parts.append(f"学习风格: {', '.join(str(t) for t in tags)}")
@@ -324,7 +373,12 @@ class PromptBuilder:
         """
         # 从 context 中获取 db session
         db = context.get("db")
-        static = self.build_static_layer(character, traveler_character, db)
+        static = self.build_static_layer(
+            character,
+            traveler_character,
+            db,
+            world_id=context.get("world_id"),
+        )
         dynamic = self.build_with_fallback(scene, context)
         return f"{static}\n\n---\n\n{dynamic}"
 
