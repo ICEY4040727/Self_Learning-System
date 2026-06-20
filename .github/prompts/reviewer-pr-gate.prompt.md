@@ -28,6 +28,11 @@ Blocking rules:
 - Missing tests for changed behavior
 - Harmful style/naming inconsistency
 - Architecture-inferior but runnable choice
+- Direct assignment to User LLM columns outside `backend/services/user_llm_settings.py`
+  (fields: default_provider, encrypted_api_key, llm_provider_settings, llm_base_url,
+  model, temperature, max_tokens on User). Offline/data-repair scripts must call
+  `update_provider_settings()` / `update_generation_params()`. Run
+  `python scripts/check_user_llm_direct_writes.py` when reviewing backend changes.
 
 Escalation:
 

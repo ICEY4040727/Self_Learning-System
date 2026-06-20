@@ -51,6 +51,11 @@ Request changes (blocking) for any of the following:
 - Missing tests for changed logic, even when manual behavior appears correct.
 - Code style or naming inconsistency that harms repository consistency.
 - Technically runnable but architecture-inferior choices that increase long-term cost.
+- Direct assignment to User LLM columns outside `backend/services/user_llm_settings.py`
+  (`default_provider`, `encrypted_api_key`, `llm_provider_settings`, `llm_base_url`,
+  `model`, `temperature`, `max_tokens`). Business routes and offline scripts must use
+  `update_provider_settings()` / `update_generation_params()`. See CONTRIBUTING.md
+  § User LLM 设置写入规范; verify with `python scripts/check_user_llm_direct_writes.py`.
 
 ## Comment Language and Tone
 

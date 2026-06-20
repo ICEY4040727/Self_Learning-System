@@ -10,9 +10,15 @@
 - [ ] 已评估回归风险
 - [ ] 已检查兼容性（接口/配置/数据）
 - [ ] 无无关改动混入
+- [ ] 未在业务层/脚本中直接赋值 User LLM 字段（须走 `user_llm_settings.update_*`；可运行 `python scripts/check_user_llm_direct_writes.py`）
 
 ## Reviewer Focus
-- [高风险点 1]
+- [ ] User LLM 字段是否存在绕过 write gateway 的直接 ORM 赋值（出现即 request changes）
+
+### 自查项 - LLM 用户配置写入规范
+- [ ] 未直接赋值 user.default_provider / model / encrypted_api_key / llm_provider_settings / temperature / max_tokens
+- [ ] 所有LLM配置更新统一使用 update_provider_settings / update_generation_params
+- [ ] 仅 tests 目录 fixture 允许裸写，业务代码、scripts 不允许直接ORM赋值
 
 ## Linked Issues
 Closes #N
