@@ -37,6 +37,10 @@ chroma_data/
 
 # User LLM static-scan scratch dirs
 .pytest_scan_tmp/
+backend/tests/user_llm/_scan_tmp/
+
+# Local dev process markers
+.backend-dev.pid
 
 # Save files (runtime generated)
 saves/
