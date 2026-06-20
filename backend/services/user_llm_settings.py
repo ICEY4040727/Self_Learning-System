@@ -163,7 +163,6 @@ def _persist_provider_json_backfill(session: Session, user: User, backfill: Lega
     if current is None:
         return False
 
-    trace_id = ""
     with session.no_autoflush, authorized_user_llm_write(
         source="persist_legacy_backfill",
         user_id=user.id,
