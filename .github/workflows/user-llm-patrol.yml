@@ -16,6 +16,24 @@ on:
 jobs:
   user-llm-consistency-patrol:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: selflearn_patrol
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/selflearn_patrol
+      SECRET_KEY: ci-user-llm-patrol-secret
+      TESTING: "1"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -30,10 +48,6 @@ jobs:
         run: |
           cd backend
           PYTHONPATH=.. alembic upgrade head
-        env:
-          DATABASE_URL: "sqlite:///../.ci-user-llm-patrol.db"
-          SECRET_KEY: "ci-user-llm-patrol-secret"
-          TESTING: "1"
       - name: Run User LLM consistency patrol
         run: |
           cd backend
@@ -47,7 +61,3 @@ jobs:
             PATROL_ARGS="--sql --repair --fail-on-issues"
           fi
           PYTHONPATH=.. python -m backend.scripts.audit_user_llm_consistency_job $PATROL_ARGS
-        env:
-          DATABASE_URL: "sqlite:///../.ci-user-llm-patrol.db"
-          SECRET_KEY: "ci-user-llm-patrol-secret"
-          TESTING: "1"
