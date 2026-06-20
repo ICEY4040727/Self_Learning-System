@@ -33,7 +33,7 @@ test('settings page only persists backend fields via /api/settings', async ({ pa
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify({ default_provider: 'claude' }),
+        body: JSON.stringify({ default_provider: 'claude', version: 0 }),
       })
       return
     }
@@ -60,9 +60,18 @@ test('settings page only persists backend fields via /api/settings', async ({ pa
 
   await expect(page.getByText('后端设置保存成功。')).toBeVisible()
   expect(putPayload).not.toBeNull()
-  expect(Object.keys(putPayload).sort()).toEqual(['api_key', 'default_provider'])
+  expect(Object.keys(putPayload).sort()).toEqual([
+    'api_key',
+    'base_url',
+    'default_provider',
+    'max_tokens',
+    'model',
+    'temperature',
+    'version',
+  ])
   expect(putPayload.default_provider).toBe('openai')
   expect(putPayload.api_key).toBe('sk-test-148')
+  expect(putPayload.model).toBeDefined()
   await page.screenshot({ path: `${EVIDENCE_DIR}/01-settings-backend-save.png`, fullPage: true })
 })
 
@@ -78,7 +87,7 @@ test('local preference toggles persist via localStorage without backend PUT', as
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify({ default_provider: 'claude' }),
+        body: JSON.stringify({ default_provider: 'claude', version: 0 }),
       })
       return
     }

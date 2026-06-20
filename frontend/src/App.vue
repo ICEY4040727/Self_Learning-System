@@ -14,7 +14,7 @@
  * Root component
  * Issue #27 + #33: 统一 Toast 通知系统
  */
-import ToastContainer from '@/components/ToastContainer.vue'
+import ToastContainer from '@/shared/components/ToastContainer.vue'
 </script>
 
 <style>

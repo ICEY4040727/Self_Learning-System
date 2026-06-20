@@ -27,14 +27,44 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Forbid direct User LLM column writes
+        run: python scripts/check_user_llm_direct_writes.py
       - uses: astral-sh/ruff-action@v3
         with:
           src: backend
           args: check --config backend/pyproject.toml --ignore F401 --ignore I001 --ignore E402 --ignore B904 --ignore F821
 
-  backend-test:
+  user-llm-unit:
     runs-on: ubuntu-latest
     needs: lint
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: astral-sh/setup-uv@v3
+      - name: Install dependencies
+        run: |
+          cd backend
+          uv pip install -r requirements-dev.txt --system
+      - name: Run User LLM risk unit tests (no skips)
+        run: |
+          cd backend
+          PYTHONPATH=.. pytest tests/user_llm/ \
+            --ignore=tests/user_llm/test_risk3_stress.py \
+            -v --tb=short
+        env:
+          DATABASE_URL: "sqlite://"
+          SECRET_KEY: "test-secret-key-for-ci"
+          TESTING: "1"
+          PYTEST_FAIL_ON_SKIP: "1"
+
+  backend-test:
+    runs-on: ubuntu-latest
+    needs: [lint, user-llm-unit]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -153,6 +183,8 @@ jobs:
           cat docker-health.json
           docker compose logs backend --tail=120 > docker-backend.log
           docker compose logs frontend --tail=120 > docker-frontend.log
+          docker compose logs user-llm-patrol --tail=40 > docker-user-llm-patrol.log
+          grep -q "User LLM patrol scheduler active" docker-user-llm-patrol.log
       - name: Upload docker smoke artifacts
         if: always()
         uses: actions/upload-artifact@v4
@@ -163,6 +195,7 @@ jobs:
             docker-health.json
             docker-backend.log
             docker-frontend.log
+            docker-user-llm-patrol.log
           if-no-files-found: warn
       - name: Teardown compose stack
         if: always()

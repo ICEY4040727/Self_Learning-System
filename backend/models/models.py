@@ -24,11 +24,11 @@ def _utcnow():
 
 # Relationship stage labels (shared across routes)
 RELATIONSHIP_STAGE_LABELS = {
-    "stranger": "初识",
-    "acquaintance": "相识",
-    "friend": "朋友",
-    "mentor": "导师",
-    "partner": "伙伴",
+    "stranger": "萍水相逢",
+    "acquaintance": "点头之交",
+    "friend": "一见如故",
+    "mentor": "亦师亦友",
+    "partner": "来日方长",
 }
 
 
@@ -52,14 +52,19 @@ class User(Base):
     username = Column(String(50), unique=True, index=True, nullable=False)
     password_hash = Column(String(255), nullable=False)
     role = Column(String(20), default="student")
+    
     encrypted_api_key = Column(String(255), nullable=True)
     default_provider = Column(String(50), nullable=True)
     llm_provider_settings = Column(JSON, nullable=True, default=dict)
+    
     temperature = Column(Float, nullable=True, default=0.7)
     max_tokens = Column(Integer, nullable=True, default=2048)
     model = Column(String(100), nullable=True)
     llm_base_url = Column(String(500), nullable=True)
+    version = Column(Integer, nullable=False, default=0, server_default="0")
     created_at = Column(DateTime, default=_utcnow)
+
+    __mapper_args__ = {"version_id_col": version}
 
     worlds = orm_relationship("World", back_populates="user", cascade="all, delete-orphan")
     characters = orm_relationship("Character", back_populates="user", cascade="all, delete-orphan")

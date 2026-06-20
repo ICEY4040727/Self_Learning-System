@@ -3,6 +3,7 @@ set -e
 
 echo "Running database migrations..."
 cd /app/backend
+export PYTHONPATH=/app
 if ! alembic upgrade head 2>&1; then
     echo "⚠️ Alembic migration failed, falling back to create_all..."
     cd /app

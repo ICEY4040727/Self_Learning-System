@@ -1,0 +1,56 @@
+name: User LLM Stress
+
+on:
+  schedule:
+    # 04:00 Asia/Shanghai (UTC+8) — after consistency patrol
+    - cron: "0 20 * * *"
+  workflow_dispatch:
+
+jobs:
+  user-llm-stress:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: selflearn_stress
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: astral-sh/setup-uv@v3
+      - name: Install dependencies
+        run: |
+          cd backend
+          uv pip install -r requirements-dev.txt --system
+      - name: Initialize PostgreSQL schema
+        run: |
+          cd backend
+          PYTHONPATH=.. alembic upgrade head
+        env:
+          DATABASE_URL: "postgresql://postgres:postgres@localhost:5432/selflearn_stress"
+          SECRET_KEY: "ci-user-llm-stress-secret"
+          TESTING: "1"
+      - name: Apply PostgreSQL audit DDL (optional observability)
+        run: |
+          PGPASSWORD=postgres psql -h localhost -U postgres -d selflearn_stress \
+            -f backend/db/postgres/user_llm_audit.sql
+      - name: Run multithread + PostgreSQL trigger stress tests
+        run: |
+          cd backend
+          PYTHONPATH=.. pytest tests/user_llm/test_risk3_stress.py -v --tb=short
+        env:
+          DATABASE_URL: "postgresql://postgres:postgres@localhost:5432/selflearn_stress"
+          SECRET_KEY: "ci-user-llm-stress-secret"
+          TESTING: "1"
+          USER_LLM_STRESS: "1"

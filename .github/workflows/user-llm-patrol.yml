@@ -1,0 +1,53 @@
+name: User LLM Patrol
+
+on:
+  schedule:
+    # 03:00 Asia/Shanghai (UTC+8)
+    - cron: "0 19 * * *"
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Scan only (no repair)"
+        type: boolean
+        default: true
+
+jobs:
+  user-llm-consistency-patrol:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: astral-sh/setup-uv@v3
+      - name: Install dependencies
+        run: |
+          cd backend
+          uv pip install -r requirements-dev.txt --system
+      - name: Initialize database
+        run: |
+          cd backend
+          PYTHONPATH=.. alembic upgrade head
+        env:
+          DATABASE_URL: "sqlite:///../.ci-user-llm-patrol.db"
+          SECRET_KEY: "ci-user-llm-patrol-secret"
+          TESTING: "1"
+      - name: Run User LLM consistency patrol
+        run: |
+          cd backend
+          if [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            PATROL_ARGS="--sql --fail-on-issues"
+          elif [ "${{ github.event_name }}" = "schedule" ]; then
+            PATROL_ARGS="--sql --repair --fail-on-issues"
+          elif [ "${{ inputs.dry_run }}" = "true" ]; then
+            PATROL_ARGS="--sql --dry-run --fail-on-issues"
+          else
+            PATROL_ARGS="--sql --repair --fail-on-issues"
+          fi
+          PYTHONPATH=.. python -m backend.scripts.audit_user_llm_consistency_job $PATROL_ARGS
+        env:
+          DATABASE_URL: "sqlite:///../.ci-user-llm-patrol.db"
+          SECRET_KEY: "ci-user-llm-patrol-secret"
+          TESTING: "1"

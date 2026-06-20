@@ -13,7 +13,8 @@ services:
     ports:
       - "8000:8000"
     environment:
-      DATABASE_URL: sqlite:///./data/socratic_learning.db
+      # Absolute path: keep alembic + runtime on the same SQLite file in /app/data
+      DATABASE_URL: sqlite:////app/data/socratic_learning.db
       SECRET_KEY: ${SECRET_KEY:-change-me-in-production}
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost}
       SENTRY_DSN: ${SENTRY_DSN:-}
@@ -27,6 +28,27 @@ services:
       timeout: 5s
       retries: 5
       start_period: 15s
+    restart: unless-stopped
+
+  user-llm-patrol:
+    build: ./backend
+    entrypoint: ["/app/backend/patrol-entrypoint.sh"]
+    env_file:
+      - .env
+    environment:
+      # Absolute path: keep alembic + runtime on the same SQLite file in /app/data
+      DATABASE_URL: sqlite:////app/data/socratic_learning.db
+      SECRET_KEY: ${SECRET_KEY:-change-me-in-production}
+      USER_LLM_PATROL_RUN_AT: ${USER_LLM_PATROL_RUN_AT:-03:00}
+      USER_LLM_PATROL_ARGS: ${USER_LLM_PATROL_ARGS:-"--sql --repair --fail-on-issues"}
+      USER_LLM_PATROL_RUN_ON_START: ${USER_LLM_PATROL_RUN_ON_START:-0}
+      USER_LLM_PATROL_ALERT_WEBHOOK: ${USER_LLM_PATROL_ALERT_WEBHOOK:-}
+      USER_LLM_PATROL_SECRET: ${USER_LLM_PATROL_SECRET:-}
+    volumes:
+      - app_data:/app/data
+    depends_on:
+      backend:
+        condition: service_healthy
     restart: unless-stopped
 
 volumes:

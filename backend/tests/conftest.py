@@ -15,6 +15,7 @@ from sqlalchemy.pool import StaticPool
 
 from backend.db.database import Base, get_db
 from backend.main import app
+from backend.services.user_llm_write_guard import register_user_llm_write_guards
 
 
 
@@ -30,8 +31,22 @@ TestSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
 @pytest.fixture(autouse=True)
+def bind_patrol_session_local():
+    """Read-heal uses SessionLocal in a background thread; point it at the test DB."""
+    import backend.db.database as db_module
+
+    original_factory = db_module.SessionLocal
+    db_module.SessionLocal = TestSessionLocal
+    try:
+        yield
+    finally:
+        db_module.SessionLocal = original_factory
+
+
+@pytest.fixture(autouse=True)
 def db_session():
     """Create tables before each test, drop after."""
+    register_user_llm_write_guards()
     Base.metadata.create_all(bind=engine)
     session = TestSessionLocal()
     try:

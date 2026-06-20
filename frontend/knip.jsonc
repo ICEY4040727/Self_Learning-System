@@ -1,0 +1,15 @@
+{
+  "$schema": "https://unpkg.com/knip@latest/schema.json",
+  "entry": [
+    "index.html",
+    "src/main.ts",
+    "src/App.vue",
+    "src/app/router/index.ts",
+    "e2e/**/*.spec.mjs"
+  ],
+  "project": [
+    "src/**/*.{ts,tsx,vue,js,mjs}",
+    "e2e/**/*.spec.mjs"
+  ]
+
+}

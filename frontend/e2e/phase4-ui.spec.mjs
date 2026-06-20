@@ -34,7 +34,7 @@ async function mockLearningApis(page) {
             history: [],
           },
           greeting: '准备好开始学习了吗？',
-          scenes: { default: '/scenes/academy.png' },
+          background_picture: '/themes/academy.jpg',
           sage_sprites: { default: '/sprites/sage.png' },
           traveler_sprites: { default: '/sprites/traveler.png' },
         }),

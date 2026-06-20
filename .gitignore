@@ -35,6 +35,9 @@ npm-debug.log*
 # ChromaDB local data
 chroma_data/
 
+# User LLM static-scan scratch dirs
+.pytest_scan_tmp/
+
 # Save files (runtime generated)
 saves/
 

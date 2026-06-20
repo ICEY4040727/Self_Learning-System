@@ -36,6 +36,10 @@ class Settings(BaseSettings):
     # Sentry
     sentry_dsn: str = ""
 
+    # User LLM patrol alerts (Feishu custom bot webhook)
+    user_llm_patrol_alert_webhook: str = ""
+    user_llm_patrol_secret: str = ""
+
     # Features
     features_voice_enabled: bool = False
 
@@ -46,6 +50,7 @@ class Settings(BaseSettings):
     # /static mount in main.py never serves user-uploaded files. Access goes
     # through the auth-protected GET /api/textbooks/{id}/file endpoint.
     upload_dir: str = "./uploads"
+    textbook_max_upload_size_bytes: int = 100 * 1024 * 1024
 
     # Application version (single source of truth)
     app_version: str = "1.0.0"

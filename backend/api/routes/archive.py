@@ -2,11 +2,13 @@ from datetime import UTC, datetime
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile
-from pydantic import BaseModel, ConfigDict, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import func as sa_func
 from sqlalchemy.orm import Session
+from sqlalchemy.orm.exc import StaleDataError
 
 from backend.api.routes.auth import get_current_user
+from backend.core.conflicts.user_llm_settings import raise_settings_conflict_http
 from backend.db.database import get_db
 from backend.models import models as models_module
 from backend.models.models import (
@@ -25,8 +27,10 @@ from backend.models.models import (
 from backend.services.character_llm_settings import normalize_character_llm_settings
 from backend.services.user_llm_settings import (
     get_effective_llm_config,
+    lock_user_for_update,
     normalize_base_url,
     serialize_provider_settings,
+    update_generation_params,
     update_provider_settings,
 )
 from backend.services import spaced_repetition
@@ -52,24 +56,20 @@ router = APIRouter()
 _world_gen_cooldowns: dict[int, float] = {}
 _WORLD_GEN_COOLDOWN = 10  # seconds
 
-WORLD_GENERATE_PROMPT = """你是一个世界构建师。用户描述了他们想要的学习世界，请生成完整的世界设定。
+WORLD_GENERATE_PROMPT = """你是一个世界构建师。用户描述了他们想要的学习世界，请生成世界壳建议。
 
 用户描述：{description}
 
 请严格按 JSON 格式输出：
 {{
   "name_suggestion": "世界名称（4-10字）",
-  "description": "世界简介（20-60字，描述这个世界的学习氛围）",
-  "theme_preset": "academy|library|laboratory|forest|ruins|city|space|ocean",
-  "mood_tags": ["标签1", "标签2", "标签3"],
-  "bgm_suggestion": "silent|classical|ambient|lofi|nature|epic|jazz",
-  "world_detail": "详细的世界背景描述（50-100字，用于 AI 导师了解世界设定）"
+  "description": "世界说明（60-160字，描述这个世界为什么适合长期学习）",
+  "background_picture": "默认背景图路径，例如 /themes/academy.jpg"
 }}
 
 注意：
-- theme_preset 必须是以上选项之一
-- mood_tags 选 2-4 个氛围关键词
-- 世界是用于学习的虚拟空间，风格可以多样
+- 世界是用于学习的长期容器，不是剧情简介
+- background_picture 只返回单个默认背景图路径
 - 直接输出 JSON，不要任何推理、思考、解释或额外内容
 - 不要输出思考过程，只输出最终 JSON"""
 
@@ -82,10 +82,7 @@ class WorldGenerateRequest(BaseModel):
 class WorldGenerateResponse(BaseModel):
     name_suggestion: str
     description: str
-    theme_preset: str
-    mood_tags: list[str]
-    bgm_suggestion: str
-    world_detail: str
+    background_picture: str | None = None
 
 
 # Phase 1.5 DD1: PERSONA_TEMPLATES 保留用于提示词构建，不再用于 TeacherPersona 创建
@@ -183,19 +180,24 @@ class WorldCreate(BaseModel):
     name: str
     description: str | None = None
     background_picture: str | None = None
-    scenes: dict | None = None
+
+    model_config = ConfigDict(extra="forbid")
 
 
 class WorldUpdate(BaseModel):
     name: str | None = None
     description: str | None = None
     background_picture: str | None = None
-    scenes: dict | None = None
+
+    model_config = ConfigDict(extra="forbid")
 
 
-class WorldResponse(WorldCreate):
+class WorldResponse(BaseModel):
     id: int
     user_id: int
+    name: str
+    description: str | None = None
+    background_picture: str | None = None
     sages: list[SageInfo] | None = None
     travelers: list[SageInfo] | None = None
     stageLabel: str | None = None
@@ -206,10 +208,7 @@ class WorldResponse(WorldCreate):
 
 
 def _extract_world_background_picture(world: World) -> str | None:
-    if world.background_picture:
-        return world.background_picture
-    scenes = world.scenes or {}
-    return scenes.get("background_picture") or scenes.get("background")
+    return world.background_picture
 
 
 class WorldCharacterCreate(BaseModel):
@@ -290,35 +289,9 @@ WORLD_CHARACTER_CONTEXT_GENERATE_PROMPT = """你是一个学习世界的角色�
 
 
 def _world_context_for_character_generation(world: World) -> str:
-    scenes = world.scenes or {}
     parts = [f"世界名称: {world.name}"]
     if world.description:
         parts.append(f"世界简介: {world.description}")
-
-    mood = scenes.get("mood") or scenes.get("mood_tags")
-    if mood:
-        mood_text = "、".join(mood) if isinstance(mood, list) else str(mood)
-        parts.append(f"氛围: {mood_text}")
-
-    theme = scenes.get("theme_preset") or scenes.get("theme")
-    if theme:
-        parts.append(f"主题风格: {theme}")
-
-    world_detail = scenes.get("world_detail")
-    if world_detail:
-        parts.append(f"世界背景: {world_detail}")
-
-    narrative = scenes.get("narrative") or scenes.get("narrative_input")
-    if isinstance(narrative, dict) and "ai_generated" in narrative:
-        narrative = narrative.get("ai_generated")
-    if isinstance(narrative, dict):
-        narrative_parts = []
-        for key in ("world_theme", "learner_role", "sage_role", "knowledge_metaphor", "progression_arc"):
-            value = narrative.get(key)
-            if value:
-                narrative_parts.append(f"{key}: {value}")
-        if narrative_parts:
-            parts.append("叙事框架: " + "；".join(narrative_parts))
 
     return "\n".join(parts)
 
@@ -763,7 +736,6 @@ def _build_world_response(world: World, db: Session, current_user_id: int = None
         name=world.name,
         description=world.description,
         background_picture=_extract_world_background_picture(world),
-        scenes=world.scenes,
         sages=sages if sages else None,
         travelers=travelers if travelers else None,
         stageLabel=stage_label,
@@ -783,7 +755,6 @@ def create_world(
         name=world.name,
         description=world.description,
         background_picture=(world.background_picture or "").strip() or None,
-        scenes=world.scenes or {},
     )
     db.add(db_world)
     db.flush()
@@ -842,8 +813,6 @@ def update_world(
         db_world.description = data["description"]
     if "background_picture" in data:
         db_world.background_picture = (data["background_picture"] or "").strip() or None
-    if "scenes" in data:
-        db_world.scenes = data["scenes"] or {}
     db.commit()
     db.refresh(db_world)
     return _build_world_response(db_world, db, current_user.id)
@@ -922,10 +891,7 @@ async def generate_world(
         return WorldGenerateResponse(
             name_suggestion=data.get("name_suggestion", "未命名世界"),
             description=data.get("description", ""),
-            theme_preset=data.get("theme_preset", "academy"),
-            mood_tags=data.get("mood_tags", []),
-            bgm_suggestion=data.get("bgm_suggestion", "silent"),
-            world_detail=data.get("world_detail", ""),
+            background_picture=(data.get("background_picture") or "").strip() or None,
         )
     except (json.JSONDecodeError, ValueError) as e:
         raise HTTPException(
@@ -1985,6 +1951,7 @@ def get_due_reviews(
 
 # Settings endpoints
 class SettingsUpdate(BaseModel):
+    version: int = Field(..., ge=0)
     default_provider: str | None = None
     api_key: str | None = None
     clear_api_key: bool = False
@@ -1995,6 +1962,7 @@ class SettingsUpdate(BaseModel):
 
 
 class SettingsResponse(BaseModel):
+    version: int
     default_provider: str | None = None
     api_key_configured: bool = False
     temperature: float | None = None
@@ -2064,6 +2032,7 @@ def get_settings(
 ):
     active = get_effective_llm_config(current_user)
     return SettingsResponse(
+        version=current_user.version,
         default_provider=active.provider,
         api_key_configured=active.api_key_configured,
         temperature=active.temperature,
@@ -2080,25 +2049,45 @@ def update_settings(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    target_provider = settings.default_provider or current_user.default_provider or "claude"
+    user = lock_user_for_update(db, current_user.id)
 
-    if settings.temperature is not None:
-        current_user.temperature = settings.temperature
+    if user.version != settings.version:
+        raise_settings_conflict_http(
+            user_id=user.id,
+            expected_version=settings.version,
+            current_version=user.version,
+        )
 
-    if settings.max_tokens is not None:
-        current_user.max_tokens = settings.max_tokens
+    target_provider = settings.default_provider or user.default_provider or "claude"
 
-    update_provider_settings(
-        current_user,
-        target_provider,
-        api_key=settings.api_key,
-        clear_api_key=settings.clear_api_key,
-        model=settings.model,
-        base_url=settings.base_url,
-    )
+    try:
+        with db.no_autoflush:
+            update_generation_params(
+                user,
+                temperature=settings.temperature,
+                max_tokens=settings.max_tokens,
+            )
 
-    db.commit()
-    return {"message": "Settings updated"}
+            update_provider_settings(
+                user,
+                target_provider,
+                api_key=settings.api_key,
+                clear_api_key=settings.clear_api_key,
+                model=settings.model,
+                base_url=settings.base_url,
+            )
+
+        db.commit()
+        db.refresh(user)
+    except StaleDataError:
+        db.rollback()
+        raise_settings_conflict_http(
+            user_id=user.id,
+            expected_version=settings.version,
+            via="commit_race",
+        )
+
+    return {"message": "Settings updated", "version": user.version}
 
 
 @router.post("/settings/test-connection", response_model=SettingsTestResponse)
@@ -2329,10 +2318,11 @@ async def generate_persona(
     if req.world_id:
         from backend.models.models import World
         world = db.query(World).filter(World.id == req.world_id, World.user_id == current_user.id).first()
-        if world and world.scenes:
-            mood = world.scenes.get("mood", [])
-            if mood:
-                world_context = f"目标世界氛围：{', '.join(mood)}。"
+        if world:
+            parts = [f"目标世界名称：{world.name}。"]
+            if world.description:
+                parts.append(f"目标世界说明：{world.description}")
+            world_context = "".join(parts)
 
     prompt = PERSONA_GENERATE_PROMPT.format(
         description=req.description,

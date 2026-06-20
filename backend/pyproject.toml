@@ -1,6 +1,9 @@
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+markers = [
+    "user_llm_stress: multithread + PostgreSQL trigger stress tests (nightly USER_LLM_STRESS=1)",
+]
 
 [tool.ruff]
 target-version = "py311"

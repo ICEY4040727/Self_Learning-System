@@ -15,3 +15,11 @@ repos:
       - id: end-of-file-fixer
       - id: check-added-large-files
         args: [--maxkb=500]
+  - repo: local
+    hooks:
+      - id: check-user-llm-direct-writes
+        name: forbid direct User LLM column writes
+        entry: python scripts/check_user_llm_direct_writes.py
+        language: system
+        files: ^(backend/|scripts/).*\.py$
+        pass_filenames: false

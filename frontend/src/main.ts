@@ -2,13 +2,13 @@ import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 import { MotionPlugin } from '@vueuse/motion'
 import App from './App.vue'
-import router from './router'
-import { useAuthStore } from './stores/auth'
+import router from './app/router'
+import { useAuthStore } from './app/stores/auth'
 
 // Import Figma styles - core galgame styles
-import './styles/galgame.css'
+import './shared/styles/galgame.css'
 // Import base CSS for compatibility
-import './assets/main.css'
+import './shared/assets/main.css'
 
 const app = createApp(App)
 const pinia = createPinia()
