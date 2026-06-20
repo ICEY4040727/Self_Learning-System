@@ -1,0 +1,13 @@
+{
+  "devDependencies": {
+    "depcheck": "^1.4.7",
+    "knip": "^6.17.1"
+  },
+  
+  
+  "scripts": {
+    "knip": "knip",
+    "depcheck": "depcheck"
+  }
+  
+}
