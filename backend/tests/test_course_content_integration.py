@@ -8,8 +8,39 @@
 import pytest
 from unittest.mock import MagicMock
 
+from backend.models.models import Course, CourseProgress, LessonPlan, ProgressTracking
 from backend.services.prompt_builder.modules.course_content import CourseContentModule
 from backend.services.teaching_planner import TeachingPlanner
+
+
+def _configure_db_mock(
+    db,
+    *,
+    course=None,
+    lesson_plans=None,
+    course_progress=None,
+    progress_tracking=None,
+):
+    """Route db.query(Model) for LessonPlan-first code paths; empty LessonPlan → meta fallback."""
+    if lesson_plans is None:
+        lesson_plans = []
+
+    def query_side_effect(model):
+        mock_query = MagicMock()
+        if model is Course:
+            mock_query.filter.return_value.first.return_value = course
+        elif model is LessonPlan:
+            filtered = mock_query.filter.return_value
+            filtered.order_by.return_value.all.return_value = lesson_plans
+            filtered.count.return_value = len(lesson_plans)
+        elif model is CourseProgress:
+            mock_query.filter.return_value.first.return_value = course_progress
+        elif model is ProgressTracking:
+            mock_query.filter.return_value.first.return_value = progress_tracking
+        return mock_query
+
+    db.query.side_effect = query_side_effect
+    return db
 
 
 # ── CourseContentModule Tests ──────────────────────────────────────────
@@ -34,8 +65,7 @@ class TestCourseContentModule:
 
     def test_should_include_no_course(self):
         """[TODO-T10] course_id given but course not in DB → skip."""
-        db = MagicMock()
-        db.query().filter().first.return_value = None
+        db = _configure_db_mock(MagicMock(), course=None)
         assert self.module.should_include({"db": db, "course_id": 999}) is False
 
     def test_should_include_no_generated_content(self):
@@ -43,7 +73,7 @@ class TestCourseContentModule:
         db = MagicMock()
         course = MagicMock()
         course.meta = {}
-        db.query().filter().first.return_value = course
+        _configure_db_mock(db, course=course)
         assert self.module.should_include({"db": db, "course_id": 1}) is False
 
     def test_should_include_with_generated_content(self):
@@ -51,7 +81,7 @@ class TestCourseContentModule:
         db = MagicMock()
         course = MagicMock()
         course.meta = {"generated_lessons": [{"title": "L1"}]}
-        db.query().filter().first.return_value = course
+        _configure_db_mock(db, course=course)
         assert self.module.should_include({"db": db, "course_id": 1}) is True
 
     def test_get_priority(self):
@@ -72,7 +102,8 @@ class TestCourseContentModule:
         db = MagicMock()
         course = MagicMock()
         course.meta = None
-        db.query().filter().first.return_value = course
+        course.world = None
+        _configure_db_mock(db, course=course)
         result = self.module.assemble({"db": db, "course_id": 1})
         assert result == ""
 
@@ -89,7 +120,9 @@ class TestCourseContentModule:
             ],
             "current_lesson_index": 0,
         }
-        db.query().filter().first.return_value = course
+        course.world = MagicMock()
+        course.world.user_id = 1
+        _configure_db_mock(db, course=course)
 
         result = self.module.assemble({"db": db, "course_id": 1})
 
@@ -111,7 +144,8 @@ class TestCourseContentModule:
             },
             "generated_lessons": [],
         }
-        db.query().filter().first.return_value = course
+        course.world = None
+        _configure_db_mock(db, course=course)
 
         result = self.module.assemble({"db": db, "course_id": 1})
 
@@ -149,14 +183,19 @@ class TestTeachingPlanner:
         return course
 
     def test_get_current_lesson_no_meta(self):
+        db = MagicMock()
         course = self._make_course(meta=None)
-        assert self.planner.get_current_lesson(course) is None
+        _configure_db_mock(db, course=course)
+        assert self.planner.get_current_lesson(db, course) is None
 
     def test_get_current_lesson_no_lessons(self):
+        db = MagicMock()
         course = self._make_course(meta={})
-        assert self.planner.get_current_lesson(course) is None
+        _configure_db_mock(db, course=course)
+        assert self.planner.get_current_lesson(db, course) is None
 
     def test_get_current_lesson_valid(self):
+        db = MagicMock()
         course = self._make_course(meta={
             "generated_lessons": [
                 {"title": "L1", "concepts": ["a"]},
@@ -164,7 +203,8 @@ class TestTeachingPlanner:
             ],
             "current_lesson_index": 1,
         })
-        result = self.planner.get_current_lesson(course)
+        _configure_db_mock(db, course=course)
+        result = self.planner.get_current_lesson(db, course)
         assert result is not None
         assert result["title"] == "L2"
         assert result["_index"] == 1
@@ -173,6 +213,7 @@ class TestTeachingPlanner:
     def test_get_progress_empty(self):
         db = MagicMock()
         course = self._make_course(meta=None)
+        _configure_db_mock(db, course=course)
         progress = self.planner.get_progress(db, course)
         assert progress["total_lessons"] == 0
         assert progress["progress_pct"] == 0.0
@@ -188,6 +229,7 @@ class TestTeachingPlanner:
             "current_lesson_index": 1,
             "completed_lessons": [0],
         })
+        _configure_db_mock(db, course=course)
         progress = self.planner.get_progress(db, course)
         assert progress["total_lessons"] == 3
         assert progress["completed_lessons"] == 1
@@ -196,8 +238,6 @@ class TestTeachingPlanner:
 
     def test_advance_lesson(self):
         db = MagicMock()
-        db.query().filter().first.return_value = None  # ProgressTracking
-
         course = self._make_course(meta={
             "generated_lessons": [
                 {"title": "L1"},
@@ -206,6 +246,7 @@ class TestTeachingPlanner:
             "current_lesson_index": 0,
             "completed_lessons": [],
         })
+        _configure_db_mock(db, course=course, progress_tracking=None)
 
         result = self.planner.advance_lesson(db, course)
         assert "error" not in result
@@ -214,25 +255,23 @@ class TestTeachingPlanner:
 
     def test_advance_lesson_at_end(self):
         db = MagicMock()
-        db.query().filter().first.return_value = None
-
         course = self._make_course(meta={
             "generated_lessons": [{"title": "L1"}, {"title": "L2"}],
             "current_lesson_index": 1,
             "completed_lessons": [0],
         })
+        _configure_db_mock(db, course=course, progress_tracking=None)
 
         result = self.planner.advance_lesson(db, course)
         assert course.meta["current_lesson_index"] == 1  # stays at last
 
     def test_set_lesson_valid(self):
         db = MagicMock()
-        db.query().filter().first.return_value = None
-
         course = self._make_course(meta={
             "generated_lessons": [{"title": "L1"}, {"title": "L2"}, {"title": "L3"}],
             "current_lesson_index": 0,
         })
+        _configure_db_mock(db, course=course, progress_tracking=None)
 
         result = self.planner.set_lesson(db, course, 2)
         assert "error" not in result
@@ -243,6 +282,7 @@ class TestTeachingPlanner:
         course = self._make_course(meta={
             "generated_lessons": [{"title": "L1"}],
         })
+        _configure_db_mock(db, course=course)
 
         result = self.planner.set_lesson(db, course, 5)
         assert "error" in result
@@ -250,6 +290,7 @@ class TestTeachingPlanner:
     def test_advance_no_content(self):
         db = MagicMock()
         course = self._make_course(meta=None)
+        _configure_db_mock(db, course=course)
         result = self.planner.advance_lesson(db, course)
         assert "error" in result
 
@@ -260,6 +301,7 @@ class TestTeachingPlanner:
             "current_lesson_index": 1,
             "completed_lessons": [0],
         })
+        _configure_db_mock(db, course=course)
         progress = self.planner.get_progress(db, course)
         assert progress["lessons"][0]["_status"] == "completed"
         assert progress["lessons"][1]["_status"] == "current"
@@ -269,13 +311,12 @@ class TestTeachingPlanner:
         """[TODO-T6] After advancing past the last lesson, get_progress
         should set course_completed=True so frontend can show completion."""
         db = MagicMock()
-        db.query().filter().first.return_value = None
-
         course = self._make_course(meta={
             "generated_lessons": [{"title": "L1"}, {"title": "L2"}],
             "current_lesson_index": 1,
             "completed_lessons": [0],
         })
+        _configure_db_mock(db, course=course, progress_tracking=None)
 
         result = self.planner.advance_lesson(db, course)
         assert result["course_completed"] is True
@@ -289,6 +330,7 @@ class TestTeachingPlanner:
             "current_lesson_index": 1,
             "completed_lessons": [0],
         })
+        _configure_db_mock(db, course=course)
         progress = self.planner.get_progress(db, course)
         assert progress["course_completed"] is False
 
@@ -299,12 +341,11 @@ class TestTeachingPlanner:
         db = MagicMock()
         existing = MagicMock()
         existing.mastery_level = 60
-        db.query.return_value.filter.return_value.first.return_value = existing
-
         course = self._make_course(meta={
             "generated_lessons": [{"title": "L1"}],
             "current_lesson_index": 0,
         })
+        _configure_db_mock(db, course=course, progress_tracking=existing)
 
         self.planner._record_lesson_progress(db, course, 0)
 
