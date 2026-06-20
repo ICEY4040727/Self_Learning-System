@@ -7,3 +7,9 @@ interface ImportMetaEnv {
 interface ImportMeta {
   readonly env: ImportMetaEnv
 }
+
+interface Window {
+  __SLS_RUNTIME_CONFIG__?: {
+    apiBaseUrl?: string
+  }
+}

@@ -1,4 +1,5 @@
 import warnings
+from pathlib import Path
 from functools import lru_cache
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -7,11 +8,17 @@ _DEFAULT_SECRET = "your-secret-key-change-in-production"
 
 
 class Settings(BaseSettings):
-    # Database (SQLite single file)
-    database_url: str = "sqlite:///./data/socratic_learning.db"
+    # App runtime
+    app_host: str = "127.0.0.1"
+    app_port: int = 8000
+    app_data_dir: str = "./data"
+
+    # Database (SQLite single file unless overridden)
+    database_url: str = ""
 
     # CORS
     cors_origin: str = "http://localhost:5173"
+    cors_origins: str = ""
 
     # JWT
     secret_key: str = _DEFAULT_SECRET
@@ -44,12 +51,12 @@ class Settings(BaseSettings):
     features_voice_enabled: bool = False
 
     # Save directory (used by save_file_manager)
-    save_directory: str = "./saves"
+    save_directory: str = ""
 
     # [TR-X16] Textbook uploads — kept OUTSIDE backend/static so the public
     # /static mount in main.py never serves user-uploaded files. Access goes
     # through the auth-protected GET /api/textbooks/{id}/file endpoint.
-    upload_dir: str = "./uploads"
+    upload_dir: str = ""
     textbook_max_upload_size_bytes: int = 100 * 1024 * 1024
 
     # Application version (single source of truth)
@@ -112,6 +119,26 @@ class Settings(BaseSettings):
         env_file=".env",
         extra="ignore",
     )
+
+    def model_post_init(self, __context) -> None:
+        base_data_dir = Path(self.app_data_dir).expanduser().resolve()
+
+        if not self.database_url:
+            db_path = (base_data_dir / "socratic_learning.db").as_posix()
+            self.database_url = f"sqlite:///{db_path}"
+
+        if not self.save_directory:
+            self.save_directory = str((base_data_dir / "saves").resolve())
+
+        if not self.upload_dir:
+            self.upload_dir = str((base_data_dir / "uploads").resolve())
+
+    @property
+    def cors_allowed_origins(self) -> list[str]:
+        raw = self.cors_origins.strip() if self.cors_origins else ""
+        if raw:
+            return [origin.strip() for origin in raw.split(",") if origin.strip()]
+        return [self.cors_origin]
 
 
 @lru_cache

@@ -13,4 +13,4 @@ else
 fi
 
 echo "Starting server..."
-exec uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload
+exec uvicorn backend.main:app --host "${APP_HOST:-0.0.0.0}" --port "${APP_PORT:-8000}" --reload
