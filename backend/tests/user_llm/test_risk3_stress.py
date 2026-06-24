@@ -40,6 +40,14 @@ def pg_engine():
     engine.dispose()
 
 
+@pytest.fixture(autouse=True)
+def isolate_pg_users(pg_engine):
+    """Stress tests share one PostgreSQL database; reset users between cases."""
+    with pg_engine.begin() as conn:
+        conn.execute(text("TRUNCATE TABLE users RESTART IDENTITY"))
+    yield
+
+
 @pytest.fixture
 def pg_session_factory(pg_engine):
     return sessionmaker(autocommit=False, autoflush=False, bind=pg_engine)
