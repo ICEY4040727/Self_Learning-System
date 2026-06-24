@@ -336,9 +336,10 @@ class TestMasteryTrackerRealDB:
         assert rows[0].mastery_level == 75  # 50 + 25 (concept_mastered delta)
 
     def test_concept_and_lesson_live_in_separate_tables(self, db_session):
-        """[TR-A3] Concept and lesson rows used to share progress_trackings
-        and stomp each other when titles matched; they now live in different
-        tables so collision is structurally impossible."""
+        """[TR-A3] Concept mastery is ConceptMastery; lesson pointer is CourseProgress.
+
+        v1.0.5 ProgressFacade stops new ProgressTracking lesson rows, so a shared
+        title cannot stomp concept mastery via progress_trackings anymore."""
         from backend.services.teaching_planner import teaching_planner
 
         user_id, world_id, course_id = self._seed_user_world_course(db_session)
@@ -368,20 +369,19 @@ class TestMasteryTrackerRealDB:
         teaching_planner._record_lesson_progress(db_session, course, 0)
         db_session.flush()
 
-        # Concept side: ConceptMastery
+        # Concept side: ConceptMastery (canonical)
         cm = db_session.query(ConceptMastery).filter(
             ConceptMastery.user_id == user_id,
             ConceptMastery.concept_id == "递归",
         ).one()
         assert cm.mastery_level == 75
 
-        # Lesson side: ProgressTracking with topic_type='lesson'
+        # Lesson side: no new ProgressTracking row under ProgressFacade
         lesson_rows = db_session.query(ProgressTracking).filter(
             ProgressTracking.course_id == course_id,
             ProgressTracking.topic == "递归",
         ).all()
-        assert len(lesson_rows) == 1
-        assert lesson_rows[0].topic_type == "lesson"
+        assert len(lesson_rows) == 0
 
         # mastery overview pulls only ConceptMastery via course.meta
         overview = mastery_tracker.get_course_mastery(db_session, course_id, user_id)
