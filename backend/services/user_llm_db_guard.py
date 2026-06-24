@@ -75,7 +75,8 @@ def install_postgresql_user_llm_guard(connection: Connection) -> None:
                     OLD.model IS DISTINCT FROM NEW.model OR
                     OLD.llm_base_url IS DISTINCT FROM NEW.llm_base_url
                 );
-                json_changed := OLD.llm_provider_settings IS DISTINCT FROM NEW.llm_provider_settings;
+                json_changed := COALESCE(OLD.llm_provider_settings::jsonb, '{}'::jsonb)
+                    IS DISTINCT FROM COALESCE(NEW.llm_provider_settings::jsonb, '{}'::jsonb);
                 repair_mode := COALESCE(current_setting('app.user_llm_repair_mode', true), '') = 'on';
 
                 IF legacy_changed AND NOT json_changed AND NOT repair_mode THEN
@@ -107,7 +108,7 @@ def install_postgresql_user_llm_guard(connection: Connection) -> None:
                 END IF;
 
                 active_provider := COALESCE(NULLIF(NEW.default_provider, ''), 'claude');
-                entry := NEW.llm_provider_settings -> active_provider;
+                entry := NEW.llm_provider_settings::jsonb -> active_provider;
                 IF entry IS NULL OR jsonb_typeof(entry) <> 'object' THEN
                     RETURN NEW;
                 END IF;
