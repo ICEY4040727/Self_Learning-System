@@ -42,6 +42,9 @@ backend/tests/user_llm/_scan_tmp/
 # Local dev process markers
 .backend-dev.pid
 
+# Accidental git worktree checkouts (must not be tracked as submodules)
+.worktrees/
+
 # Save files (runtime generated)
 saves/
 
