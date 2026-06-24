@@ -44,6 +44,7 @@ backend/tests/user_llm/_scan_tmp/
 
 # Accidental git worktree checkouts (must not be tracked as submodules)
 .worktrees/
+skill-cowork/
 
 # Save files (runtime generated)
 saves/
