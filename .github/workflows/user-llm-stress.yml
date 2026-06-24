@@ -38,7 +38,7 @@ jobs:
       - name: Initialize PostgreSQL schema
         run: |
           cd backend
-          PYTHONPATH=.. alembic upgrade head
+          PYTHONPATH=.. python -m backend.scripts.init_pg_stress_schema
         env:
           DATABASE_URL: "postgresql://postgres:postgres@localhost:5432/selflearn_stress"
           SECRET_KEY: "ci-user-llm-stress-secret"
