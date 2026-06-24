@@ -49,6 +49,8 @@ class Settings(BaseSettings):
 
     # Features
     features_voice_enabled: bool = False
+    # ProgressFacade — set false to restore archive direct ProgressTracking writes
+    use_progress_facade: bool = True
 
     # Save directory (used by save_file_manager)
     save_directory: str = ""

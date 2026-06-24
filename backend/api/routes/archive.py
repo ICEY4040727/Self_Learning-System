@@ -1,7 +1,7 @@
 from datetime import UTC, datetime
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, HTTPException, Response, UploadFile
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import func as sa_func
 from sqlalchemy.orm import Session
@@ -15,7 +15,6 @@ from backend.models.models import (
     Character,
     ChatMessage,
     Course,
-    FSRSState,
     LearnerProfile,
     LearningDiary,
     MemoryFact,
@@ -33,7 +32,6 @@ from backend.services.user_llm_settings import (
     update_generation_params,
     update_provider_settings,
 )
-from backend.services import spaced_repetition
 
 router = APIRouter()
 
@@ -1788,9 +1786,12 @@ def get_learning_diaries(
 @router.post("/progress", response_model=ProgressTrackingResponse)
 def create_progress(
     progress: ProgressTrackingCreate,
+    response: Response,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
+    from backend.services.progress_facade import progress_facade
+
     course = db.query(Course).join(World, Course.world_id == World.id).filter(
         Course.id == progress.course_id,
         World.user_id == current_user.id,
@@ -1798,52 +1799,72 @@ def create_progress(
     if not course:
         raise HTTPException(status_code=404, detail="Course not found")
 
-    db_progress = ProgressTracking(
-        **progress.model_dump(),
-        user_id=current_user.id
+    for key, value in progress_facade.progress_compat_headers(progress.course_id).items():
+        response.headers[key] = value
+
+    db_progress = progress_facade.create_progress_compat(
+        db,
+        user_id=current_user.id,
+        course_id=progress.course_id,
+        topic=progress.topic,
+        mastery_level=progress.mastery_level,
+        next_review=progress.next_review,
     )
-    db.add(db_progress)
     db.commit()
-    db.refresh(db_progress)
+    if hasattr(db_progress, "__mapper__"):
+        db.refresh(db_progress)
     return db_progress
 
 
 @router.get("/progress", response_model=list[ProgressTrackingResponse])
 def get_progress(
+    response: Response,
     course_id: int | None = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
-    query = db.query(ProgressTracking).join(Course, ProgressTracking.course_id == Course.id).join(
-        World, Course.world_id == World.id
-    ).filter(
-        ProgressTracking.user_id == current_user.id,
-        World.user_id == current_user.id,
-    )
-    if course_id:
-        query = query.filter(ProgressTracking.course_id == course_id)
-    return query.all()
+    from backend.services.progress_facade import progress_facade
+
+    for key, value in progress_facade.progress_compat_headers(course_id).items():
+        response.headers[key] = value
+    if course_id is not None:
+        canonical_index = progress_facade.get_canonical_lesson_index(
+            db, course_id, current_user.id,
+        )
+        response.headers["X-Canonical-Current-Lesson-Index"] = str(canonical_index)
+
+    return progress_facade.list_compat_progress_rows(db, current_user.id, course_id)
 
 
 @router.put("/progress/{progress_id}", response_model=ProgressTrackingResponse)
 def update_progress(
     progress_id: int,
     progress: ProgressTrackingCreate,
+    response: Response,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    db_progress = db.query(ProgressTracking).filter(
-        ProgressTracking.id == progress_id,
-        ProgressTracking.user_id == current_user.id
-    ).first()
-    if not db_progress:
+    from backend.services.progress_facade import progress_facade
+
+    for key, value in progress_facade.progress_compat_headers(progress.course_id).items():
+        response.headers[key] = value
+
+    try:
+        db_progress = progress_facade.update_progress_compat(
+            db,
+            progress_id=progress_id,
+            user_id=current_user.id,
+            course_id=progress.course_id,
+            topic=progress.topic,
+            mastery_level=progress.mastery_level,
+            next_review=progress.next_review,
+        )
+    except LookupError:
         raise HTTPException(status_code=404, detail="Progress not found")
 
-    for key, value in progress.model_dump(exclude_unset=True).items():
-        setattr(db_progress, key, value)
-
     db.commit()
-    db.refresh(db_progress)
+    if hasattr(db_progress, "__mapper__"):
+        db.refresh(db_progress)
     return db_progress
 
 
@@ -1865,88 +1886,52 @@ class ReviewResponse(BaseModel):
 def review_progress(
     progress_id: int,
     req: ReviewRequest,
+    response: Response,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """Record a review for a topic and compute next review date via FSRS."""
-    db_progress = db.query(ProgressTracking).join(Course, ProgressTracking.course_id == Course.id).join(
-        World, Course.world_id == World.id
-    ).filter(
-        ProgressTracking.id == progress_id,
-        ProgressTracking.user_id == current_user.id,
-        World.user_id == current_user.id,
-    ).first()
-    if not db_progress:
-        raise HTTPException(status_code=404, detail="Progress not found")
+    from backend.services.progress_facade import progress_facade
 
-    course = db.query(Course).filter(Course.id == db_progress.course_id).first()
-    if not course:
-        raise HTTPException(status_code=404, detail="Course not found")
+    response.headers["Deprecation"] = "true"
 
-    # [TR-B4] FSRSState is per-(user, concept) cross-world; world_id is no
-    # longer in the unique key.
-    fsrs_state_row = db.query(FSRSState).filter(
-        FSRSState.user_id == current_user.id,
-        FSRSState.concept_id == db_progress.topic,
-    ).first()
-
-    # [TODO-T7] Use card_data as authoritative state — cherry-picking columns
-    # loses card_id/state/step which py-fsrs Card.from_dict requires.
-    existing_fsrs_state = fsrs_state_row.card_data if fsrs_state_row else None
-
-    result = spaced_repetition.review(existing_fsrs_state, req.rating)
-
-    db_progress.last_review = result["last_review"]
-    db_progress.next_review = result["due"]
-    db_progress.mastery_level = result["mastery_level"]
-
-    fsrs_payload = result["fsrs_state"]
-    if fsrs_state_row is None:
-        fsrs_state_row = FSRSState(
+    try:
+        result = progress_facade.record_review_compat(
+            db,
+            progress_id=progress_id,
             user_id=current_user.id,
-            world_id=course.world_id,  # diagnostic only
-            concept_id=db_progress.topic,
+            rating=req.rating,
         )
-        db.add(fsrs_state_row)
-
-    fsrs_state_row.card_data = fsrs_payload
-    fsrs_state_row.difficulty = fsrs_payload.get("difficulty")
-    fsrs_state_row.stability = fsrs_payload.get("stability")
-    fsrs_state_row.reps = (fsrs_state_row.reps or 0) + 1
-    fsrs_state_row.last_review = result["last_review"]
-    fsrs_state_row.next_review = result["due"]
+    except LookupError as exc:
+        detail = str(exc) or "Progress not found"
+        raise HTTPException(status_code=404, detail=detail)
 
     db.commit()
-    db.refresh(db_progress)
 
     return ReviewResponse(
-        id=db_progress.id,
-        topic=db_progress.topic,
-        mastery_level=db_progress.mastery_level,
+        id=result["id"],
+        topic=result["topic"],
+        mastery_level=result["mastery_level"],
         retrievability=result["retrievability"],
-        next_review=db_progress.next_review,
-        last_review=db_progress.last_review,
+        next_review=result["next_review"],
+        last_review=result["last_review"],
     )
 
 
 @router.get("/progress/due", response_model=list[ProgressTrackingResponse])
 def get_due_reviews(
+    response: Response,
     course_id: int | None = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """Get topics that are due for review (next_review <= now)."""
-    now = datetime.now(UTC)
-    query = db.query(ProgressTracking).join(Course, ProgressTracking.course_id == Course.id).join(
-        World, Course.world_id == World.id
-    ).filter(
-        ProgressTracking.user_id == current_user.id,
-        ProgressTracking.next_review <= now,
-        World.user_id == current_user.id,
-    )
-    if course_id:
-        query = query.filter(ProgressTracking.course_id == course_id)
-    return query.order_by(ProgressTracking.next_review).all()
+    from backend.services.progress_facade import progress_facade
+
+    for key, value in progress_facade.progress_compat_headers(course_id).items():
+        response.headers[key] = value
+
+    return progress_facade.list_due_reviews_compat(db, current_user.id, course_id)
 
 
 # Settings endpoints

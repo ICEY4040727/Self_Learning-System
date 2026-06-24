@@ -291,7 +291,13 @@ class TeachingPlanner:
         """首次到达某 lesson 时插入 'started' 行（mastery=20）。
 
         [TODO-T5] 不再对 existing 行 += 20。
+        [v1.0.5] ProgressFacade 启用时不再 INSERT ProgressTracking。
         """
+        from backend.services.progress_facade import progress_facade
+
+        if progress_facade.skip_progress_tracking_writes():
+            return
+
         lessons = self._get_lessons(db, course)
         if not lessons or lesson_idx >= len(lessons):
             return

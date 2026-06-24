@@ -856,9 +856,8 @@ def get_course_progress(
     """获取课程教学进度"""
     course = _get_course_with_auth(course_id, db, current_user)
 
-    from backend.services.teaching_planner import teaching_planner
-    progress = teaching_planner.get_progress(db, course)
-    return progress
+    from backend.services.progress_facade import progress_facade
+    return progress_facade.get_lesson_progress(db, course, current_user.id)
 
 
 @router.post("/courses/{course_id}/advance", response_model=LessonProgressResponse)
@@ -897,8 +896,8 @@ def get_course_mastery(
     """获取课程概念掌握度概览"""
     _get_course_with_auth(course_id, db, current_user)
 
-    from backend.services.mastery_tracker import mastery_tracker
-    return mastery_tracker.get_course_mastery(db, course_id, current_user.id)
+    from backend.services.progress_facade import progress_facade
+    return progress_facade.get_course_mastery(db, course_id, current_user.id)
 
 
 class GenerateDescriptionRequest(BaseModel):
