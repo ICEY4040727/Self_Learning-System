@@ -11,7 +11,7 @@ import threading
 
 import pytest
 from sqlalchemy import create_engine, text
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import DBAPIError, IntegrityError
 from sqlalchemy.orm import sessionmaker
 
 from backend.models.models import User
@@ -53,7 +53,7 @@ class TestPostgresDbTriggers:
         session.close()
 
         session = pg_session_factory()
-        with pytest.raises(IntegrityError, match="legacy LLM columns cannot be updated alone"):
+        with pytest.raises((IntegrityError, DBAPIError), match="legacy LLM columns cannot be updated alone"):
             session.execute(
                 text("UPDATE users SET model = :model WHERE id = :id"),
                 {"model": "bad-model", "id": user_id},

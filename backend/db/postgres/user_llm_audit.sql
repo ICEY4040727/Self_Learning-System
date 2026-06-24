@@ -59,7 +59,8 @@ BEGIN
         OLD.model IS DISTINCT FROM NEW.model OR
         OLD.llm_base_url IS DISTINCT FROM NEW.llm_base_url
     );
-    json_changed := OLD.llm_provider_settings IS DISTINCT FROM NEW.llm_provider_settings;
+    json_changed := COALESCE(OLD.llm_provider_settings::jsonb, '{}'::jsonb)
+        IS DISTINCT FROM COALESCE(NEW.llm_provider_settings::jsonb, '{}'::jsonb);
 
     IF NOT legacy_changed AND NOT json_changed THEN
         RETURN NEW;
