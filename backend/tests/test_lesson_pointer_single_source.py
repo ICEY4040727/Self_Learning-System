@@ -395,3 +395,38 @@ class TestLearningEntryAlignment:
             CourseProgress.user_id == user.id,
         ).one()
         assert cp.current_lesson_index == api_index == 1
+
+
+class TestA22CanonicalLessonReads:
+    def test_course_content_uses_planner_not_direct_course_progress(self):
+        source = (
+            ROOT / "backend/services/prompt_builder/modules/course_content.py"
+        ).read_text(encoding="utf-8")
+        start = source.index("def _get_lessons_and_progress")
+        rest = source[start + 1:]
+        next_def = rest.index("\n    def ")
+        chunk = source[start: start + 1 + next_def]
+        assert "query(CourseProgress)" not in chunk
+
+    def test_course_content_honors_course_progress_over_stale_meta(
+        self, db_session,
+    ):
+        from backend.services.prompt_builder.modules.course_content import (
+            CourseContentModule,
+        )
+
+        user, course = _seed_dual_source_course(
+            db_session, cp_index=1, meta_index=5,
+        )
+        db_session.commit()
+
+        module = CourseContentModule()
+        rendered = module.assemble({
+            "db": db_session,
+            "course_id": course.id,
+        })
+
+        assert "第2课: Lesson 1" in rendered
+        assert "[当前章节]" in rendered
+        assert "第1课: Lesson 0" in rendered
+        assert "已完成" in rendered

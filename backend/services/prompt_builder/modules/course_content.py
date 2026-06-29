@@ -105,7 +105,7 @@ class CourseContentModule(MemoryModule):
         Tries LessonPlan table first, falls back to course.meta.
         """
         # New data source: LessonPlan rows
-        from backend.models.models import CourseProgress, LessonPlan
+        from backend.models.models import LessonPlan
 
         lesson_rows = db.query(LessonPlan).filter(
             LessonPlan.course_id == course.id,
@@ -122,17 +122,10 @@ class CourseContentModule(MemoryModule):
                 for lp in lesson_rows
             ]
 
-            # Progress from CourseProgress table
-            current_idx = 0
-            if user_id:
-                progress = db.query(CourseProgress).filter(
-                    CourseProgress.course_id == course.id,
-                    CourseProgress.user_id == user_id,
-                ).first()
-                if progress:
-                    current_idx = progress.current_lesson_index or 0
+            from backend.services.teaching_planner import teaching_planner
 
-            return lessons, current_idx
+            prog = teaching_planner.get_progress(db, course, user_id=user_id)
+            return lessons, prog["current_index"]
 
         # Backward compat: course.meta
         lessons = meta.get("generated_lessons", [])
