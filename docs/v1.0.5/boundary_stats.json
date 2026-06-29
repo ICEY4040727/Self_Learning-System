@@ -1,0 +1,644 @@
+{
+  "meta": {
+    "generated_at": "2026-06-24T10:37:20.391075+00:00",
+    "generator": "scripts/collect_boundary_stats.py",
+    "git_head": "642c127ff5f8b1d6dff21de88941080944d017be",
+    "verify_note": "Compare fingerprints.lines/sha256_prefix against live files before citing counts as hard evidence."
+  },
+  "backend": {
+    "route_files": 15,
+    "route_fingerprints": {
+      "achievements.py": {
+        "path": "backend/api/routes/achievements.py",
+        "lines": 45,
+        "bytes": 1398,
+        "sha256_prefix": "d112431ee8c23284"
+      },
+      "archive.py": {
+        "path": "backend/api/routes/archive.py",
+        "lines": 192,
+        "bytes": 6418,
+        "sha256_prefix": "86c611b7bbb7e0bc"
+      },
+      "auth.py": {
+        "path": "backend/api/routes/auth.py",
+        "lines": 108,
+        "bytes": 3445,
+        "sha256_prefix": "3e6661aac777063a"
+      },
+      "bookshelf.py": {
+        "path": "backend/api/routes/bookshelf.py",
+        "lines": 358,
+        "bytes": 12396,
+        "sha256_prefix": "efcc1ba49941b9d1"
+      },
+      "characters.py": {
+        "path": "backend/api/routes/characters.py",
+        "lines": 576,
+        "bytes": 21645,
+        "sha256_prefix": "de5713a8e34ac7ef"
+      },
+      "courses.py": {
+        "path": "backend/api/routes/courses.py",
+        "lines": 417,
+        "bytes": 13714,
+        "sha256_prefix": "2b7b6bd452bc891c"
+      },
+      "learner_profiles.py": {
+        "path": "backend/api/routes/learner_profiles.py",
+        "lines": 124,
+        "bytes": 4069,
+        "sha256_prefix": "5fba272e8e742557"
+      },
+      "learning.py": {
+        "path": "backend/api/routes/learning.py",
+        "lines": 810,
+        "bytes": 31983,
+        "sha256_prefix": "93ce3ce8d5341c8e"
+      },
+      "learning_diary.py": {
+        "path": "backend/api/routes/learning_diary.py",
+        "lines": 69,
+        "bytes": 2185,
+        "sha256_prefix": "a2cefc22d69d1334"
+      },
+      "learning_plans.py": {
+        "path": "backend/api/routes/learning_plans.py",
+        "lines": 337,
+        "bytes": 11686,
+        "sha256_prefix": "791933764a75b039"
+      },
+      "report.py": {
+        "path": "backend/api/routes/report.py",
+        "lines": 188,
+        "bytes": 5286,
+        "sha256_prefix": "8c0ee305469897a9"
+      },
+      "save.py": {
+        "path": "backend/api/routes/save.py",
+        "lines": 729,
+        "bytes": 25530,
+        "sha256_prefix": "6330fcf43ec293ba"
+      },
+      "settings.py": {
+        "path": "backend/api/routes/settings.py",
+        "lines": 293,
+        "bytes": 9675,
+        "sha256_prefix": "8799888ef8e47952"
+      },
+      "textbook.py": {
+        "path": "backend/api/routes/textbook.py",
+        "lines": 973,
+        "bytes": 36169,
+        "sha256_prefix": "a4932af5f0ec71f1"
+      },
+      "worlds.py": {
+        "path": "backend/api/routes/worlds.py",
+        "lines": 775,
+        "bytes": 27082,
+        "sha256_prefix": "97469b644d2b73dc"
+      }
+    },
+    "route_total_lines": 5994,
+    "endpoint_counts_by_file": {
+      "achievements.py": 1,
+      "archive.py": 5,
+      "auth.py": 3,
+      "bookshelf.py": 5,
+      "characters.py": 10,
+      "courses.py": 10,
+      "learner_profiles.py": 4,
+      "learning.py": 8,
+      "learning_diary.py": 2,
+      "learning_plans.py": 6,
+      "report.py": 5,
+      "save.py": 9,
+      "settings.py": 4,
+      "textbook.py": 12,
+      "worlds.py": 12
+    },
+    "endpoint_total": 96,
+    "main_py_mounts": [
+      {
+        "module": "auth",
+        "prefix": "/api/auth",
+        "tags": "auth"
+      },
+      {
+        "module": "archive",
+        "prefix": "/api",
+        "tags": "archive"
+      },
+      {
+        "module": "learning",
+        "prefix": "/api",
+        "tags": "learning"
+      },
+      {
+        "module": "save",
+        "prefix": "/api",
+        "tags": "checkpoints"
+      },
+      {
+        "module": "report",
+        "prefix": "/api/report",
+        "tags": "report"
+      },
+      {
+        "module": "achievements",
+        "prefix": "/api",
+        "tags": "achievements"
+      },
+      {
+        "module": "textbook",
+        "prefix": "/api",
+        "tags": "textbook"
+      },
+      {
+        "module": "bookshelf",
+        "prefix": "/api",
+        "tags": "bookshelf"
+      },
+      {
+        "module": "learning_plans",
+        "prefix": "/api",
+        "tags": "learning-plans"
+      }
+    ],
+    "main_py_mount_count": 9,
+    "archive_progress_endpoints": [
+      {
+        "method": "POST",
+        "path": "/progress"
+      },
+      {
+        "method": "GET",
+        "path": "/progress"
+      },
+      {
+        "method": "PUT",
+        "path": "/progress/{progress_id}"
+      },
+      {
+        "method": "POST",
+        "path": "/progress/{progress_id}/review"
+      },
+      {
+        "method": "GET",
+        "path": "/progress/due"
+      }
+    ]
+  },
+  "frontend": {
+    "src_top_level_dirs": [
+      "app",
+      "archives",
+      "characters",
+      "courses",
+      "settings",
+      "shared",
+      "worlds"
+    ],
+    "src_top_level_dir_count": 7,
+    "router_paths": [
+      "/",
+      "/login",
+      "/home",
+      "worlds",
+      "worlds/:worldId",
+      "worlds/:worldId/courses/:courseId",
+      "/learning/:courseId",
+      "/bookshelf",
+      "/archive",
+      "/character",
+      "/settings"
+    ],
+    "router_path_count": 11,
+    "home_report_registered": false,
+    "learning_store_fingerprint": {
+      "path": "frontend/src/app/stores/learning.ts",
+      "lines": 438,
+      "bytes": 18729,
+      "sha256_prefix": "7345019b45c2ddc4"
+    }
+  },
+  "services": {
+    "py_file_count": 59
+  },
+  "endpoints_by_file": {
+    "achievements.py": [
+      {
+        "method": "GET",
+        "path": "/achievements/{user_id}/{character_id}"
+      }
+    ],
+    "archive.py": [
+      {
+        "method": "POST",
+        "path": "/progress"
+      },
+      {
+        "method": "GET",
+        "path": "/progress"
+      },
+      {
+        "method": "PUT",
+        "path": "/progress/{progress_id}"
+      },
+      {
+        "method": "POST",
+        "path": "/progress/{progress_id}/review"
+      },
+      {
+        "method": "GET",
+        "path": "/progress/due"
+      }
+    ],
+    "auth.py": [
+      {
+        "method": "POST",
+        "path": "/register"
+      },
+      {
+        "method": "POST",
+        "path": "/login"
+      },
+      {
+        "method": "GET",
+        "path": "/me"
+      }
+    ],
+    "bookshelf.py": [
+      {
+        "method": "POST",
+        "path": "/bookshelf/upload"
+      },
+      {
+        "method": "GET",
+        "path": "/bookshelf"
+      },
+      {
+        "method": "DELETE",
+        "path": "/bookshelf/{library_id}"
+      },
+      {
+        "method": "POST",
+        "path": "/courses/{course_id}/link-textbook"
+      },
+      {
+        "method": "POST",
+        "path": "/courses/batch-link-textbooks"
+      }
+    ],
+    "characters.py": [
+      {
+        "method": "POST",
+        "path": "/character"
+      },
+      {
+        "method": "GET",
+        "path": "/character"
+      },
+      {
+        "method": "GET",
+        "path": "/character/stats"
+      },
+      {
+        "method": "GET",
+        "path": "/character/{character_id}"
+      },
+      {
+        "method": "PUT",
+        "path": "/character/{character_id}"
+      },
+      {
+        "method": "DELETE",
+        "path": "/character/{character_id}"
+      },
+      {
+        "method": "POST",
+        "path": "/character/{character_id}/avatar"
+      },
+      {
+        "method": "POST",
+        "path": "/character/{character_id}/levelup"
+      },
+      {
+        "method": "POST",
+        "path": "/characters/{character_id}/sprites"
+      },
+      {
+        "method": "POST",
+        "path": "/persona/generate"
+      }
+    ],
+    "courses.py": [
+      {
+        "method": "POST",
+        "path": "/worlds/{world_id}/courses"
+      },
+      {
+        "method": "GET",
+        "path": "/worlds/{world_id}/courses"
+      },
+      {
+        "method": "POST",
+        "path": "/courses"
+      },
+      {
+        "method": "GET",
+        "path": "/courses"
+      },
+      {
+        "method": "GET",
+        "path": "/courses/{course_id}"
+      },
+      {
+        "method": "PUT",
+        "path": "/courses/{course_id}"
+      },
+      {
+        "method": "DELETE",
+        "path": "/courses/{course_id}"
+      },
+      {
+        "method": "GET",
+        "path": "/courses/{course_id}/sages"
+      },
+      {
+        "method": "GET",
+        "path": "/courses/{course_id}/sessions"
+      },
+      {
+        "method": "GET",
+        "path": "/courses/{course_id}/memory-facts"
+      }
+    ],
+    "learner_profiles.py": [
+      {
+        "method": "POST",
+        "path": "/learner_profile"
+      },
+      {
+        "method": "GET",
+        "path": "/learner_profile"
+      },
+      {
+        "method": "PUT",
+        "path": "/learner_profile/{profile_id}"
+      },
+      {
+        "method": "GET",
+        "path": "/worlds/{world_id}/learner_profile"
+      }
+    ],
+    "learning.py": [
+      {
+        "method": "POST",
+        "path": "/courses/{course_id}/start"
+      },
+      {
+        "method": "POST",
+        "path": "/courses/{course_id}/chat"
+      },
+      {
+        "method": "POST",
+        "path": "/sessions/{session_id}/end"
+      },
+      {
+        "method": "GET",
+        "path": "/sessions/{session_id}/history"
+      },
+      {
+        "method": "GET",
+        "path": "/sessions"
+      },
+      {
+        "method": "GET",
+        "path": "/sessions/{session_id}/emotion_trajectory"
+      },
+      {
+        "method": "GET",
+        "path": "/user/profile"
+      },
+      {
+        "method": "POST",
+        "path": "/user/profile/refresh"
+      }
+    ],
+    "learning_diary.py": [
+      {
+        "method": "POST",
+        "path": "/learning_diary"
+      },
+      {
+        "method": "GET",
+        "path": "/learning_diary"
+      }
+    ],
+    "learning_plans.py": [
+      {
+        "method": "POST",
+        "path": "/learning-plans/drafts"
+      },
+      {
+        "method": "GET",
+        "path": "/learning-plans/drafts/{draft_id}"
+      },
+      {
+        "method": "PUT",
+        "path": "/learning-plans/drafts/{draft_id}"
+      },
+      {
+        "method": "POST",
+        "path": "/learning-plans/drafts/{draft_id}/regenerate"
+      },
+      {
+        "method": "POST",
+        "path": "/learning-plans/drafts/{draft_id}/commit"
+      },
+      {
+        "method": "PUT",
+        "path": "/learning-plans/drafts/{draft_id}/world"
+      }
+    ],
+    "report.py": [
+      {
+        "method": "GET",
+        "path": "/mastery-trends"
+      },
+      {
+        "method": "GET",
+        "path": "/relationship-history"
+      },
+      {
+        "method": "GET",
+        "path": "/world-comparison"
+      },
+      {
+        "method": "GET",
+        "path": "/milestones"
+      },
+      {
+        "method": "GET",
+        "path": "/worlds/{world_id}/mastery-trends"
+      }
+    ],
+    "save.py": [
+      {
+        "method": "POST",
+        "path": "/checkpoints"
+      },
+      {
+        "method": "GET",
+        "path": "/checkpoints"
+      },
+      {
+        "method": "GET",
+        "path": "/worlds/{world_id}/checkpoints"
+      },
+      {
+        "method": "GET",
+        "path": "/checkpoints/{checkpoint_id}"
+      },
+      {
+        "method": "DELETE",
+        "path": "/checkpoints/{checkpoint_id}"
+      },
+      {
+        "method": "POST",
+        "path": "/checkpoints/{checkpoint_id}/branch"
+      },
+      {
+        "method": "GET",
+        "path": "/worlds/{world_id}/timelines"
+      },
+      {
+        "method": "GET",
+        "path": "/checkpoints/{checkpoint_id}/export"
+      },
+      {
+        "method": "POST",
+        "path": "/checkpoints/import"
+      }
+    ],
+    "settings.py": [
+      {
+        "method": "GET",
+        "path": "/settings"
+      },
+      {
+        "method": "PUT",
+        "path": "/settings"
+      },
+      {
+        "method": "POST",
+        "path": "/settings/test-connection"
+      },
+      {
+        "method": "POST",
+        "path": "/settings/models"
+      }
+    ],
+    "textbook.py": [
+      {
+        "method": "POST",
+        "path": "/courses/{course_id}/textbooks"
+      },
+      {
+        "method": "GET",
+        "path": "/courses/{course_id}/textbooks"
+      },
+      {
+        "method": "GET",
+        "path": "/textbooks/{textbook_id}/file"
+      },
+      {
+        "method": "DELETE",
+        "path": "/courses/{course_id}/textbooks/{textbook_id}"
+      },
+      {
+        "method": "DELETE",
+        "path": "/courses/{course_id}/generated"
+      },
+      {
+        "method": "POST",
+        "path": "/courses/{course_id}/generate"
+      },
+      {
+        "method": "GET",
+        "path": "/courses/{course_id}/lessons"
+      },
+      {
+        "method": "GET",
+        "path": "/courses/{course_id}/progress"
+      },
+      {
+        "method": "POST",
+        "path": "/courses/{course_id}/advance"
+      },
+      {
+        "method": "GET",
+        "path": "/courses/{course_id}/mastery"
+      },
+      {
+        "method": "POST",
+        "path": "/courses/generate-description"
+      },
+      {
+        "method": "PUT",
+        "path": "/courses/{course_id}/lesson"
+      }
+    ],
+    "worlds.py": [
+      {
+        "method": "POST",
+        "path": "/worlds"
+      },
+      {
+        "method": "GET",
+        "path": "/worlds"
+      },
+      {
+        "method": "GET",
+        "path": "/worlds/{world_id}"
+      },
+      {
+        "method": "PUT",
+        "path": "/worlds/{world_id}"
+      },
+      {
+        "method": "DELETE",
+        "path": "/worlds/{world_id}"
+      },
+      {
+        "method": "POST",
+        "path": "/world/generate"
+      },
+      {
+        "method": "POST",
+        "path": "/worlds/{world_id}/characters"
+      },
+      {
+        "method": "POST",
+        "path": "/worlds/{world_id}/characters/{character_id}/generate-context"
+      },
+      {
+        "method": "GET",
+        "path": "/worlds/{world_id}/characters"
+      },
+      {
+        "method": "PATCH",
+        "path": "/worlds/{world_id}/characters/{character_id}"
+      },
+      {
+        "method": "PUT",
+        "path": "/worlds/{world_id}/characters/{character_id}/set-primary"
+      },
+      {
+        "method": "DELETE",
+        "path": "/worlds/{world_id}/characters/{character_id}"
+      }
+    ]
+  }
+}
