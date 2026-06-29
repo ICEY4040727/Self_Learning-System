@@ -64,8 +64,19 @@ def progress_compat_headers(course_id: int | None = None) -> dict[str, str]:
 
 def get_lesson_progress(db: Session, course: Course, user_id: int) -> dict[str, Any]:
     """Canonical lesson progress (CourseProgress / LessonPlan)."""
-    _ = user_id  # caller supplies for auth symmetry; planner reads course.world
-    return teaching_planner.get_progress(db, course)
+    return teaching_planner.get_progress(db, course, user_id=user_id)
+
+
+def get_course_lesson_progress_fraction(
+    db: Session,
+    course: Course,
+    user_id: int,
+) -> float | None:
+    """0.0–1.0 lesson completion fraction for list/display surfaces (A2-3)."""
+    prog = get_lesson_progress(db, course, user_id)
+    if prog.get("total_lessons", 0) == 0:
+        return None
+    return round(prog.get("progress_pct", 0.0) / 100.0, 4)
 
 
 def get_canonical_lesson_index(db: Session, course_id: int, user_id: int) -> int:
@@ -425,6 +436,7 @@ class ProgressFacade:
     use_progress_facade = staticmethod(use_progress_facade)
     skip_progress_tracking_writes = staticmethod(skip_progress_tracking_writes)
     get_lesson_progress = staticmethod(get_lesson_progress)
+    get_course_lesson_progress_fraction = staticmethod(get_course_lesson_progress_fraction)
     get_canonical_lesson_index = staticmethod(get_canonical_lesson_index)
     get_course_mastery = staticmethod(get_course_mastery)
     list_compat_progress_rows = staticmethod(list_compat_progress_rows)

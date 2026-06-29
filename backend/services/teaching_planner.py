@@ -119,8 +119,11 @@ class TeachingPlanner:
 
         return None
 
-    def get_progress(self, db: Session, course: Course) -> dict:
+    def get_progress(self, db: Session, course: Course, user_id: int | None = None) -> dict:
         """获取课程教学进度
+
+        Args:
+            user_id: 显式用户 ID（路由层已知时传入）
 
         Returns:
             {
@@ -145,8 +148,8 @@ class TeachingPlanner:
                 "course_completed": False,
             }
 
-        user_id = self._get_user_id(course)
-        if user_id is None:
+        uid = user_id if user_id is not None else self._get_user_id(course)
+        if uid is None:
             return {
                 "total_lessons": len(lessons),
                 "current_index": 0,
@@ -157,8 +160,8 @@ class TeachingPlanner:
                 "course_completed": False,
             }
 
-        current_idx = self._get_current_index(db, course, user_id)
-        completed_list = self._get_completed(db, course, user_id)
+        current_idx = self._get_current_index(db, course, uid)
+        completed_list = self._get_completed(db, course, uid)
         completed = set(completed_list)
 
         # current_idx 超出范围时 clamp
