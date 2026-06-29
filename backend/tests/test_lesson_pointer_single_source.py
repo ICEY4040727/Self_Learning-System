@@ -18,11 +18,16 @@ from backend.services.teaching_planner import teaching_planner
 ROOT = Path(__file__).resolve().parents[2]
 
 
-def _seed_dual_source_course(db_session, *, cp_index: int = 0, meta_index: int = 5):
-    """CourseProgress 与 course.meta 故意分叉。"""
-    user = User(username="a2-dual", password_hash="x", role="user")
+def _seed_test_user(db_session, username: str) -> User:
+    user = User(username=username, password_hash="hash", role="user")  # NOSONAR
     db_session.add(user)
     db_session.flush()
+    return user
+
+
+def _seed_dual_source_course(db_session, *, cp_index: int = 0, meta_index: int = 5):
+    """CourseProgress 与 course.meta 故意分叉。"""
+    user = _seed_test_user(db_session, "a2-dual")
 
     world = World(user_id=user.id, name="A2 World", scenes={})
     db_session.add(world)
@@ -70,9 +75,7 @@ def _seed_dual_source_course(db_session, *, cp_index: int = 0, meta_index: int =
 
 
 def _seed_meta_only_course(db_session):
-    user = User(username="a2-meta", password_hash="x", role="user")
-    db_session.add(user)
-    db_session.flush()
+    user = _seed_test_user(db_session, "a2-meta")
 
     world = World(user_id=user.id, name="Legacy World", scenes={})
     db_session.add(world)
