@@ -146,8 +146,10 @@ class TestMasteryTracker:
 
         with patch.object(self.tracker, '_update_concept_mastery'), \
              patch.object(self.tracker, '_schedule_review'), \
-             patch.object(self.tracker, '_check_lesson_mastered', return_value=True), \
-             patch.object(self.tracker, '_try_auto_advance', return_value=(True, 1)):
+             patch(
+                 'backend.services.teaching_planner.teaching_planner.try_auto_advance_if_mastered',
+                 return_value=(True, 1),
+             ):
             facts = [self._make_fact("concept_mastered", ["变量"])]
             result = self.tracker.update_from_memories(
                 db=db, memories=facts, course_id=1, world_id=1, user_id=1,
@@ -163,8 +165,10 @@ class TestMasteryTracker:
 
         with patch.object(self.tracker, '_update_concept_mastery'), \
              patch.object(self.tracker, '_schedule_review'), \
-             patch.object(self.tracker, '_check_lesson_mastered', return_value=True), \
-             patch.object(self.tracker, '_try_auto_advance', return_value=(False, None)):
+             patch(
+                 'backend.services.teaching_planner.teaching_planner.try_auto_advance_if_mastered',
+                 return_value=(False, None),
+             ):
             facts = [self._make_fact("concept_mastered", ["a"])]
             result = self.tracker.update_from_memories(
                 db=db, memories=facts, course_id=1, world_id=1, user_id=1,
@@ -244,29 +248,7 @@ class TestMasteryTracker:
         result = self.tracker._check_lesson_mastered(MagicMock(), 1, [])
         assert result is False
 
-    # ── _try_auto_advance ──────────────────────────────────────────
-
-    def test_try_auto_advance_success(self):
-        db = MagicMock()
-        lessons = [{"title": "L1"}, {"title": "L2"}]
-        course = self._make_course(lessons=lessons, current_idx=0)
-
-        with patch("sqlalchemy.orm.attributes.flag_modified"):
-            success, new_idx = self.tracker._try_auto_advance(db, course)
-            assert success is True
-            assert new_idx == 1
-            assert course.meta["current_lesson_index"] == 1
-            assert 0 in course.meta["completed_lessons"]
-
-    def test_try_auto_advance_at_end(self):
-        db = MagicMock()
-        lessons = [{"title": "L1"}, {"title": "L2"}]
-        course = self._make_course(lessons=lessons, current_idx=1)
-
-        with patch("sqlalchemy.orm.attributes.flag_modified"):
-            success, new_idx = self.tracker._try_auto_advance(db, course)
-            assert success is False
-            assert new_idx is None
+    # auto-advance 行为见 test_lesson_pointer_single_source.py
 
     # ── get_course_mastery — see TestMasteryTrackerRealDB below ────
     # The reader now joins course.meta lesson concepts with ConceptMastery

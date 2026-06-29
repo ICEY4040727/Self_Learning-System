@@ -90,6 +90,33 @@ class TeachingPlanner:
             return course.meta.get("completed_lessons", [])
         return []
 
+    def _set_lesson_progress(
+        self,
+        db: Session,
+        course: Course,
+        user_id: int,
+        *,
+        current_index: int,
+        completed_ids: list[int] | None = None,
+    ) -> None:
+        """唯一 lesson pointer 写入口。
+
+        - 有 CourseProgress 行 → 只写表（不写 course.meta 指针字段）
+        - 无行 → legacy fallback 写 course.meta
+        """
+        progress = self._get_progress_record(db, course, user_id)
+        if progress:
+            progress.current_lesson_index = current_index
+            if completed_ids is not None:
+                progress.completed_lesson_ids = completed_ids
+        else:
+            if not course.meta:
+                course.meta = {}
+            course.meta["current_lesson_index"] = current_index
+            if completed_ids is not None:
+                course.meta["completed_lessons"] = completed_ids
+            flag_modified(course, "meta")
+
     def _get_user_id(self, course: Course) -> int | None:
         """从 course → world → user 获取 user_id"""
         if course.world:
@@ -224,18 +251,13 @@ class TeachingPlanner:
         if next_idx >= len(lessons):
             next_idx = len(lessons) - 1  # stay on last lesson
 
-        # 更新 CourseProgress 表
-        progress = self._get_progress_record(db, course, user_id)
-        if progress:
-            progress.current_lesson_index = next_idx
-            progress.completed_lesson_ids = sorted(completed)
-        else:
-            # 向后兼容：也更新 course.meta
-            if not course.meta:
-                course.meta = {}
-            course.meta["current_lesson_index"] = next_idx
-            course.meta["completed_lessons"] = sorted(completed)
-            flag_modified(course, "meta")
+        self._set_lesson_progress(
+            db,
+            course,
+            user_id,
+            current_index=next_idx,
+            completed_ids=sorted(completed),
+        )
 
         # 记录到 ProgressTracking
         self._record_lesson_progress(db, course, next_idx)
@@ -269,16 +291,12 @@ class TeachingPlanner:
         if user_id is None:
             return {"error": "无法确定用户"}
 
-        # 更新 CourseProgress 表
-        progress = self._get_progress_record(db, course, user_id)
-        if progress:
-            progress.current_lesson_index = lesson_index
-        else:
-            # 向后兼容
-            if not course.meta:
-                course.meta = {}
-            course.meta["current_lesson_index"] = lesson_index
-            flag_modified(course, "meta")
+        self._set_lesson_progress(
+            db,
+            course,
+            user_id,
+            current_index=lesson_index,
+        )
 
         self._record_lesson_progress(db, course, lesson_index)
         db.flush()
@@ -329,6 +347,54 @@ class TeachingPlanner:
             last_review=datetime.now(UTC),
         )
         db.add(tracking)
+
+    def try_auto_advance_if_mastered(
+        self,
+        db: Session,
+        course: Course,
+        user_id: int,
+    ) -> tuple[bool, int | None]:
+        """唯一 auto-advance 事务入口（TeachingPlanner 完整边界）。
+
+        读取当前课节 → 判定 concepts 是否 mastered → 推进并落库。
+        """
+        from backend.services.mastery_tracker import mastery_tracker
+
+        lessons = self._get_lessons(db, course)
+        if not lessons:
+            return False, None
+
+        current_idx = self._get_current_index(db, course, user_id)
+        if current_idx >= len(lessons) - 1:
+            return False, None
+
+        current_lesson = lessons[current_idx]
+        lesson_concepts = current_lesson.get("concepts") or []
+        if not lesson_concepts:
+            return False, None
+
+        if not mastery_tracker._check_lesson_mastered(db, user_id, lesson_concepts):
+            return False, None
+
+        completed = set(self._get_completed(db, course, user_id))
+        completed.add(current_idx)
+        next_idx = current_idx + 1
+
+        self._set_lesson_progress(
+            db,
+            course,
+            user_id,
+            current_index=next_idx,
+            completed_ids=sorted(completed),
+        )
+        self._record_lesson_progress(db, course, next_idx)
+        db.flush()
+
+        logger.info(
+            "Auto-advanced course %d: lesson %d → %d",
+            course.id, current_idx, next_idx,
+        )
+        return True, next_idx
 
 
 # Global instance

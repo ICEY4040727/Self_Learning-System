@@ -113,20 +113,16 @@ class MasteryTracker:
                         db, user_id, world_id, concept, signal=fact.fact_type,
                     )
 
-        # 检查是否可以自动推进
+        # 检查是否可以自动推进（lesson pointer 判定/写入均委托 teaching_planner）
         auto_advanced = False
         new_lesson_index = None
 
-        if updated_concepts and course.meta:
-            lessons = course.meta.get("generated_lessons", [])
-            current_idx = course.meta.get("current_lesson_index", 0)
+        if updated_concepts:
+            from backend.services.teaching_planner import teaching_planner
 
-            if lessons and 0 <= current_idx < len(lessons):
-                current_lesson = lessons[current_idx]
-                lesson_concepts = current_lesson.get("concepts", [])
-
-                if lesson_concepts and self._check_lesson_mastered(db, user_id, lesson_concepts):
-                    auto_advanced, new_lesson_index = self._try_auto_advance(db, course)
+            auto_advanced, new_lesson_index = teaching_planner.try_auto_advance_if_mastered(
+                db, course, user_id,
+            )
 
         if updated_concepts:
             logger.info(
@@ -191,37 +187,6 @@ class MasteryTracker:
 
         avg = sum(by_concept.values()) / len(concepts)
         return avg >= AUTO_ADVANCE_THRESHOLD
-
-    def _try_auto_advance(self, db: Session, course: Course) -> tuple[bool, int | None]:
-        """尝试自动推进到下一课
-
-        Returns:
-            (是否推进成功, 新章节索引)
-        """
-        from sqlalchemy.orm.attributes import flag_modified
-
-        lessons = course.meta.get("generated_lessons", [])
-        current_idx = course.meta.get("current_lesson_index", 0)
-
-        if current_idx >= len(lessons) - 1:
-            # 已经是最后一课
-            return False, None
-
-        # 推进
-        completed = set(course.meta.get("completed_lessons", []))
-        completed.add(current_idx)
-
-        next_idx = current_idx + 1
-        course.meta["current_lesson_index"] = next_idx
-        course.meta["completed_lessons"] = sorted(completed)
-        flag_modified(course, "meta")
-
-        logger.info(
-            "Auto-advanced course %d: lesson %d → %d",
-            course.id, current_idx, next_idx,
-        )
-
-        return True, next_idx
 
     def _schedule_review(
         self, db: Session, user_id: int, world_id: int, concept: str,
