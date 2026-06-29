@@ -64,8 +64,7 @@ def progress_compat_headers(course_id: int | None = None) -> dict[str, str]:
 
 def get_lesson_progress(db: Session, course: Course, user_id: int) -> dict[str, Any]:
     """Canonical lesson progress (CourseProgress / LessonPlan)."""
-    _ = user_id  # caller supplies for auth symmetry; planner reads course.world
-    return teaching_planner.get_progress(db, course)
+    return teaching_planner.get_progress(db, course, user_id=user_id)
 
 
 def get_canonical_lesson_index(db: Session, course_id: int, user_id: int) -> int:
