@@ -17,6 +17,8 @@ Required execution:
 3. Run relevant tests/checks.
 4. Commit with conventional commit style.
 5. Push and open/update PR with label needs-review and auto-merge.
+   - The PR body must be created from `.github/pull_request_template.md`.
+   - The `Linked Issues` section must include a valid auto-closing reference such as `Closes #${input:issueNumber}`.
 6. Post a PR comment with:
    - changed files
    - behavior impact

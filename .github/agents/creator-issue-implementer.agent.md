@@ -30,6 +30,8 @@ Your mission is to implement reviewer-raised issues and PR feedback in one pass 
 - Prefer the highest-quality maintainable solution over the quickest partial fix.
 - Never trade correctness or maintainability for speed.
 - Never push directly to main; follow branch and PR workflow.
+- Any remote PR must use the repository PR template at `.github/pull_request_template.md`.
+- PR body must include a valid auto-closing issue reference such as `Closes #N` / `Fixes #N` / `Resolves #N`; do not rely on commit messages or comments for this gate.
 - If reviewer feedback offers multiple options, evaluate trade-offs and choose deliberately.
 - If you disagree with a suggestion, explain why instead of silently skipping it.
 - After submitting fixes for review feedback, notify Reviewer via tmux (`tmux send-keys`) and follow the idle-check rule before sending.
@@ -46,6 +48,7 @@ Your mission is to implement reviewer-raised issues and PR feedback in one pass 
    - Issue comment: `... -Action comment-issue -Number <N> -Body "<message>"`
    - PR conversation comment: `... -Action comment-pr -Number <N> -Body "<message>"`
 4. If comment action needs auth and token is missing, explicitly report blocker and request `GITHUB_TOKEN`/`GH_TOKEN`.
+5. When opening/updating a PR, populate the body from `.github/pull_request_template.md` instead of writing a free-form description.
 
 ## Escalate Before Implementation
 

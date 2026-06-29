@@ -13,6 +13,8 @@ Input:
 Required execution:
 
 1. Pull PR diff, linked issue, and all comments from remote.
+   - Verify the PR description uses `.github/pull_request_template.md`.
+   - Verify the PR body contains a valid auto-closing issue reference such as `Closes #N` / `Fixes #N` / `Resolves #N`.
 2. Evaluate correctness, regression risk, design quality, and tests.
 3. Output findings by severity: blocker, major, minor.
 4. Post PR comments in Chinese, objective and evidence-first.
@@ -27,6 +29,8 @@ Blocking rules:
 - Potential regression risk
 - Missing tests for changed behavior
 - Harmful style/naming inconsistency
+- PR description does not use the repository template or is missing required template sections
+- Missing valid auto-closing issue keyword in PR body
 - Architecture-inferior but runnable choice
 - Direct assignment to User LLM columns outside `backend/services/user_llm_settings.py`
   (fields: default_provider, encrypted_api_key, llm_provider_settings, llm_base_url,

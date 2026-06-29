@@ -99,6 +99,7 @@ Owner创建Issue → Owner 标记 approved
 
 - **单一职责**：一个 PR 只做一件事
 - **体量控制**：尽量 300 行以内
+- **必须使用仓库 PR 模板**：`.github/pull_request_template.md`
 - **必须关联 Issue**：`Closes #N`
 - **禁止只写**：`Related to #N`（不会自动闭合 issue）
 - **PR 描述包含**：

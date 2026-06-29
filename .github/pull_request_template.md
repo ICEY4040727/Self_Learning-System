@@ -1,27 +1,55 @@
 ## Overview
-[本 PR 的目的、背景与核心收益]
+- What problem does this PR solve?
+- Why is this change needed now?
+- What is the intended user-facing or developer-facing outcome?
+
+## Scope
+- Included in this PR:
+  - 
+- Explicitly not included in this PR:
+  - 
 
 ## Change List
-- [模块/文件 1]：[改动说明]
-- [模块/文件 2]：[改动说明]
+- `path/to/file_or_module`: what changed and why
+- `path/to/file_or_module`: what changed and why
+
+## Behavior Notes
+- Canonical data source or API path affected:
+  - 
+- Compatibility behavior preserved:
+  - 
+- Known follow-up work intentionally deferred:
+  - 
+
+## Validation
+- Test command(s) run:
+  ```bash
+  
+  ```
+- Result summary:
+  - 
+- Manual verification performed:
+  - 
+
+## Risk Review
+- Main regression risk:
+  - 
+- Rollback plan:
+  - revert PR #
 
 ## Self-Check
-- [ ] 已运行相关测试（单测/集成/手测）
-- [ ] 已评估回归风险
-- [ ] 已检查兼容性（接口/配置/数据）
-- [ ] 无无关改动混入
-- [ ] 未在业务层/脚本中直接赋值 User LLM 字段（须走 `user_llm_settings.update_*`；可运行 `python scripts/check_user_llm_direct_writes.py`）
+- [ ] I ran the relevant tests for this change.
+- [ ] I reviewed regression risk, compatibility impact, and data-flow impact.
+- [ ] I did not mix unrelated changes into this PR.
+- [ ] If User LLM settings code was touched, I did not directly assign protected User LLM ORM fields outside the approved gateway.
+- [ ] If routes or API contracts changed, I updated tests and docs as needed.
 
 ## Reviewer Focus
-- [ ] User LLM 字段是否存在绕过 write gateway 的直接 ORM 赋值（出现即 request changes）
-
-### 自查项 - LLM 用户配置写入规范
-- [ ] 未直接赋值 user.default_provider / model / encrypted_api_key / llm_provider_settings / temperature / max_tokens
-- [ ] 所有LLM配置更新统一使用 update_provider_settings / update_generation_params
-- [ ] 仅 tests 目录 fixture 允许裸写，业务代码、scripts 不允许直接ORM赋值
+- Please pay special attention to:
+  - 
 
 ## Linked Issues
 Closes #N
 
-> 必须使用自动闭合关键字：`Closes #N` / `Fixes #N` / `Resolves #N`。
-> 仅写 `Related to #N` 不会自动闭合 issue。
+> Required by CI: the PR description must include an auto-closing issue reference such as `Closes #130`, `Fixes #130`, or `Resolves #130`.
+> `Related to #130` alone is not sufficient.

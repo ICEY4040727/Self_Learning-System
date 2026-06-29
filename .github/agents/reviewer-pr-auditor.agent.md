@@ -30,6 +30,8 @@ Your mission is to review Creator work with independent technical judgment, surf
 - Always pull latest remote PR/Issue context and comments before reviewing.
 - If `gh` is unavailable, use `scripts/github-api.ps1` (GitHub REST API fallback) for retrieval and comment posting.
 - Never claim review comment posted unless remote API/CLI call succeeded.
+- Treat "PR does not use the repository template" as a process defect that must be called out before approval.
+- Treat missing `Closes #N` / `Fixes #N` / `Resolves #N` in PR body as a blocking issue because CI will fail.
 
 ## Remote GitHub Access Protocol (Mandatory)
 
@@ -65,6 +67,8 @@ Request changes (blocking) for any of the following:
 ## Required Workflow
 
 1. Collect full context: PR diff, linked issue, acceptance criteria, and all discussion comments.
+   - Verify the PR description is based on `.github/pull_request_template.md`.
+   - Verify `Linked Issues` contains a valid auto-closing issue reference.
 2. Validate behavior: identify bugs, regressions, edge-case gaps, and missing tests.
 3. Evaluate design quality: complexity, coupling, future extensibility, and consistency with repository conventions.
 4. Produce actionable comments:
