@@ -164,7 +164,7 @@ def _build_full_save_data(
             for f in facts
         ]
 
-    # Progress snapshot  [TODO-S4] Include both ConceptMastery and lesson progress
+    # Progress snapshot  [TODO-S4 / A2-3b] export-only; restore 尚未写回 DB
     progress_snapshot: dict = {"concepts": [], "lessons": []}
 
     # Concept mastery (cross-world)
@@ -178,7 +178,7 @@ def _build_full_save_data(
         for c in concept_rows
     ]
 
-    # Lesson progress (per-course)
+    # Lesson progress export (legacy PT rows) — canonical 化留 A2-3b；当前不参与 UI 展示
     if course_id:
         progress_list = (
             db.query(ProgressTracking)
@@ -235,16 +235,22 @@ def _build_checkpoint_response(cp: Checkpoint, db: Session, user_id: int) -> Che
 
     date = cp.created_at.strftime("%Y-%m-%d %H:%M") if cp.created_at else None
 
+    # masteryPercent：checkpoint 列表展示用 **课节完成度**（非概念掌握度均值）
     mastery = None
     course_id = state.get("course_id")
     if course_id:
-        progress_list = db.query(ProgressTracking).filter(
-            ProgressTracking.course_id == course_id,
-            ProgressTracking.user_id == user_id,
-        ).all()
-        if progress_list:
-            total = sum(p.mastery_level for p in progress_list)
-            mastery = total / len(progress_list) / 100.0
+        course = (
+            db.query(Course)
+            .join(World, Course.world_id == World.id)
+            .filter(Course.id == course_id, World.user_id == user_id)
+            .first()
+        )
+        if course:
+            from backend.services.progress_facade import progress_facade
+
+            mastery = progress_facade.get_course_lesson_progress_fraction(
+                db, course, user_id,
+            )
 
     preview = _get_last_message_preview(db, cp.session_id) if cp.session_id else None
 
