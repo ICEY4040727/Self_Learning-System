@@ -20,8 +20,5 @@
 - [ ] 所有LLM配置更新统一使用 update_provider_settings / update_generation_params
 - [ ] 仅 tests 目录 fixture 允许裸写，业务代码、scripts 不允许直接ORM赋值
 
-## Linked Issues
-Closes #N
-
-> 必须使用自动闭合关键字：`Closes #N` / `Fixes #N` / `Resolves #N`。
-> 仅写 `Related to #N` 不会自动闭合 issue。
+## Linked Issues（可选）
+<!-- 有 tracking issue 时可写 Closes #N / Fixes #N / Resolves #N；无 issue 的小步 PR 可留空 -->

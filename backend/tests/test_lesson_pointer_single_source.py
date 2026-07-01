@@ -430,3 +430,114 @@ class TestA22CanonicalLessonReads:
         assert "[当前章节]" in rendered
         assert "第1课: Lesson 0" in rendered
         assert "已完成" in rendered
+
+
+class TestA23CanonicalLessonReads:
+    def test_world_list_course_progress_matches_canonical_api(
+        self, client, auth_headers, db_session,
+    ):
+        user = db_session.query(User).filter_by(username="testuser").one()
+
+        world = World(user_id=user.id, name="World List", description="")
+        db_session.add(world)
+        db_session.flush()
+
+        course = Course(world_id=world.id, name="Listed Course", meta={})
+        db_session.add(course)
+        db_session.flush()
+
+        for i, title in enumerate(["L0", "L1", "L2"]):
+            db_session.add(
+                LessonPlan(
+                    course_id=course.id,
+                    order_index=i,
+                    title=title,
+                    concepts=[f"c{i}"],
+                )
+            )
+        db_session.add(
+            CourseProgress(
+                course_id=course.id,
+                user_id=user.id,
+                current_lesson_index=1,
+                completed_lesson_ids=[0],
+            )
+        )
+        db_session.commit()
+
+        canonical = client.get(
+            f"/api/courses/{course.id}/progress",
+            headers=auth_headers,
+        )
+        assert canonical.status_code == 200
+        expected_fraction = round(canonical.json()["progress_pct"] / 100.0, 4)
+
+        worlds = client.get("/api/worlds", headers=auth_headers)
+        assert worlds.status_code == 200
+        world_payload = next(w for w in worlds.json() if w["id"] == world.id)
+        listed = next(c for c in world_payload["courses"] if c["id"] == course.id)
+        assert listed["progress"] == expected_fraction
+
+    def test_archive_world_builder_has_no_progress_tracking_lesson_read(self):
+        source = (ROOT / "backend/api/routes/archive.py").read_text(encoding="utf-8")
+        start = source.index("def _build_world_response")
+        rest = source[start + 1:]
+        next_def = rest.index("\ndef ")
+        chunk = source[start: start + 1 + next_def]
+        assert "ProgressTracking" not in chunk
+
+    def test_save_checkpoint_mastery_percent_uses_canonical_progress(
+        self, client, auth_headers, db_session,
+    ):
+        user = db_session.query(User).filter_by(username="testuser").one()
+
+        world = World(user_id=user.id, name="Save World", description="")
+        db_session.add(world)
+        db_session.flush()
+
+        course = Course(world_id=world.id, name="Save Course", meta={})
+        db_session.add(course)
+        db_session.flush()
+
+        for i, title in enumerate(["L0", "L1"]):
+            db_session.add(
+                LessonPlan(
+                    course_id=course.id,
+                    order_index=i,
+                    title=title,
+                    concepts=[f"c{i}"],
+                )
+            )
+        db_session.add(
+            CourseProgress(
+                course_id=course.id,
+                user_id=user.id,
+                current_lesson_index=1,
+                completed_lesson_ids=[0],
+            )
+        )
+        db_session.commit()
+
+        start = client.post(f"/api/courses/{course.id}/start", headers=auth_headers)
+        assert start.status_code == 200
+        session_id = start.json()["session_id"]
+
+        checkpoint = client.post(
+            "/api/checkpoints",
+            json={
+                "world_id": world.id,
+                "save_name": "a2-canonical",
+                "session_id": session_id,
+            },
+            headers=auth_headers,
+        )
+        assert checkpoint.status_code == 200
+        assert checkpoint.json()["masteryPercent"] == 0.5
+
+    def test_save_checkpoint_display_has_no_progress_tracking_read(self):
+        source = (ROOT / "backend/api/routes/save.py").read_text(encoding="utf-8")
+        start = source.index("def _build_checkpoint_response")
+        rest = source[start + 1:]
+        next_def = rest.index("\ndef ")
+        chunk = source[start: start + 1 + next_def]
+        assert "query(ProgressTracking)" not in chunk

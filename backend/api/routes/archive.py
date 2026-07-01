@@ -693,14 +693,13 @@ def _build_world_response(world: World, db: Session, current_user_id: int = None
             progress = None
             icon = ""  # 默认图标
 
-            # 如果提供了 user_id，获取课程进度
+            # 如果提供了 user_id，获取课程进度（canonical · A2-3）
             if current_user_id:
-                course_progress = db.query(ProgressTracking).filter(
-                    ProgressTracking.course_id == course.id,
-                    ProgressTracking.user_id == current_user_id
-                ).first()
-                if course_progress:
-                    progress = course_progress.mastery_level / 100.0
+                from backend.services.progress_facade import progress_facade
+
+                progress = progress_facade.get_course_lesson_progress_fraction(
+                    db, course, current_user_id,
+                )
 
             course_list.append(CourseResponse(
                 id=course.id,
