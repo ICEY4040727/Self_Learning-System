@@ -479,7 +479,7 @@ class TestA23CanonicalLessonReads:
         assert listed["progress"] == expected_fraction
 
     def test_archive_world_builder_has_no_progress_tracking_lesson_read(self):
-        source = (ROOT / "backend/api/routes/archive.py").read_text(encoding="utf-8")
+        source = (ROOT / "backend/api/routes/worlds.py").read_text(encoding="utf-8")
         start = source.index("def _build_world_response")
         rest = source[start + 1:]
         next_def = rest.index("\ndef ")
