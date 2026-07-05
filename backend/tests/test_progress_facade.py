@@ -133,7 +133,7 @@ class TestProgressFacadeBehavior:
         after = db_session.query(ProgressTracking).count()
         assert after == before
 
-    def test_rollback_flag_restores_progress_tracking_insert(
+    def test_rollback_flag_restores_archive_progress_tracking_insert(
         self, client, auth_headers, db_session, monkeypatch,
     ):
         from backend.core.config import get_settings
@@ -164,10 +164,14 @@ class TestProgressFacadeBehavior:
         import inspect
 
         from backend.api.routes import archive as archive_routes
+        from backend.services import teaching_planner as teaching_planner_module
 
         source = inspect.getsource(archive_routes.create_progress)
         assert "progress_facade.create_progress_compat" in source
         assert "ProgressTracking(" not in source
+
+        planner_source = inspect.getsource(teaching_planner_module.TeachingPlanner)
+        assert "ProgressTracking" not in planner_source
 
         textbook_source = open(
             __file__.replace("test_progress_facade.py", "../api/routes/textbook.py"),

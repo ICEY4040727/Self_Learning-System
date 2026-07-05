@@ -5,10 +5,11 @@
 - API endpoints (progress/advance/lesson)
 """
 
+import inspect
 import pytest
 from unittest.mock import MagicMock
 
-from backend.models.models import Course, CourseProgress, LessonPlan, ProgressTracking
+from backend.models.models import Course, CourseProgress, LessonPlan
 from backend.services.prompt_builder.modules.course_content import CourseContentModule
 from backend.services.teaching_planner import TeachingPlanner
 
@@ -19,7 +20,6 @@ def _configure_db_mock(
     course=None,
     lesson_plans=None,
     course_progress=None,
-    progress_tracking=None,
 ):
     """Route db.query(Model) for LessonPlan-first code paths; empty LessonPlan → meta fallback."""
     if lesson_plans is None:
@@ -35,8 +35,6 @@ def _configure_db_mock(
             filtered.count.return_value = len(lesson_plans)
         elif model is CourseProgress:
             mock_query.filter.return_value.first.return_value = course_progress
-        elif model is ProgressTracking:
-            mock_query.filter.return_value.first.return_value = progress_tracking
         return mock_query
 
     db.query.side_effect = query_side_effect
@@ -246,7 +244,7 @@ class TestTeachingPlanner:
             "current_lesson_index": 0,
             "completed_lessons": [],
         })
-        _configure_db_mock(db, course=course, progress_tracking=None)
+        _configure_db_mock(db, course=course)
 
         result = self.planner.advance_lesson(db, course)
         assert "error" not in result
@@ -260,7 +258,7 @@ class TestTeachingPlanner:
             "current_lesson_index": 1,
             "completed_lessons": [0],
         })
-        _configure_db_mock(db, course=course, progress_tracking=None)
+        _configure_db_mock(db, course=course)
 
         result = self.planner.advance_lesson(db, course)
         assert course.meta["current_lesson_index"] == 1  # stays at last
@@ -271,7 +269,7 @@ class TestTeachingPlanner:
             "generated_lessons": [{"title": "L1"}, {"title": "L2"}, {"title": "L3"}],
             "current_lesson_index": 0,
         })
-        _configure_db_mock(db, course=course, progress_tracking=None)
+        _configure_db_mock(db, course=course)
 
         result = self.planner.set_lesson(db, course, 2)
         assert "error" not in result
@@ -316,7 +314,7 @@ class TestTeachingPlanner:
             "current_lesson_index": 1,
             "completed_lessons": [0],
         })
-        _configure_db_mock(db, course=course, progress_tracking=None)
+        _configure_db_mock(db, course=course)
 
         result = self.planner.advance_lesson(db, course)
         assert result["course_completed"] is True
@@ -334,20 +332,10 @@ class TestTeachingPlanner:
         progress = self.planner.get_progress(db, course)
         assert progress["course_completed"] is False
 
-    def test_record_progress_does_not_bump_existing_mastery(self):
+    def test_teaching_planner_has_no_progress_tracking_writer(self):
         """[TODO-T5] Revisiting a lesson must not increment mastery — that
         was the bug where set_lesson(1) after advance_lesson(2) silently
         added +20 to lesson 1's mastery on every revisit."""
-        db = MagicMock()
-        existing = MagicMock()
-        existing.mastery_level = 60
-        course = self._make_course(meta={
-            "generated_lessons": [{"title": "L1"}],
-            "current_lesson_index": 0,
-        })
-        _configure_db_mock(db, course=course, progress_tracking=existing)
-
-        self.planner._record_lesson_progress(db, course, 0)
-
-        assert existing.mastery_level == 60, "revisit must not change mastery_level"
-        assert not db.add.called, "must not insert another row when one exists"
+        source = inspect.getsource(TeachingPlanner)
+        assert "_record_lesson_progress" not in source
+        assert "ProgressTracking" not in source

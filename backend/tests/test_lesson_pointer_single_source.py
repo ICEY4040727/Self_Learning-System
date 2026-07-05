@@ -541,3 +541,72 @@ class TestA23CanonicalLessonReads:
         next_def = rest.index("\ndef ")
         chunk = source[start: start + 1 + next_def]
         assert "query(ProgressTracking)" not in chunk
+
+    def test_save_export_lesson_snapshot_uses_canonical_progress(self, client, auth_headers, db_session):
+        user = db_session.query(User).filter_by(username="testuser").one()
+
+        world = World(user_id=user.id, name="Save Export World", description="")
+        db_session.add(world)
+        db_session.flush()
+
+        course = Course(
+            world_id=world.id,
+            name="Save Export Course",
+            meta={
+                "generated_lessons": [
+                    {"title": "Meta 0", "concepts": ["old-a"]},
+                    {"title": "Meta 1", "concepts": ["old-b"]},
+                ],
+                "current_lesson_index": 9,
+                "completed_lessons": [],
+            },
+        )
+        db_session.add(course)
+        db_session.flush()
+
+        for i, title in enumerate(["L0", "L1"]):
+            db_session.add(
+                LessonPlan(
+                    course_id=course.id,
+                    order_index=i,
+                    title=title,
+                    concepts=[f"c{i}"],
+                )
+            )
+        db_session.add(
+            CourseProgress(
+                course_id=course.id,
+                user_id=user.id,
+                current_lesson_index=1,
+                completed_lesson_ids=[0],
+            )
+        )
+        db_session.commit()
+
+        start = client.post(f"/api/courses/{course.id}/start", headers=auth_headers)
+        assert start.status_code == 200
+        session_id = start.json()["session_id"]
+
+        checkpoint = client.post(
+            "/api/checkpoints",
+            json={
+                "world_id": world.id,
+                "save_name": "a2-canonical-export",
+                "session_id": session_id,
+            },
+            headers=auth_headers,
+        )
+        assert checkpoint.status_code == 200
+
+        detail = client.get(
+            f"/api/checkpoints/{checkpoint.json()['id']}",
+            headers=auth_headers,
+        )
+        assert detail.status_code == 200
+
+        lesson_snapshot = detail.json()["state"]["progress_snapshot"]["lessons"]
+        assert lesson_snapshot["current_index"] == 1
+        assert lesson_snapshot["completed_lesson_ids"] == [0]
+        assert lesson_snapshot["progress_pct"] == 50.0
+        assert [item["title"] for item in lesson_snapshot["items"]] == ["L0", "L1"]
+        assert [item["status"] for item in lesson_snapshot["items"]] == ["completed", "current"]
