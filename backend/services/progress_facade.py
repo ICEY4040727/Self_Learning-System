@@ -57,9 +57,142 @@ def skip_progress_tracking_writes() -> bool:
 
 def progress_compat_headers(course_id: int | None = None) -> dict[str, str]:
     headers = {"Deprecation": "true"}
+    if use_progress_facade():
+        headers["X-Progress-Compat-Mode"] = "canonical-concept-mastery"
     if course_id is not None:
         headers["Link"] = f'</api/courses/{course_id}/progress>; rel="successor-version"'
     return headers
+
+
+def _courses_for_user(
+    db: Session,
+    user_id: int,
+    course_id: int | None = None,
+) -> list[Course]:
+    query = (
+        db.query(Course)
+        .join(World, Course.world_id == World.id)
+        .filter(World.user_id == user_id)
+    )
+    if course_id is not None:
+        query = query.filter(Course.id == course_id)
+    return query.all()
+
+
+def _course_concept_ids(db: Session, course: Course) -> list[str]:
+    concepts: list[str] = []
+    for lesson in teaching_planner._get_lessons(db, course):
+        for concept in lesson.get("concepts") or []:
+            if concept not in concepts:
+                concepts.append(concept)
+    return concepts
+
+
+def _query_legacy_progress_rows(
+    db: Session,
+    user_id: int,
+    course_id: int | None = None,
+) -> list[ProgressTracking]:
+    query = (
+        db.query(ProgressTracking)
+        .join(Course, ProgressTracking.course_id == Course.id)
+        .join(World, Course.world_id == World.id)
+        .filter(
+            ProgressTracking.user_id == user_id,
+            World.user_id == user_id,
+        )
+    )
+    if course_id is not None:
+        query = query.filter(ProgressTracking.course_id == course_id)
+    return list(query.all())
+
+
+def _fsrs_next_review_by_concept(
+    db: Session,
+    user_id: int,
+    concept_ids: list[str],
+) -> dict[str, datetime | None]:
+    if not concept_ids:
+        return {}
+    rows = (
+        db.query(FSRSState)
+        .filter(
+            FSRSState.user_id == user_id,
+            FSRSState.concept_id.in_(concept_ids),
+        )
+        .all()
+    )
+    return {row.concept_id: row.next_review for row in rows}
+
+
+def _list_merged_compat_progress_rows(
+    db: Session,
+    user_id: int,
+    course_id: int | None = None,
+) -> list[ProgressTracking | CompatProgressView]:
+    """A2-5: merge ConceptMastery (+ FSRS) into archive GET /progress compat rows."""
+    pt_rows = _query_legacy_progress_rows(db, user_id, course_id)
+    pt_by_key = {(row.course_id, row.topic): row for row in pt_rows}
+
+    merged: list[ProgressTracking | CompatProgressView] = []
+    seen_keys: set[tuple[int, str]] = set()
+
+    for course in _courses_for_user(db, user_id, course_id):
+        concept_ids = _course_concept_ids(db, course)
+        if not concept_ids:
+            continue
+
+        cm_rows = (
+            db.query(ConceptMastery)
+            .filter(
+                ConceptMastery.user_id == user_id,
+                ConceptMastery.concept_id.in_(concept_ids),
+            )
+            .all()
+        )
+        fsrs_reviews = _fsrs_next_review_by_concept(
+            db, user_id, [row.concept_id for row in cm_rows],
+        )
+
+        for cm in cm_rows:
+            key = (course.id, cm.concept_id)
+            seen_keys.add(key)
+            pt = pt_by_key.get(key)
+            next_review = fsrs_reviews.get(cm.concept_id)
+            if next_review is None and pt is not None:
+                next_review = pt.next_review
+            last_review = cm.last_review or (pt.last_review if pt else None)
+
+            if pt is not None:
+                merged.append(
+                    CompatProgressView(
+                        id=pt.id,
+                        user_id=user_id,
+                        course_id=course.id,
+                        topic=cm.concept_id,
+                        mastery_level=cm.mastery_level or 0,
+                        next_review=next_review,
+                        last_review=last_review,
+                    )
+                )
+            else:
+                merged.append(
+                    _synthetic_compat_row(
+                        user_id=user_id,
+                        course_id=course.id,
+                        topic=cm.concept_id,
+                        mastery_level=cm.mastery_level or 0,
+                        next_review=next_review,
+                        last_review=last_review,
+                        source_id=cm.id,
+                    )
+                )
+
+    for key, pt in pt_by_key.items():
+        if key not in seen_keys:
+            merged.append(pt)
+
+    return merged
 
 
 def get_lesson_progress(db: Session, course: Course, user_id: int) -> dict[str, Any]:
@@ -100,19 +233,10 @@ def list_compat_progress_rows(
     user_id: int,
     course_id: int | None = None,
 ) -> list[ProgressTracking | CompatProgressView]:
-    """Read legacy ProgressTracking rows for archive GET /progress."""
-    query = (
-        db.query(ProgressTracking)
-        .join(Course, ProgressTracking.course_id == Course.id)
-        .join(World, Course.world_id == World.id)
-        .filter(
-            ProgressTracking.user_id == user_id,
-            World.user_id == user_id,
-        )
-    )
-    if course_id is not None:
-        query = query.filter(ProgressTracking.course_id == course_id)
-    return list(query.all())
+    """Archive GET /progress — canonical ConceptMastery merge when facade enabled."""
+    if not use_progress_facade():
+        return _query_legacy_progress_rows(db, user_id, course_id)
+    return _list_merged_compat_progress_rows(db, user_id, course_id)
 
 
 def _upsert_concept_mastery(

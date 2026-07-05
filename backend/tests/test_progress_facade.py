@@ -78,6 +78,10 @@ class TestProgressFacadeBehavior:
         assert archive_resp.status_code == 200
         assert archive_resp.headers.get("Deprecation") == "true"
         assert (
+            archive_resp.headers.get("X-Progress-Compat-Mode")
+            == "canonical-concept-mastery"
+        )
+        assert (
             archive_resp.headers.get("X-Canonical-Current-Lesson-Index")
             == str(textbook_index)
         )
@@ -181,3 +185,95 @@ class TestProgressFacadeBehavior:
         assert "teaching_planner.get_progress" not in textbook_source.split(
             "get_course_progress",
         )[1].split("def advance_lesson")[0]
+
+
+class TestA25ArchiveCompatCanonical:
+    def test_archive_get_prefers_concept_mastery_over_stale_pt(
+        self, client, auth_headers, db_session,
+    ):
+        user = db_session.query(User).filter_by(username="testuser").one()
+        course_id = _seed_course_with_lessons(db_session, user.id)
+
+        stale = ProgressTracking(
+            course_id=course_id,
+            user_id=user.id,
+            topic="c1",
+            mastery_level=20,
+        )
+        db_session.add(stale)
+        db_session.add(
+            ConceptMastery(
+                user_id=user.id,
+                concept_id="c1",
+                mastery_level=88,
+            )
+        )
+        db_session.commit()
+
+        resp = client.get(
+            f"/api/progress?course_id={course_id}",
+            headers=auth_headers,
+        )
+        assert resp.status_code == 200
+        assert resp.headers.get("X-Progress-Compat-Mode") == "canonical-concept-mastery"
+        rows = resp.json()
+        c1 = next(row for row in rows if row["topic"] == "c1")
+        assert c1["mastery_level"] == 88
+
+    def test_archive_get_includes_concept_mastery_without_pt_row(
+        self, client, auth_headers, db_session,
+    ):
+        user = db_session.query(User).filter_by(username="testuser").one()
+        course_id = _seed_course_with_lessons(db_session, user.id)
+
+        db_session.add(
+            ConceptMastery(
+                user_id=user.id,
+                concept_id="c2",
+                mastery_level=72,
+            )
+        )
+        db_session.commit()
+
+        resp = client.get(
+            f"/api/progress?course_id={course_id}",
+            headers=auth_headers,
+        )
+        assert resp.status_code == 200
+        topics = {row["topic"]: row for row in resp.json()}
+        assert topics["c2"]["mastery_level"] == 72
+        assert topics["c2"]["id"] < 0
+
+    def test_archive_get_keeps_legacy_pt_when_no_concept_mastery(
+        self, client, auth_headers, db_session,
+    ):
+        user = db_session.query(User).filter_by(username="testuser").one()
+        course_id = _seed_course_with_lessons(db_session, user.id)
+
+        db_session.add(
+            ProgressTracking(
+                course_id=course_id,
+                user_id=user.id,
+                topic="legacy_only",
+                mastery_level=45,
+            )
+        )
+        db_session.commit()
+
+        resp = client.get(
+            f"/api/progress?course_id={course_id}",
+            headers=auth_headers,
+        )
+        assert resp.status_code == 200
+        legacy = next(row for row in resp.json() if row["topic"] == "legacy_only")
+        assert legacy["mastery_level"] == 45
+        assert legacy["id"] > 0
+
+    def test_list_compat_progress_rows_does_not_query_pt_only_when_facade_on(self):
+        import inspect
+
+        from backend.services import progress_facade as pf_module
+
+        source = inspect.getsource(pf_module.list_compat_progress_rows)
+        assert "_list_merged_compat_progress_rows" in source
+        assert "use_progress_facade()" in source
