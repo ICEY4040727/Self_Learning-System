@@ -16,7 +16,6 @@ from backend.models.models import (
     Course,
     LearnerProfile,
     MemoryFact,
-    ProgressTracking,
     # Phase 1.5 DD1: TeacherPersona 已删除，相关功能合并到 Character
     User,
     World,
@@ -164,8 +163,8 @@ def _build_full_save_data(
             for f in facts
         ]
 
-    # Progress snapshot  [TODO-S4 / A2-3b] export-only; restore 尚未写回 DB
-    progress_snapshot: dict = {"concepts": [], "lessons": []}
+    # Progress snapshot. Lesson state is exported from canonical CourseProgress/LessonPlan.
+    progress_snapshot: dict = {"concepts": [], "lessons": {}}
 
     # Concept mastery (cross-world)
     concept_rows = (
@@ -178,20 +177,12 @@ def _build_full_save_data(
         for c in concept_rows
     ]
 
-    # Lesson progress export (legacy PT rows) — canonical 化留 A2-3b；当前不参与 UI 展示
-    if course_id:
-        progress_list = (
-            db.query(ProgressTracking)
-            .filter(
-                ProgressTracking.course_id == int(course_id),
-                ProgressTracking.user_id == user_id,
-            )
-            .all()
-        )
-        progress_snapshot["lessons"] = [
-            {"topic": p.topic, "mastery_level": p.mastery_level}
-            for p in progress_list
-        ]
+    # Lesson progress export is canonical read-only snapshot data; restore still owns writeback.
+    progress_snapshot["lessons"] = _build_lesson_progress_snapshot(
+        db,
+        user_id=user_id,
+        course_id=course_id,
+    )
 
     return SaveFileManager.build_save_data(
         checkpoint_id=checkpoint.id,
@@ -220,6 +211,51 @@ def _get_checkpoint_state(checkpoint: Checkpoint) -> dict:
             checkpoint.file_path,
         )
     return checkpoint.state or {}
+
+
+def _build_lesson_progress_snapshot(
+    db: Session,
+    *,
+    user_id: int,
+    course_id: int | None,
+) -> dict:
+    if not course_id:
+        return {}
+
+    course = (
+        db.query(Course)
+        .join(World, Course.world_id == World.id)
+        .filter(
+            Course.id == int(course_id),
+            World.user_id == user_id,
+        )
+        .first()
+    )
+    if not course:
+        return {}
+
+    from backend.services.progress_facade import progress_facade
+
+    progress = progress_facade.get_lesson_progress(db, course, user_id)
+    lessons = progress.get("lessons", [])
+    return {
+        "current_index": progress.get("current_index", 0),
+        "completed_lesson_ids": [
+            idx for idx, lesson in enumerate(lessons)
+            if lesson.get("_status") == "completed"
+        ],
+        "total_lessons": progress.get("total_lessons", 0),
+        "progress_pct": progress.get("progress_pct", 0.0),
+        "course_completed": progress.get("course_completed", False),
+        "items": [
+            {
+                "id": lesson.get("id"),
+                "title": lesson.get("title", ""),
+                "status": lesson.get("_status", "pending"),
+            }
+            for lesson in lessons
+        ],
+    }
 
 
 def _build_checkpoint_response(cp: Checkpoint, db: Session, user_id: int) -> CheckpointResponse:

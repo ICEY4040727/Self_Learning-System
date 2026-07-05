@@ -348,7 +348,7 @@ class TestMasteryTrackerRealDB:
             course_id=course_id, world_id=world_id, user_id=user_id,
         )
 
-        teaching_planner._record_lesson_progress(db_session, course, 0)
+        teaching_planner.set_lesson(db_session, course, 0)
         db_session.flush()
 
         # Concept side: ConceptMastery (canonical)
